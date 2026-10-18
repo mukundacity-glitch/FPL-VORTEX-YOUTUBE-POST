@@ -25074,21 +25074,20 @@ def events_for(key, info):
             },
         ]
 
-    # OUTRO — every narrative transition is anchored to Ryan WordBoundary data.
-    today_at,_=_sync("Today",0.35)
-    take_1_at,take_1_dur=_sync("best fixture runs",0.40)
-    take_2_at,take_2_dur=_sync("strongest projected output",0.40)
-    take_3_at,take_3_dur=_sync("highest clean-sheet potential",0.40)
-    tomorrow_at,_=_sync("Tomorrow",0.35)
-    tomorrow_head_at,tomorrow_head_dur=_sync("player decisions",0.45)
-    tom_1_at,tom_1_dur=_sync("safe core picks",0.35)
-    tom_2_at,tom_2_dur=_sync("rank-climb options",0.35)
-    tom_3_at,tom_3_dur=_sync("player traps",0.35)
-    tom_4_at,tom_4_dur=_sync("captaincy",0.35)
-    tom_5_at,tom_5_dur=_sync("transfer plan",0.35)
-    cta_at,cta_dur=_sync("Subscribe and follow",0.45)
-    next_video_at,next_video_dur=_sync("next video",0.35)
-    climb_at,_=_sync("climb the ranks",0.35)
+    # Anchor section transitions to spoken Ryan words; preview cards reveal in sequence.
+    today_at,_=_sync("the picture",0.35)
+    take_1_at,take_1_dur=_sync("the fixtures help",0.40)
+    take_2_at,take_2_dur=_sync("the model likes",0.40)
+    take_3_at,take_3_dur=_sync("need caution",0.40)
+    tomorrow_at,_=_sync("In the next video",0.35)
+    tomorrow_head_at,tomorrow_head_dur=_sync("player-by-player plan",0.45)
+    tom_1_at,tom_2_at,tom_3_at,tom_4_at,tom_5_at=(
+        round(tomorrow_head_at+index*0.22,3) for index in range(5)
+    )
+    tom_1_dur=tom_2_dur=tom_3_dur=tom_4_dur=tom_5_dur=0.35
+    cta_at,cta_dur=_sync("Subscribe",0.45)
+    next_video_at,next_video_dur=round(cta_at+0.45,3),0.35
+    climb_at,_=_sync("Subscribe",0.35)
 
     return [
         {"sel":"#summaryStage .topHeader","at":today_at,"dur":0.55,"stagger":0.05,"fx":"left"},
@@ -25629,12 +25628,12 @@ for key,(src_name,out_name) in SCENES.items():
     # Outro timings are strict Ryan WordBoundary anchors — no guessed fallbacks.
     if key=="05_outro":
 
-        today_1=vx_phrase_time(words,"best fixture runs",required=True,context="05_outro recap")
-        today_2=vx_phrase_time(words,"strongest projected output",required=True,context="05_outro recap")
-        today_3=vx_phrase_time(words,"highest clean-sheet potential",required=True,context="05_outro recap")
-        tomorrow=vx_phrase_time(words,"Tomorrow",required=True,context="05_outro tomorrow panel")
-        cta_start=vx_phrase_time(words,"Subscribe and follow",required=True,context="05_outro CTA")
-        logo_phrase_start=vx_phrase_time(words,"Let us make smarter",required=True,context="05_outro logo finale")
+        today_1=vx_phrase_time(words,"the fixtures help",required=True,context="05_outro recap")
+        today_2=vx_phrase_time(words,"the model likes",required=True,context="05_outro recap")
+        today_3=vx_phrase_time(words,"need caution",required=True,context="05_outro recap")
+        tomorrow=vx_phrase_time(words,"In the next video",required=True,context="05_outro tomorrow panel")
+        cta_start=vx_phrase_time(words,"Subscribe",required=True,context="05_outro CTA")
+        logo_phrase_start=vx_phrase_time(words,"one Gameweek never tells the whole story",required=True,context="05_outro logo finale")
         minimum_logo_hold=3.25
         logo_start=min(logo_phrase_start,max(0.0,duration-minimum_logo_hold))
         logo_start=max(logo_start,cta_start+1.20)
@@ -25660,11 +25659,11 @@ for key,(src_name,out_name) in SCENES.items():
             {"text":"Best Fixtures","at":round(today_1,3)},
             {"text":"Best Projected Attack","at":round(today_2,3)},
             {"text":"Best Clean-Sheet Odds","at":round(today_3,3)},
-            {"text":"Safe Core Picks","at":round(vx_phrase_time(words,"safe core picks",required=True,context="05_outro agenda"),3)},
-            {"text":"Rank-Climb Options","at":round(vx_phrase_time(words,"rank-climb options",required=True,context="05_outro agenda"),3)},
-            {"text":"Player Traps","at":round(vx_phrase_time(words,"player traps",required=True,context="05_outro agenda"),3)},
+            {"text":"Safe Core Picks","at":round(vx_phrase_time(words,"player-by-player plan",required=True,context="05_outro agenda"),3)},
+            {"text":"Rank-Climb Options","at":round(vx_phrase_time(words,"player-by-player plan",required=True,context="05_outro agenda"),3)},
+            {"text":"Player Traps","at":round(vx_phrase_time(words,"transfers",required=True,context="05_outro agenda"),3)},
             {"text":"Captaincy","at":round(vx_phrase_time(words,"captaincy",required=True,context="05_outro agenda"),3)},
-            {"text":"Transfer Plan","at":round(vx_phrase_time(words,"transfer plan",required=True,context="05_outro agenda"),3)},
+            {"text":"Transfer Plan","at":round(vx_phrase_time(words,"transfers",required=True,context="05_outro agenda"),3)},
         ]
 
     page=src.read_text(
