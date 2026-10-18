@@ -24952,10 +24952,8 @@ def events_for(key, info):
     if key=="00_intro":
 
         welcome_at,_=_sync("Welcome",0.35)
-        _,agenda_1_dur=_sync("Gameweek review",0.45)
-        _,agenda_2_dur=_sync("fixture difficulty",0.45)
-        _,agenda_3_dur=_sync("projected goals",0.45)
-        _,agenda_4_dur=_sync("clean sheet odds",0.45)
+        # Agenda cards appear at fixed times, independent of narration wording.
+        agenda_1_dur = agenda_2_dur = agenda_3_dur = agenda_4_dur = 0.45
 
         # Intro visual order is clock-locked: fixtures remain visible through
         # 18.000s, disappear, then the agenda cards pop in from 18.000s.
