@@ -72,6 +72,8 @@ jobs:
           print("Day 1 integrity and 33-cell syntax check: PASS")
           PY
 
+          python -m unittest discover -s tests -p 'test_day1_narration_sync.py' -v
+
       - name: Verify private YouTube upload configuration
         shell: bash
         run: |
