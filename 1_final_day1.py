@@ -15898,7 +15898,7 @@ def vx_review_creator_player_text(player: dict[str, Any], index: int, bench: boo
     elif index == 0:
         prefix = {"GK": "In goal, ", "DEF": "At the back, ", "MID": "In midfield, ", "FWD": "Up front, "}[player["pos"]]
     else:
-        openings = ("Then there's ", "As for ", "And ", "Meanwhile, ")
+        openings = ("Meanwhile, ", "Elsewhere, ", "Next, ", "And ")
         prefix = openings[(index + {"GK": 0, "DEF": 1, "MID": 2, "FWD": 3}[player["pos"]]) % len(openings)]
     reason = vx_review_return_reason(player)
     if points is None:
@@ -15936,8 +15936,8 @@ def vx_review_creator_player_text(player: dict[str, Any], index: int, bench: boo
         if recent and schedule:
             context_lines = (
                 f" That's {recent}, but {schedule} matters more than one result.",
-                f" That's {recent} to weigh against {schedule}.",
-                f" That's {recent} recently; {schedule} is the next test.",
+                f" That's {recent}; now we need to weigh it against {schedule}.",
+                f" The recent record is {recent}; {schedule} is the next test.",
                 f" With {recent}, it's worth considering {schedule} before judging one score.",
             )
             text += context_lines[story_index]
@@ -16106,8 +16106,8 @@ if _review_known_active:
     highest_player = max(_review_known_active, key=lambda player: (player["points"], bool(player.get("captain") or int(player.get("multiplier") or 0) > 1), player.get("bonus", 0), player.get("goals", 0) + player.get("assists", 0), player.get("minutes", 0)))
     _quietest_player = min(_review_known_active, key=lambda player: (player["points"], player.get("minutes", 0), _review_narration_context[int(player["id"])]["last_three"]["total_points"] if _review_narration_context[int(player["id"])]["last_three"]["complete"] and _review_narration_context[int(player["id"])]["last_three"]["total_points"] is not None else math.inf))
     _hero_reason = vx_review_return_reason(highest_player)
-    _review_narration["gameweek_hero"] = f"The standout return came from {vx_review_full_name(highest_player)} with {highest_player['points']}" + (f", helped by {_hero_reason}." if _hero_reason else " points.")
-    _review_narration["quietest_return"] = f"At the other end, {vx_review_full_name(_quietest_player)} had {_quietest_player['points']} points. But one week isn't the full picture."
+    _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} led the way with {highest_player['points']} points" + (f", including {_hero_reason}." if _hero_reason else ".")
+    _review_narration["quietest_return"] = (f"{vx_review_full_name(_quietest_player)} currently has {_quietest_player['points']} points, but the Gameweek is still unfolding." if GW_REVIEW_PARTIAL else f"At the other end, {vx_review_full_name(_quietest_player)} had {_quietest_player['points']} points. But one week isn't the full picture.")
 
 _review_alerts = []
 for _player in review_players:
@@ -24549,7 +24549,7 @@ Over the next six Gameweeks, the strongest attacks in the model are {vx_narr_tea
 
 {vx_narr_team(narr_goal_target,1)} aren't far behind on {vx_narr_goals_6gw(narr_goal_target,1):.2f}, but having no cover from this team isn't, by itself, a reason to buy. Is there a player with the role and minutes to justify it?
 
-{vx_narr_team(narr_goal_target,2)}, {vx_narr_team(narr_goal_target,3)}, and {vx_narr_team(narr_goal_target,4)} complete the top five, each projected between {vx_narr_goals_6gw(narr_goal_target,4):.2f} and {vx_narr_goals_6gw(narr_goal_target,2):.2f} goals. Good signals across the board — but remember, this is a team-level number. The player who benefits most is whoever's guaranteed minutes and a direct route to goal involvement, not just anyone wearing the shirt. Rotation risk can quietly undo a great team projection, so always check the starting eleven before you check the price tag.
+{vx_narr_team(narr_goal_target,2)}, {vx_narr_team(narr_goal_target,3)}, and {vx_narr_team(narr_goal_target,4)} complete the top five, each projected between {vx_narr_goals_6gw(narr_goal_target,4):.2f} and {vx_narr_goals_6gw(narr_goal_target,2):.2f} goals. Good signals across the board — but remember, this is a team-level number. The player most likely to benefit is someone with reliable minutes and a direct route to goal involvement, not just anyone wearing the shirt. Rotation risk can quietly undo a great team projection, so always check the starting eleven before you check the price tag.
 
 On the other side, three attacks are projected well below the rest: {vx_narr_team(narr_goal_low,0)}, {vx_narr_team(narr_goal_low,1)}, and {vx_narr_team(narr_goal_low,2)}.
 
@@ -24568,7 +24568,7 @@ Now, what about the defence? A friendly fixture can look great on the ticker, bu
 
 The five strongest defensive projections over the next six Gameweeks belong to {vx_narr_team(narr_cs_target,0)}, {vx_narr_team(narr_cs_target,1)}, {vx_narr_team(narr_cs_target,2)}, {vx_narr_team(narr_cs_target,3)}, and {vx_narr_team(narr_cs_target,4)}.
 
-{vx_narr_team(narr_cs_target,0)} lead the way at an average {vx_narr_cs_6gw(narr_cs_target,0):.0f} percent clean-sheet chance per fixture across that run. It's an estimate, not a guarantee. This is the first defence I'd look at. Start with whoever's nailed on to start, then weigh up price, attacking threat, and bonus potential — the biggest name isn't always the best value pick here. A settled back line makes that projection easier to trust than a defence still shuffling its personnel.
+{vx_narr_team(narr_cs_target,0)} lead the way at an average {vx_narr_cs_6gw(narr_cs_target,0):.0f} percent clean-sheet chance per fixture across that run. It's an estimate, not a guarantee. This is the first defence I'd look at. Start with the players most likely to start, then weigh up price, attacking threat, and bonus potential — the biggest name isn't always the best value pick here. A settled back line makes that projection easier to trust than a defence still shuffling its personnel.
 
 {vx_narr_team(narr_cs_target,1)} follow close at {vx_narr_cs_6gw(narr_cs_target,1):.0f} percent. Strong enough that if you already own a starter there, this comfortably supports the hold.
 
