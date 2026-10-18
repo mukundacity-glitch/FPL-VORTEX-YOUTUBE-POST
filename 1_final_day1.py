@@ -15850,7 +15850,7 @@ def vx_review_context(player: dict[str, Any]) -> dict[str, Any]:
 def vx_review_recent_phrase(context: dict[str, Any]) -> str:
     recent = context["last_three"]
     if recent["complete"] and len(recent["gameweeks"]) == 3 and recent["total_points"] is not None:
-        return f"{int(recent['total_points'])} across the last three"
+        return f"{int(recent['total_points'])} points across the last three Gameweeks"
     minutes = vx_review_number(context["stats"].get("minutes"))
     return f"{int(minutes)} minutes this week" if minutes is not None else ""
 
@@ -15893,9 +15893,13 @@ def vx_review_creator_player_text(player: dict[str, Any], index: int, bench: boo
     name = context["full_name"]
     points = vx_review_number(context["stats"].get("total_points"))
     minutes = vx_review_number(context["stats"].get("minutes"))
-    prefix = ("For the reserves, " if index == 0 else "Elsewhere, " if index % 2 else "Alongside him, ") if bench else (
-        {"GK": "In goal, ", "DEF": "At the back, ", "MID": "In midfield, ", "FWD": "Up front, "}[player["pos"]] if index == 0 else "Elsewhere, " if index % 2 else "Alongside him, "
-    )
+    if bench:
+        prefix = ("On the bench, ", "Next among the reserves, ", "Also on the bench, ", "And finally, ")[index % 4]
+    elif index == 0:
+        prefix = {"GK": "In goal, ", "DEF": "At the back, ", "MID": "In midfield, ", "FWD": "Up front, "}[player["pos"]]
+    else:
+        openings = ("Meanwhile, ", "Elsewhere, ", "Next, ", "And ")
+        prefix = openings[(index + {"GK": 0, "DEF": 1, "MID": 2, "FWD": 3}[player["pos"]]) % len(openings)]
     reason = vx_review_return_reason(player)
     if points is None:
         return prefix + name + " has no confirmed return yet."
@@ -15931,10 +15935,10 @@ def vx_review_creator_player_text(player: dict[str, Any], index: int, bench: boo
         recent, schedule = vx_review_recent_phrase(context), vx_review_schedule(context)
         if recent and schedule:
             context_lines = (
-                f" With {recent}, {schedule} matters more than one result.",
-                f" There is {recent} to weigh against {schedule}.",
-                f" The recent picture is {recent}; {schedule} is the next test.",
-                f" That leaves {recent}, with {schedule} still ahead.",
+                f" That's {recent}, but {schedule} matters more than one result.",
+                f" That's {recent}; now we need to weigh it against {schedule}.",
+                f" The recent record is {recent}; {schedule} is the next test.",
+                f" With {recent}, it's worth considering {schedule} before judging one score.",
             )
             text += context_lines[story_index]
         elif recent:
@@ -16059,7 +16063,7 @@ for _player in review_starters:
         _spoken += " His place was covered by an automatic substitution."
     _review_narration[_review_section_names[_player["pos"]]] += _spoken + " "
     segments.append({"id": f"player_{_player['id']}", "player_id": _player["id"], "name": _player["name"], "spoken_name": vx_review_full_name(_player), "kind": "starter", "text": _spoken})
-segments.append({"id": "bench_intro", "text": "There is also a story in the squad depth."})
+segments.append({"id": "bench_intro", "text": "Before we move on, let's check the bench."})
 for _index, _player in enumerate(review_bench):
     _spoken = vx_review_creator_player_text(_player, _index, bench=True)
     if _review_final_available and int(_player["id"]) in _review_final_ids and int(_player["id"]) not in _review_selected_ids:
@@ -16102,8 +16106,8 @@ if _review_known_active:
     highest_player = max(_review_known_active, key=lambda player: (player["points"], bool(player.get("captain") or int(player.get("multiplier") or 0) > 1), player.get("bonus", 0), player.get("goals", 0) + player.get("assists", 0), player.get("minutes", 0)))
     _quietest_player = min(_review_known_active, key=lambda player: (player["points"], player.get("minutes", 0), _review_narration_context[int(player["id"])]["last_three"]["total_points"] if _review_narration_context[int(player["id"])]["last_three"]["complete"] and _review_narration_context[int(player["id"])]["last_three"]["total_points"] is not None else math.inf))
     _hero_reason = vx_review_return_reason(highest_player)
-    _review_narration["gameweek_hero"] = f"The Gameweek hero was {vx_review_full_name(highest_player)} with {highest_player['points']}" + (f", helped by {_hero_reason}." if _hero_reason else " points.")
-    _review_narration["quietest_return"] = f"The quietest return came from {vx_review_full_name(_quietest_player)} with {_quietest_player['points']}; one week does not tell the whole story."
+    _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} led the way with {highest_player['points']} points" + (f", including {_hero_reason}." if _hero_reason else ".")
+    _review_narration["quietest_return"] = (f"{vx_review_full_name(_quietest_player)} currently has {_quietest_player['points']} points, but the Gameweek is still unfolding." if GW_REVIEW_PARTIAL else f"At the other end, {vx_review_full_name(_quietest_player)} had {_quietest_player['points']} points. But one week isn't the full picture.")
 
 _review_alerts = []
 for _player in review_players:
@@ -16132,9 +16136,9 @@ _clean_availability = all(context["status"] == "a" and not context["news"] for c
 _review_narration["outro"] = (
     ("There are no official availability flags in this squad. " if _clean_availability else "")
     + ("This is still a provisional review. " if GW_REVIEW_PARTIAL else "")
-    + "That is the review. Recent minutes and the next fixtures will show whether the quieter returns are a dip or a trend."
+    + "So that's where the squad stands. One quiet week isn't the whole story; minutes and upcoming fixtures matter much more."
 )
-segments.append({"id": "metrics_intro", "text": "The armband is the next part of the story."})
+segments.append({"id": "metrics_intro", "text": "Now, did the captaincy pay off?"})
 for _segment_id, _section in (("metric_captain", "captain_review"), ("hero_review", "gameweek_hero"), ("quietest_review", "quietest_return"), ("availability_review", "availability_alerts"), ("review_close", "outro")):
     if _review_narration[_section]:
         segments.append({"id": _segment_id, "text": _review_narration[_section]})
@@ -24490,23 +24494,23 @@ scripts = {
 
 f"""
 
-Welcome to Fantasy Premier League Vortex analysis.
+Welcome back to Fantasy Premier League Vortex.
 
-Gameweek {NEXT_GW} is not about chasing last week's points. It is about spotting what could happen next.
+Gameweek {NEXT_GW} brings a familiar question. Do you chase the players who returned last week, or focus on the fixtures and numbers that could matter next?
 
-Some teams are heading into excellent fixtures. Others may look tempting on paper, but the numbers tell a different story.
+Let's work through it properly.
 
-We will start with a quick Gameweek review — the points, the minutes, and any role changes worth paying attention to.
+First, we'll revisit the last Gameweek. The points are useful, but the minutes and roles behind them tell us more.
 
-Then we move into fixture difficulty, looking at the six-Gameweek runs that could create real Fantasy Premier League value, and the ones that deserve caution.
+Then we'll look at the next six fixtures. Which teams have a run worth targeting, and which apparently easy schedules need a second look?
 
-After that, we will check the projected goals to see which attacks are most likely to produce chances.
+From there, we'll compare projected goals and ask where the attacking upside might actually come from.
 
-Then we turn to clean sheet odds and identify the defences that have both fixtures and data on their side.
+And we'll look at clean-sheet probabilities, because a good fixture alone doesn't make a defender a good transfer.
 
-And at the end, I will bring everything together into clear transfer priorities for Gameweek {NEXT_GW}.
+By the end, we'll have a clearer shortlist for Gameweek {NEXT_GW}, along with the reasons to act and the reasons to wait.
 
-The goal is simple: spot the opportunity early, before everyone else does.
+The aim isn't to chase last week's result. It's to make the next decision count.
 
 """.strip(),
 
@@ -24514,11 +24518,11 @@ The goal is simple: spot the opportunity early, before everyone else does.
 "02_fdr":
 f"""
 
-Over the next six Gameweeks, fixtures are going to shape a lot of transfer decisions, so let's get straight into it.
+Let's start with the fixture swing. Over six Gameweeks, a good run can change the transfer conversation. But is a green fixture list enough on its own? Not quite.
 
 Five teams stand out with genuinely favourable runs: {vx_narr_team(narr_target,0)}, {vx_narr_team(narr_target,1)}, {vx_narr_team(narr_target,2)}, {vx_narr_team(narr_target,3)}, and {vx_narr_team(narr_target,4)}.
 
-{vx_narr_team(narr_target,0)} top the list with the easiest schedule in the league, averaging {vx_narr_fdr_value(narr_target,0):.1f} fixture difficulty. That's the first club I'd actually go and check for a transfer this week — start with whoever's nailed on for minutes, then let the attacking or defensive numbers confirm the pick.
+{vx_narr_team(narr_target,0)} top the list with the easiest schedule in the league, averaging {vx_narr_fdr_value(narr_target,0):.1f} fixture difficulty. That puts them straight on the shortlist. I'd still check who is likely to play consistently and whether the attacking or defensive projections support a move.
 
 {vx_narr_team(narr_target,1)} are close behind at {vx_narr_fdr_value(narr_target,1):.1f}. No need to rush here — this is more of a "get ready" fixture list than a "buy today" one. Hold your transfer, keep the budget flexible, and let the picture sharpen.
 
@@ -24530,22 +24534,22 @@ Now the other end of the table. Three teams face a genuinely tough stretch: {vx_
 
 {vx_narr_team(narr_avoid,1)} and {vx_narr_team(narr_avoid,2)} aren't far off, at {vx_narr_fdr_value(narr_avoid,1):.1f} and {vx_narr_fdr_value(narr_avoid,2):.1f}. If a player from either side pops off with a goal or a clean sheet, don't chase it blind — check what's actually coming next before you spend a transfer on the back of one good week.
 
-So: {vx_narr_team(narr_target,0)}, {vx_narr_team(narr_target,1)}, {vx_narr_team(narr_target,2)}, {vx_narr_team(narr_target,3)}, and {vx_narr_team(narr_target,4)} to target — {vx_narr_team(narr_avoid,0)}, {vx_narr_team(narr_avoid,1)}, and {vx_narr_team(narr_avoid,2)} to treat with caution. Favourable fixtures start the conversation; secure minutes and real output finish it.
+So, what would I actually do with this? Start the shortlist with the five easier runs, but don't buy a player just because the fixture colours look good. Check minutes, role and projected output before committing a transfer. And if you already own a proven player with tougher fixtures, a difficult run isn't automatically a reason to sell.
 
 """.strip(),
 
 "03_projected_goals":
 f"""
 
-Fixtures tell you where the opportunity is. Projected goals tell you who's actually going to convert it.
+Fixtures show where an opportunity might open up. Projected goals help us estimate which attacks could benefit. They're forecasts, though, not promises.
 
 Over the next six Gameweeks, the strongest attacks in the model are {vx_narr_team(narr_goal_target,0)}, {vx_narr_team(narr_goal_target,1)}, {vx_narr_team(narr_goal_target,2)}, {vx_narr_team(narr_goal_target,3)}, and {vx_narr_team(narr_goal_target,4)}.
 
-{vx_narr_team(narr_goal_target,0)} sit at the top, projected for {vx_narr_goals_6gw(narr_goal_target,0):.2f} goals across the window — the highest total in the league. That's your first attack to investigate: look at whoever owns the central role, the penalties, the set pieces. That's usually where the value actually lives, not just the biggest name in the front three. If that player is also nailed on for ninety minutes every week, the case gets even stronger.
+{vx_narr_team(narr_goal_target,0)} sit at the top, projected for {vx_narr_goals_6gw(narr_goal_target,0):.2f} goals across the window — the highest total in the league. That's your first attack to investigate: look at whoever owns the central role, the penalties, the set pieces. That's usually where the value actually lives, not just the biggest name in the front three. If their minutes look reliable as well, the case gets stronger.
 
-{vx_narr_team(narr_goal_target,1)} aren't far behind on {vx_narr_goals_6gw(narr_goal_target,1):.2f}, and if you've got zero coverage from this attack right now, it's worth serious thought.
+{vx_narr_team(narr_goal_target,1)} aren't far behind on {vx_narr_goals_6gw(narr_goal_target,1):.2f}, but having no cover from this team isn't, by itself, a reason to buy. Is there a player with the role and minutes to justify it?
 
-{vx_narr_team(narr_goal_target,2)}, {vx_narr_team(narr_goal_target,3)}, and {vx_narr_team(narr_goal_target,4)} complete the top five, each projected between {vx_narr_goals_6gw(narr_goal_target,4):.2f} and {vx_narr_goals_6gw(narr_goal_target,2):.2f} goals. Good signals across the board — but remember, this is a team-level number. The player who benefits most is whoever's guaranteed minutes and a direct route to goal involvement, not just anyone wearing the shirt. Rotation risk can quietly undo a great team projection, so always check the starting eleven before you check the price tag.
+{vx_narr_team(narr_goal_target,2)}, {vx_narr_team(narr_goal_target,3)}, and {vx_narr_team(narr_goal_target,4)} complete the top five, each projected between {vx_narr_goals_6gw(narr_goal_target,4):.2f} and {vx_narr_goals_6gw(narr_goal_target,2):.2f} goals. Good signals across the board — but remember, this is a team-level number. The player most likely to benefit is someone with reliable minutes and a direct route to goal involvement, not just anyone wearing the shirt. Rotation risk can quietly undo a great team projection, so always check the starting eleven before you check the price tag.
 
 On the other side, three attacks are projected well below the rest: {vx_narr_team(narr_goal_low,0)}, {vx_narr_team(narr_goal_low,1)}, and {vx_narr_team(narr_goal_low,2)}.
 
@@ -24553,22 +24557,22 @@ On the other side, three attacks are projected well below the rest: {vx_narr_tea
 
 {vx_narr_team(narr_goal_low,1)} and {vx_narr_team(narr_goal_low,2)} sit close by. Existing assets there might still be worth holding, but if you're looking to spend a transfer, stronger attacking environments exist elsewhere. Patience usually pays off more than panic-selling a player the moment the fixtures turn.
 
-Bottom line: {vx_narr_team(narr_goal_target,0)}, {vx_narr_team(narr_goal_target,1)}, {vx_narr_team(narr_goal_target,2)}, {vx_narr_team(narr_goal_target,3)}, and {vx_narr_team(narr_goal_target,4)} to target — {vx_narr_team(narr_goal_low,0)}, {vx_narr_team(narr_goal_low,1)}, and {vx_narr_team(narr_goal_low,2)} to avoid. Let the projection narrow your list, then let minutes and role pick the actual player.
+Here's the key distinction: a strong team projection isn't an automatic player recommendation. Use these rankings to narrow the search, then look at minutes, role and price. That's how you turn a promising attacking forecast into a sensible transfer decision.
 
 """.strip(),
 
 "04_clean_sheets":
 f"""
 
-Good fixtures are one thing — clean-sheet probability tells you which defences are actually likely to cash them in. Pairing the two together is where the sharpest defensive transfers usually come from.
+Now, what about the defence? A friendly fixture can look great on the ticker, but how likely is that clean sheet? That's why we're comparing the schedule with the model, rather than relying on fixture colours alone.
 
 The five strongest defensive projections over the next six Gameweeks belong to {vx_narr_team(narr_cs_target,0)}, {vx_narr_team(narr_cs_target,1)}, {vx_narr_team(narr_cs_target,2)}, {vx_narr_team(narr_cs_target,3)}, and {vx_narr_team(narr_cs_target,4)}.
 
-{vx_narr_team(narr_cs_target,0)} lead the way at {vx_narr_cs_6gw(narr_cs_target,0):.0f} percent — the highest in the model. This is the first defence I'd look at. Start with whoever's nailed on to start, then weigh up price, attacking threat, and bonus potential — the biggest name isn't always the best value pick here. A settled back line makes that projection easier to trust than a defence still shuffling its personnel.
+{vx_narr_team(narr_cs_target,0)} lead the way at an average {vx_narr_cs_6gw(narr_cs_target,0):.0f} percent clean-sheet chance per fixture across that run. It's an estimate, not a guarantee. This is the first defence I'd look at. Start with the players most likely to start, then weigh up price, attacking threat, and bonus potential — the biggest name isn't always the best value pick here. A settled back line makes that projection easier to trust than a defence still shuffling its personnel.
 
 {vx_narr_team(narr_cs_target,1)} follow close at {vx_narr_cs_6gw(narr_cs_target,1):.0f} percent. Strong enough that if you already own a starter there, this comfortably supports the hold.
 
-{vx_narr_team(narr_cs_target,2)}, {vx_narr_team(narr_cs_target,3)}, and {vx_narr_team(narr_cs_target,4)} round out the top five, ranging from {vx_narr_cs_6gw(narr_cs_target,4):.0f} to {vx_narr_cs_6gw(narr_cs_target,2):.0f} percent. All solid defensive environments — the order to check is minutes first, clean-sheet odds second, then extra upside through saves or attacking returns. A goalkeeper on penalty duty or a centre-back who attacks set pieces can turn a good defensive pick into a genuinely great one.
+{vx_narr_team(narr_cs_target,2)}, {vx_narr_team(narr_cs_target,3)}, and {vx_narr_team(narr_cs_target,4)} round out the top five, ranging from {vx_narr_cs_6gw(narr_cs_target,4):.0f} to {vx_narr_cs_6gw(narr_cs_target,2):.0f} percent. All solid defensive environments — the order to check is minutes first, clean-sheet odds second, then extra upside through saves or attacking returns. A goalkeeper who collects saves or a defender who attacks set pieces can offer something even when the clean sheet doesn't arrive.
 
 Now the weaker end: {vx_narr_team(narr_cs_low,0)}, {vx_narr_team(narr_cs_low,1)}, and {vx_narr_team(narr_cs_low,2)} have the softest clean-sheet outlooks in the league.
 
@@ -24576,7 +24580,7 @@ Now the weaker end: {vx_narr_team(narr_cs_low,0)}, {vx_narr_team(narr_cs_low,1)}
 
 {vx_narr_team(narr_cs_low,1)} and {vx_narr_team(narr_cs_low,2)} aren't much better. If you're holding a defender or keeper from either side, I'd want real attacking upside or save potential to justify keeping them in. Don't be afraid to rotate a defensive asset out early if the model keeps pointing the same direction week after week.
 
-So: {vx_narr_team(narr_cs_target,0)}, {vx_narr_team(narr_cs_target,1)}, {vx_narr_team(narr_cs_target,2)}, {vx_narr_team(narr_cs_target,3)}, and {vx_narr_team(narr_cs_target,4)} to target for defensive returns — {vx_narr_team(narr_cs_low,0)}, {vx_narr_team(narr_cs_low,1)}, and {vx_narr_team(narr_cs_low,2)} to treat with caution. Start with the strongest defensive environment, then let price and role decide the player.
+So, would I bring in a defender from the top-ranked side right away? Only if the price, likely minutes and your current squad make the move worthwhile. The probability helps us compare options; it doesn't make the decision for us.
 
 """.strip(),
 
@@ -24584,11 +24588,11 @@ So: {vx_narr_team(narr_cs_target,0)}, {vx_narr_team(narr_cs_target,1)}, {vx_narr
 
 f"""
 
-Today, we found the teams with the best fixture runs, strongest projected output, and highest clean-sheet potential.
+That's the picture heading into Gameweek {NEXT_GW}: where the fixtures help, what the model likes, and where we still need caution.
 
-Tomorrow, we turn that data into player decisions: safe core picks, rank-climb options, player traps, captaincy, and the final transfer plan.
+In the next video, we'll put that into a player-by-player plan, including transfers and captaincy.
 
-Subscribe and follow for the next video. Let us make smarter decisions, stay ahead, and climb the ranks.
+Subscribe if that helps you make clearer decisions. And remember, one Gameweek never tells the whole story.
 
 """.strip(),
 
