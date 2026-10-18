@@ -34,12 +34,26 @@ def narration_literals(source: str) -> dict[str, str]:
                 "00_intro", "05_outro"
             ):
                 continue
-            if not isinstance(value, ast.JoinedStr):
-                raise AssertionError(f"{key.value} narration is not an f-string")
-            scripts[key.value] = "".join(
-                part.value if isinstance(part, ast.Constant) else " _dynamic_ "
-                for part in value.values
-            )
+            expression = value
+            if (
+                isinstance(expression, ast.Call)
+                and isinstance(expression.func, ast.Attribute)
+                and expression.func.attr == "strip"
+                and not expression.args
+                and not expression.keywords
+            ):
+                expression = expression.func.value
+            if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+                scripts[key.value] = expression.value.strip()
+            elif isinstance(expression, ast.JoinedStr):
+                scripts[key.value] = "".join(
+                    part.value
+                    if isinstance(part, ast.Constant) and isinstance(part.value, str)
+                    else " _dynamic_ "
+                    for part in expression.values
+                ).strip()
+            else:
+                raise AssertionError(f"{key.value} narration is not a literal string")
     return scripts
 
 
@@ -72,6 +86,18 @@ def required_animation_anchors(source: str) -> dict[str, list[str]]:
 
 
 class TestDay1NarrationSync(unittest.TestCase):
+    def test_narration_literals_accepts_stripped_strings(self) -> None:
+        scripts = narration_literals(
+            'scripts = {"00_intro": f"Welcome GW{gameweek}".strip(), '
+            '"05_outro": "Subscribe now".strip()}'
+        )
+        self.assertEqual(scripts["00_intro"], "Welcome GW _dynamic_")
+        self.assertEqual(scripts["05_outro"], "Subscribe now")
+
+    def test_nonliteral_narration_is_rejected(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "00_intro"):
+            narration_literals('scripts = {"00_intro": build_intro()}')
+
     def test_required_anchors_are_present_in_spoken_scripts(self) -> None:
         source = SOURCE_PATH.read_text(encoding="utf-8")
         scripts = narration_literals(source)
