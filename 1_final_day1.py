@@ -25821,7 +25821,7 @@ FORCE = bool(globals().get("FORCE_RERENDER", False))
 # the requested constant output frame rate. Static narration holds cost no
 # browser screenshots.
 MOTION_CAPTURE_FPS = int(
-    globals().get("CELL20_MOTION_CAPTURE_FPS", 12 if FPS > 5 else FPS)
+    globals().get("CELL20_MOTION_CAPTURE_FPS", FPS)
 )
 MOTION_CAPTURE_FPS = max(1, min(MOTION_CAPTURE_FPS, max(FPS, 12)))
 JPEG_QUALITY = int(globals().get("CELL20_JPEG_QUALITY", 94))
@@ -26454,6 +26454,7 @@ CONCAT_FILE = ASSEMBLY_WORK / "selected_scenes.ffconcat"
 QA_FILE = DATA / "final_video_qa.json"
 CACHE_FILE = DATA / "cell21_master_cache.json"
 ASSEMBLER_VERSION = "VX21-RESUME-ATOMIC-V1"
+FULL_SCENE_HASH_QA = bool(globals().get("CELL21_FULL_SCENE_HASH_QA", False))
 
 
 # ------------------------------------------------------------
@@ -26493,6 +26494,14 @@ def _vx21_quick_hash(path, chunk_size=1024 * 1024):
         if size > chunk_size:
             handle.seek(max(0, size - chunk_size))
             digest.update(handle.read(chunk_size))
+    return digest.hexdigest()
+
+
+def _vx21_full_sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -26644,6 +26653,8 @@ for number, (key, label, path) in enumerate(ORDER, 1):
         "duration": duration,
         "signature": list(signature),
     }
+    if FULL_SCENE_HASH_QA:
+        source_record["full_sha256"] = _vx21_full_sha256(path)
     source_fingerprints.append(source_record)
     reports.append({
         "order": number,
@@ -26656,6 +26667,7 @@ for number, (key, label, path) in enumerate(ORDER, 1):
         "video_codec": video.get("codec_name"),
         "audio_codec": audio.get("codec_name"),
         "quick_sha256": quick_hash,
+        **({"full_sha256": source_record["full_sha256"]} if FULL_SCENE_HASH_QA else {}),
     })
 
     print(
@@ -26975,6 +26987,7 @@ qa = {
     "video_codec": master_media["video_codec"],
     "audio_codec": master_media["audio_codec"],
     "assembly_mode": ASSEMBLY_MODE,
+    "full_scene_hash_qa": FULL_SCENE_HASH_QA,
     "master_reused": REUSE_MASTER,
     "combined_mp3_reused": REUSE_MP3,
     "expected_duration": expected_duration,
