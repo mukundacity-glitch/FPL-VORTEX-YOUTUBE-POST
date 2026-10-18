@@ -25821,7 +25821,7 @@ FORCE = bool(globals().get("FORCE_RERENDER", False))
 # the requested constant output frame rate. Static narration holds cost no
 # browser screenshots.
 MOTION_CAPTURE_FPS = int(
-    globals().get("CELL20_MOTION_CAPTURE_FPS", 12 if FPS > 5 else FPS)
+    globals().get("CELL20_MOTION_CAPTURE_FPS", FPS)
 )
 MOTION_CAPTURE_FPS = max(1, min(MOTION_CAPTURE_FPS, max(FPS, 12)))
 JPEG_QUALITY = int(globals().get("CELL20_JPEG_QUALITY", 94))
