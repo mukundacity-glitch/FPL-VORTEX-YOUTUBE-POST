@@ -18737,7 +18737,7 @@ manifest = {
 print("✅ GW REVIEW ANIMATION READY")
 print(f"✅ GW: {pkg['gw']}")
 print("✅ Frame zero: header + channel logo + footer only")
-print("✅ Premier League logo 0:01 • title 0:02 • pitch 0:03")
+print("✅ Gameweek Review logo, title and pitch animate immediately from frame zero")
 print("✅ Ryan-name → player pitch reveal")
 print("✅ Player remains on pitch")
 print("✅ Responsive CELL 15A hero card appears on the spoken name")
