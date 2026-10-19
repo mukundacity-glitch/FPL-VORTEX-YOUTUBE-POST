@@ -15564,18 +15564,42 @@ def _review_fixture_state(f):
 
 
 def fixture_for(team_id):
-    for f in review_fx:
-        if f["team_h"]==team_id or f["team_a"]==team_id:
-            home=f["team_h"]==team_id
-            opp=review_teams[f["team_a"] if home else f["team_h"]]["short_name"]
-            score=f'{f.get("team_h_score","—")}–{f.get("team_a_score","—")}'
-            return {
-                "opp":opp,
-                "ha":"H" if home else "A",
-                "score":score,
-                "state":_review_fixture_state(f),
-            }
-    return {"opp":"—","ha":"","score":"—","state":"PENDING"}
+    fixtures = [
+        fixture for fixture in review_fx
+        if team_id in (fixture.get("team_h"), fixture.get("team_a"))
+    ]
+    if not fixtures:
+        return {"opp":"—","ha":"","score":"—","state":"UNKNOWN"}
+
+    states = [_review_fixture_state(fixture) for fixture in fixtures]
+    if all(state == "FINAL" for state in states):
+        aggregate_state = "FINAL"
+    elif all(state == "PENDING" for state in states):
+        aggregate_state = "PENDING"
+    elif "LIVE" in states:
+        aggregate_state = "LIVE"
+    else:
+        aggregate_state = "PARTIAL"
+
+    # A double Gameweek must not be marked final while another fixture remains.
+    fixture = next(
+        (item for item, state in zip(fixtures, states) if state != "FINAL"),
+        fixtures[-1],
+    )
+    home = fixture["team_h"] == team_id
+    opponent = review_teams[fixture["team_a"] if home else fixture["team_h"]]["short_name"]
+    score = (
+        f'{fixture.get("team_h_score")}–{fixture.get("team_a_score")}'
+        if fixture.get("team_h_score") is not None
+        and fixture.get("team_a_score") is not None
+        else "—"
+    )
+    return {
+        "opp": opponent,
+        "ha": "H" if home else "A",
+        "score": score,
+        "state": aggregate_state,
+    }
 
 
 def next_fixture_for(team_id):
@@ -15775,7 +15799,9 @@ def vx_review_join(items: list[str]) -> str:
 
 
 def vx_review_full_name(player: dict[str, Any]) -> str:
-    return str(player.get("full_name") or " ".join(str(player.get(key) or "").strip() for key in ("first_name", "second_name")).strip() or player["name"])
+    # Official FPL web_name is the canonical spoken identity, not the legal surname.
+    spoken = vx_narration_player(player)
+    return str(spoken or player.get("name") or "").strip()
 
 
 def vx_review_context(player: dict[str, Any]) -> dict[str, Any]:
@@ -15888,11 +15914,24 @@ def vx_review_return_reason(player: dict[str, Any]) -> str:
     return vx_review_join(details[:2])
 
 
+def vx_review_player_result_state(player: dict[str, Any]) -> str:
+    fixture_state = str(player.get("review_state") or "UNKNOWN").upper()
+    minutes = vx_review_number(player.get("minutes"))
+    if fixture_state in {"PENDING", "UNKNOWN"}:
+        return "AWAITING" if fixture_state == "PENDING" else "UNKNOWN"
+    if minutes is None:
+        return "UNKNOWN"
+    if minutes <= 0:
+        return "DID_NOT_PLAY" if fixture_state == "FINAL" else "AWAITING"
+    return "COMPLETE" if fixture_state == "FINAL" else "PROVISIONAL"
+
+
 def vx_review_creator_player_text(player: dict[str, Any], index: int, bench: bool = False) -> str:
     context = _review_narration_context[int(player["id"])]
     name = context["full_name"]
     points = vx_review_number(context["stats"].get("total_points"))
     minutes = vx_review_number(context["stats"].get("minutes"))
+    result_state = vx_review_player_result_state(player)
     if bench:
         prefix = ("On the bench, ", "Next among the reserves, ", "Also on the bench, ", "And finally, ")[index % 4]
     elif index == 0:
@@ -15900,14 +15939,22 @@ def vx_review_creator_player_text(player: dict[str, Any], index: int, bench: boo
     else:
         openings = ("Meanwhile, ", "Elsewhere, ", "Next, ", "And ")
         prefix = openings[(index + {"GK": 0, "DEF": 1, "MID": 2, "FWD": 3}[player["pos"]]) % len(openings)]
-    reason = vx_review_return_reason(player)
+    if result_state == "AWAITING":
+        if str(player.get("review_state") or "").upper() == "LIVE":
+            return prefix + name + " has not featured yet; their match is still in progress."
+        return prefix + name + " has not played yet; their Gameweek score is not settled."
+    if result_state == "UNKNOWN":
+        return prefix + name + " has no verified match result yet."
+    if result_state == "DID_NOT_PLAY":
+        return prefix + name + " did not feature in the completed fixture, so there is no performance to judge."
     if points is None:
-        return prefix + name + " has no confirmed return yet."
+        return prefix + name + " has no confirmed points return yet."
     points = int(points)
     point_word = "point" if points == 1 else "points"
+    if result_state == "PROVISIONAL":
+        return prefix + name + f" has {points} {point_word} so far, but their Gameweek is not finished."
+    reason = vx_review_return_reason(player)
     story_index = int(player.get("squad_position") or index) % 4
-    if minutes == 0 and bench:
-        return prefix + name + (" has not featured yet, so the result is still open." if GW_REVIEW_PARTIAL else " did not feature, so there is no new performance to judge.")
     if player["pos"] == "GK" and not bench:
         text = prefix + name + f" returned {points} {point_word}" + (f" through {reason}." if reason else ".")
         recent = vx_review_recent_phrase(context)
@@ -16080,16 +16127,21 @@ if captain_player:
     _captain_minutes = vx_review_number(_captain_stats.get("minutes"))
     _captain_name = vx_review_full_name(captain_player)
     _captain_multiplier = int(captain_player.get("multiplier") or 0)
-    if _captain_minutes == 0:
-        _captain_text = f"Captain {_captain_name} did not play."
-        _vice_player = next((player for player in review_players if player.get("vice") and int(player.get("multiplier") or 0) > 1), None)
+    _captain_state = vx_review_player_result_state(captain_player)
+    if _captain_state in {"AWAITING", "UNKNOWN"}:
+        _captain_text = f"Captain {_captain_name} has not played yet, so their return is still unknown."
+    elif _captain_state == "DID_NOT_PLAY":
+        _captain_text = f"Captain {_captain_name} did not feature in the completed fixture."
+        _vice_player = next((player for player in review_players if player.get("vice") and int(player.get("multiplier") or 0) > 1 and vx_review_player_result_state(player) == "COMPLETE"), None)
         if _vice_player:
             _vice_raw = vx_review_number(_review_narration_context[int(_vice_player["id"])]["stats"].get("total_points"))
             if _vice_raw is not None:
                 _captain_text += f" The armband passed to {vx_review_full_name(_vice_player)}, contributing {int(_vice_raw) * int(_vice_player['multiplier'])} points."
+    elif _captain_state == "PROVISIONAL" and _captain_raw is not None:
+        _captain_text = f"Captain {_captain_name} has {int(_captain_raw)} points so far; the captaincy outcome remains provisional."
     elif _captain_raw is not None:
         captain_return = int(_captain_raw) * _captain_multiplier
-        _other_returns = [vx_review_number(_review_narration_context[int(player["id"])]["stats"].get("total_points")) for player in _review_final_players if int(player["id"]) != int(captain_player["id"])]
+        _other_returns = [vx_review_number(_review_narration_context[int(player["id"])]["stats"].get("total_points")) for player in _review_final_players if int(player["id"]) != int(captain_player["id"]) and vx_review_player_result_state(player) == "COMPLETE"]
         _other_returns = [value for value in _other_returns if value is not None]
         _captain_average = sum(_other_returns) / len(_other_returns) if _other_returns else None
         _captain_verdict = "above the other starters' average" if _captain_average is not None and _captain_raw > _captain_average else "below the other starters' average" if _captain_average is not None and _captain_raw < _captain_average else "level with the other starters' average" if _captain_average is not None else "the captain result this week"
@@ -16101,13 +16153,27 @@ if not _captain_text:
     _captain_text = "The captain result is not available in this snapshot."
 _review_narration["captain_review"] = _captain_text
 
-_review_known_active = [player for player in _review_final_players if vx_review_number(_review_narration_context[int(player["id"])]["stats"].get("total_points")) is not None]
+_review_known_active = [
+    player for player in _review_final_players
+    if vx_review_player_result_state(player) in {"COMPLETE", "PROVISIONAL"}
+    and vx_review_number(_review_narration_context[int(player["id"])]["stats"].get("total_points")) is not None
+]
 if _review_known_active:
     highest_player = max(_review_known_active, key=lambda player: (player["points"], bool(player.get("captain") or int(player.get("multiplier") or 0) > 1), player.get("bonus", 0), player.get("goals", 0) + player.get("assists", 0), player.get("minutes", 0)))
-    _quietest_player = min(_review_known_active, key=lambda player: (player["points"], player.get("minutes", 0), _review_narration_context[int(player["id"])]["last_three"]["total_points"] if _review_narration_context[int(player["id"])]["last_three"]["complete"] and _review_narration_context[int(player["id"])]["last_three"]["total_points"] is not None else math.inf))
     _hero_reason = vx_review_return_reason(highest_player)
-    _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} led the way with {highest_player['points']} points" + (f", including {_hero_reason}." if _hero_reason else ".")
-    _review_narration["quietest_return"] = (f"{vx_review_full_name(_quietest_player)} currently has {_quietest_player['points']} points, but the Gameweek is still unfolding." if GW_REVIEW_PARTIAL else f"At the other end, {vx_review_full_name(_quietest_player)} had {_quietest_player['points']} points. But one week isn't the full picture.")
+    if vx_review_player_result_state(highest_player) == "COMPLETE":
+        _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} leads the verified returns with {highest_player['points']} points" + (f", including {_hero_reason}." if _hero_reason else ".")
+    else:
+        _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} currently leads with {highest_player['points']} points, pending the remaining football."
+
+    # Select the lowest completed return before considering an unfinished match.
+    _completed_players = [player for player in _review_known_active if vx_review_player_result_state(player) == "COMPLETE"]
+    _quietest_pool = _completed_players or _review_known_active
+    _quietest_player = min(_quietest_pool, key=lambda player: (player["points"], player.get("minutes", 0)))
+    if vx_review_player_result_state(_quietest_player) == "COMPLETE":
+        _review_narration["quietest_return"] = f"At the other end, {vx_review_full_name(_quietest_player)} finished with {_quietest_player['points']} points. But one match is not the whole picture."
+    else:
+        _review_narration["quietest_return"] = f"{vx_review_full_name(_quietest_player)} has {_quietest_player['points']} points so far, with their fixture still unfinished."
 
 _review_alerts = []
 for _player in review_players:
@@ -16122,7 +16188,7 @@ for _player in review_players:
         else:
             _review_alerts.append(f"{_context['full_name']} has an official availability flag before the next deadline.")
 if not _review_alerts:
-    _limited = [vx_review_full_name(player) for player in _review_final_players if vx_review_number(_review_narration_context[int(player["id"])]["stats"].get("minutes")) is not None and int(player.get("minutes") or 0) < 30]
+    _limited = [vx_review_full_name(player) for player in _review_final_players if vx_review_player_result_state(player) in {"COMPLETE", "PROVISIONAL"} and 0 < int(player.get("minutes") or 0) < 30]
     if _limited:
         _review_alerts.append("Limited minutes for " + vx_review_join(_limited) + " change the short-term picture.")
 _review_narration["availability_alerts"] = " ".join(_review_alerts)
@@ -16339,7 +16405,7 @@ for seg in segments:
 # ------------------------------------------------------------
 # Ryan keeps the approved voice, mood, punctuation and speaking rate. Only the
 # opening sentence is regenerated when its measured MP3 duration would collide
-# with the goalkeeper's real WordBoundary-aligned 0:08 reveal.
+# with the goalkeeper's real WordBoundary-aligned reveal.
 _headline_segment = next(
     (segment for segment in segments if str(segment.get("id", "")) == "headline"),
     None,
@@ -16352,7 +16418,12 @@ if _headline_segment is None or _first_review_player is None:
     raise RuntimeError("GW Review opening-fit QA requires headline and player narration.")
 
 _review_timing_override = globals().get("GW_REVIEW_ANIMATION_TIMING_OVERRIDES", {}) or {}
-_headline_first_player_at = float(_review_timing_override.get("first_player_at", 8.0))
+_headline_first_player_at = max(
+    float(_review_timing_override.get("first_player_at", 0.0)),
+    float(_headline_segment.get("duration") or 0.0)
+    + float(_first_review_player.get("name_time") or 0.0)
+    + 0.12,
+)
 _headline_name_time = float(_first_review_player.get("name_time") or 0.0)
 _headline_safety_gap = 0.12
 _headline_budget = (
@@ -17565,10 +17636,21 @@ for p in pkg["players"]:
         ]
 
     fixture = p.get("fixture") or {}
+    result_state = vx_review_player_result_state(p)
+    if result_state == "AWAITING":
+        points_label = "AWAITING RESULT"
+    elif result_state == "UNKNOWN":
+        points_label = "RESULT UNAVAILABLE"
+    elif result_state == "DID_NOT_PLAY":
+        points_label = "DID NOT PLAY"
+    elif result_state == "PROVISIONAL":
+        points_label = f"{p.get('points', 0)} PTS SO FAR"
+    else:
+        points_label = f"{p.get('points', 0)} PTS"
     review_bits = [
         f"GW {pkg['gw']}",
-        f"{p.get('points', 0)} PTS",
-        f"{p.get('minutes', 0)} MIN",
+        points_label,
+        f"{p.get('minutes', 0)} MIN" if result_state in {"COMPLETE", "PROVISIONAL"} else "",
     ]
     if fixture.get("opp"):
         review_bits.append(f"{fixture.get('opp')} {fixture.get('ha','')} {fixture.get('score','')}".strip())
@@ -17667,10 +17749,10 @@ for pos, arr in groups.items():
 # values that need tuning after a final narration pass, for example:
 # GW_REVIEW_ANIMATION_TIMING_OVERRIDES = {"goalkeeper_card_out": 23.4}
 GW_REVIEW_ANIMATION_DEFAULTS = {
-    "premier_league_logo_at": 1.0,
-    "review_title_at": 2.0,
-    "pitch_at": 3.0,
-    "first_player_at": 8.0,
+    "premier_league_logo_at": 0.0,
+    "review_title_at": 0.0,
+    "pitch_at": 0.0,
+    "first_player_at": 0.0,
     "goalkeeper_card_out": 23.0,
     "entrance_duration": 0.42,
     "hero_fade_in": 0.32,
@@ -17734,14 +17816,10 @@ def _vx_build_review_timeline(review_pkg, timing):
         if index == 0:
             start = 0.0
         elif is_first_player:
+            # Start the goalkeeper as soon as the headline finishes speaking.
             name_time = float(segment.get("name_time") or 0.0)
-            start = float(timing["first_player_at"]) - name_time
-            if start < cursor - 1e-6:
-                raise RuntimeError(
-                    "Headline narration overlaps the fixed 0:08 goalkeeper reveal. "
-                    f"Headline ends at {cursor:.3f}s; goalkeeper audio must begin "
-                    f"at {start:.3f}s. Shorten the headline or adjust the override."
-                )
+            start = cursor
+            timing["first_player_at"] = float(start + name_time)
             first_player_seen = True
         else:
             start = cursor
@@ -17782,18 +17860,11 @@ def _vx_build_review_timeline(review_pkg, timing):
                 segment["hero_on"] = reveal_at
                 if is_first_player:
                     if abs(reveal_at - float(timing["first_player_at"])) > 1e-6:
-                        raise RuntimeError("Goalkeeper reveal drifted from the fixed 0:08 beat.")
-                    goalkeeper_card_cap = float(timing["goalkeeper_card_out"])
+                        raise RuntimeError("Goalkeeper reveal drifted from the measured Ryan spoken-name beat.")
                     goalkeeper_card_exit = max(
                         float(reveal_at) + 0.50,
                         float(segment["speech_end_at"]) + 0.25,
                     )
-                    if goalkeeper_card_exit > goalkeeper_card_cap + 1e-6:
-                        raise RuntimeError(
-                            "Goalkeeper spoken narration exceeds the configured card safety cap: "
-                            f"speech ends at {segment['speech_end_at']:.3f}s."
-                        )
-                    # Keep 0:23 as a safety ceiling, not a forced silent hold.
                     timing["goalkeeper_card_out"] = float(goalkeeper_card_exit)
                     segment["hero_exit_at"] = float(goalkeeper_card_exit)
                 else:
@@ -17890,7 +17961,7 @@ if (
 print("✅ GW Review sync QA: Ryan name = hero reveal = player reveal")
 print("✅ Player images persist; only hero windows end")
 print("✅ Full data board begins after the final reserve")
-print("✅ Opening beats: PL 0:01 • title 0:02 • pitch 0:03 • goalkeeper 0:08 • card exits after narration (0:23 cap)")
+print("✅ Opening: logo/title/pitch animate from frame zero; goalkeeper follows the spoken headline without an eight-second gate")
 
 # ------------------------------------------------------------
 # 3. PLACE RYAN SEGMENTS ON THE CONFIGURABLE MASTER TIMELINE
@@ -18266,14 +18337,14 @@ window.__seek=function(t){
 
     const pl=$v(".plBug");
     if(pl){
-        const p=ease((t-Number(timing.premier_league_logo_at||1))/.46);
+        const p=ease((t-Number(timing.premier_league_logo_at ?? 0))/.46);
         pl.style.opacity=p;
         pl.style.transform=`translateY(${(1-p)*-18}px) scale(${.94+.06*p})`;
     }
 
     const title=$v(".pitchHeader");
     if(title){
-        const p=ease((t-Number(timing.review_title_at||2))/.52);
+        const p=ease((t-Number(timing.review_title_at ?? 0))/.52);
         title.style.opacity=p;
         title.style.setProperty(
           "transform",
@@ -18282,7 +18353,7 @@ window.__seek=function(t){
         );
     }
 
-    const pitchP=ease((t-Number(timing.pitch_at||3))/.62);
+    const pitchP=ease((t-Number(timing.pitch_at ?? 0))/.62);
     document.querySelectorAll(".pitch,.pitchGlow,.pitchSvg").forEach(el=>{
         el.style.opacity=pitchP;
         el.style.transform=
@@ -23599,13 +23670,13 @@ else:
             )
 
     if not (
-        float(_vx17_timeline["premier_league_logo_at"])
-        < float(_vx17_timeline["review_title_at"])
-        < float(_vx17_timeline["pitch_at"])
+        0.0 <= float(_vx17_timeline["premier_league_logo_at"])
+        <= float(_vx17_timeline["review_title_at"])
+        <= float(_vx17_timeline["pitch_at"])
         < float(_vx17_timeline["first_player_at"])
         < float(_vx17_timeline["goalkeeper_card_out"])
     ):
-        raise RuntimeError(f"GW Review fixed opening beats are not ordered: {_vx17_timeline}")
+        raise RuntimeError(f"GW Review immediate opening and measured player reveal are not ordered: {_vx17_timeline}")
 
     if float(_vx17_manifest.get("final_hold_seconds") or 0.0) < 3.0 - 1e-6:
         raise RuntimeError("GW Review final completed composition hold must be at least 3 seconds.")
@@ -23626,7 +23697,7 @@ else:
         float(_vx17_first_segment["reveal_at"])
         - float(_vx17_timeline["first_player_at"])
     ) > 1e-6:
-        raise RuntimeError("GW Review goalkeeper is not aligned to the configured 0:08 beat.")
+        raise RuntimeError("GW Review goalkeeper is not aligned to the measured spoken-name beat.")
     if abs(
         float(_vx17_first_segment["hero_exit_at"])
         - float(_vx17_timeline["goalkeeper_card_out"])
@@ -23976,21 +24047,18 @@ else:
                     raise RuntimeError(f"GW Review initial state is not blank: {initial}")
 
                 pl_state = checkpoint_states["pl_logo"]
-                _vx17_assert_near(pl_state["plLogo"], 1, "PL logo after 0:01")
-                _vx17_assert_near(pl_state["title"], 0, "title before 0:02")
-                _vx17_assert_near(pl_state["pitch"], 0, "pitch before 0:03")
+                _vx17_assert_near(pl_state["plLogo"], 1, "PL logo within the first second")
 
                 title_state = checkpoint_states["title"]
-                _vx17_assert_near(title_state["title"], 1, "title after 0:02")
-                _vx17_assert_near(title_state["pitch"], 0, "pitch before 0:03")
+                _vx17_assert_near(title_state["title"], 1, "title within the first second")
 
                 pitch_state = checkpoint_states["pitch"]
-                _vx17_assert_near(pitch_state["pitch"], 1, "pitch after 0:03")
+                _vx17_assert_near(pitch_state["pitch"], 1, "pitch within the first second")
                 if pitch_state["pitchPlayers"] != 0:
-                    raise RuntimeError(f"GW Review players appeared before 0:08: {pitch_state}")
+                    raise RuntimeError(f"GW Review player appeared before their spoken name: {pitch_state}")
 
                 if checkpoint_states["before_goalkeeper"]["pitchPlayers"] != 0:
-                    raise RuntimeError("GW Review goalkeeper appeared before the fixed 0:08 beat.")
+                    raise RuntimeError("GW Review goalkeeper appeared before Ryan said their name.")
                 goalkeeper_state = checkpoint_states["goalkeeper_visible"]
                 if goalkeeper_state["pitchPlayers"] != 1 or goalkeeper_state["hero"] < 0.88:
                     raise RuntimeError(
