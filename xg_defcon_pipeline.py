@@ -180,8 +180,10 @@ def read_report_metadata(root: Path) -> dict[str, Any]:
         meta = json.loads(metadata_path.read_text(encoding="utf-8"))
         if int(meta.get("team_count", -1)) != 20:
             raise RuntimeError(f"{report} is missing a complete 20-team report")
-        if bool(meta.get("provisional")):
-            raise RuntimeError(f"{report} data is provisional; refusing public upload")
+        # The official FPL API can flag a fully completed gameweek as provisional.
+        # Publish only with visible provisional disclosure; other fixture checks remain mandatory.
+        if not isinstance(meta.get("provisional"), bool):
+            raise RuntimeError(f"{report} is missing its official provisional-data indicator")
         if int(meta.get("gameweek", 0)) < 1:
             raise RuntimeError(f"{report} has no completed gameweek")
         if not caption_path.read_text(encoding="utf-8").strip():
@@ -357,8 +359,13 @@ def publish_public() -> None:
     title = f"FPL GW{gameweek}: xG vs DEFCON & Game State | All 20 PL Clubs #Shorts"
     if len(title) > 100:
         raise RuntimeError("YouTube title exceeds 100 characters")
+    provisional = any(bool(meta.get("provisional")) for meta in metas.values())
     descriptions = [
         f"FPL VORTEX | Premier League {season} through completed GW{gameweek}.",
+        *(
+            ["DATA STATUS: Official FPL figures are currently provisional and may be revised."]
+            if provisional else []
+        ),
         "Which Premier League clubs lead in xG, DEFCON and time spent winning?",
         "Animated 9:16 Shorts analysis of all 20 clubs using validated FPL and match data.",
         "",
