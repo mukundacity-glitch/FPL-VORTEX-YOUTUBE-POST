@@ -430,7 +430,9 @@ class DefconNumericRegressionTests(unittest.TestCase):
         )
         updated = runner._patch_defcon_render_preflight(original)
         self.assertIn(
-            'if key == "03_defcon":\n            await vx_prepare_capture(page)\n'
+            'if key == "03_defcon":\n'
+            '            await page.evaluate("() => { window.__vxDefconRenderScaleReady = true; }")\n'
+            "            await vx_prepare_capture(page)\n"
             "            # Audit",
             updated,
         )
@@ -448,6 +450,7 @@ class DefconNumericRegressionTests(unittest.TestCase):
         )
         updated = runner._patch_defcon_team_numeric_fit(source)
         self.assertIn("window.__ready === true", updated)
+        self.assertIn("window.__vxDefconRenderScaleReady === true", updated)
         self.assertIn("!window.__vxDefconTeamNumbersFitted", updated)
         self.assertIn("window.__vxDefconTeamNumbersFitted = true", updated)
         self.assertIn("window.__seek(0);", updated)
