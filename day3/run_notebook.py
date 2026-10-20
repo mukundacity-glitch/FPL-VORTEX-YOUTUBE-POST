@@ -27,6 +27,7 @@ from day3.availability_patches import patch_availability_source
 from day3.sell_reasoning import patch_sell_reasoning_source
 from day3.creator_narration import patch_creator_narration_source
 from day3.elite_input import patch_elite_input_source
+from day3.decision_consistency import patch_bench_sell_source
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1057,6 +1058,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_pitch_reveal_audit(source)
         if cell_index == SHARED_NARRATION_CELL_INDEX:
             source = _patch_benching_narration(source)
+            source = patch_bench_sell_source(source)
             source = patch_transfer_desk_audio_source(source)
         if cell_index == SCENE_DESIGN_CELL_INDEX:
             source = _patch_defcon_gameweek_contract(source)
