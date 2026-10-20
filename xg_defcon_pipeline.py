@@ -118,8 +118,22 @@ def prepare() -> None:
         run_command([
             "rclone", "copyto", music_remote, str(source / "background.mp3")
         ], env=environment)
+    # Load the established FPL VORTEX assets, without modifying any Google Drive files.
+    media_files = {
+        "opening.mp4": "1KlxpGOUrC-2-rNMZINuZWbfL05nQj0U-",
+        "outro.mp4": "1M4w9Adk1H9xsVLQHCIcf6HdUn4XOqPmg",
+        "background.mp3": "1Vmwc1Qlvx1Vi1DHJ3BEOzbqG8oOUusXW",
+    }
+    for filename, file_id in media_files.items():
+        destination = source / filename
+        run_command(
+            ["rclone", "backend", "copyid", "xg-defcon-drive:", file_id, str(destination)],
+            env=environment,
+        )
+        if not destination.is_file() or destination.stat().st_size < 1000:
+            raise RuntimeError(f"Required Google Drive media is missing: {filename}")
     config.unlink(missing_ok=True)
-    print("[XG-DEFCON] Pinned source, brand and available read-only cache restored.")
+    print("[XG-DEFCON] Pinned notebook, logo, intro/outro and licensed music assets restored.")
 
 
 def read_report_metadata(root: Path) -> dict[str, Any]:
@@ -302,28 +316,55 @@ def publish_public() -> None:
         raise RuntimeError("Authenticated YouTube channel does not match configured channel")
     gameweek = int(metas["xG"]["gameweek"])
     season = str(metas["xG"]["season"])
-    title = f"FPL GW{gameweek}: xG, DEFCON & Game State | Premier League {season}"
+    # Only the validated 9:16 Shorts renderer is permitted to publish.
+    manifest_path = root / "shorts_manifest.json"
+    if not manifest_path.is_file():
+        raise RuntimeError("Missing verified Shorts manifest; refusing legacy landscape publishing")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if (
+        manifest.get("format") != "youtube_shorts"
+        or manifest.get("orientation") != "9:16"
+        or manifest.get("width") != 1080
+        or manifest.get("height") != 1920
+        or not (10 <= float(manifest.get("duration_seconds", 0)) < 59)
+        or manifest.get("voiceover") is not False
+        or int(manifest.get("gameweek", 0)) != gameweek
+        or str(manifest.get("season")) != season
+    ):
+        raise RuntimeError("Shorts render manifest does not pass publishing requirements")
+    title = f"FPL GW{gameweek}: xG vs DEFCON & Game State | All 20 PL Clubs #Shorts"
     if len(title) > 100:
         raise RuntimeError("YouTube title exceeds 100 characters")
     descriptions = [
         f"FPL VORTEX | Premier League {season} through completed GW{gameweek}.",
-        "Data-led breakdown of all 20 clubs: expected goals, defensive contributions (DEFCON), and match game-state shares.",
-        "xG and DEFCON: official FPL statistics. Game State: FotMob goal timelines cross-checked with final FPL scores.",
-        "Rankings are descriptive, not guarantees of future outcomes.",
+        "Which Premier League clubs lead in xG, DEFCON and time spent winning?",
+        "Animated 9:16 Shorts analysis of all 20 clubs using validated FPL and match data.",
         "",
-        "Chapters:",
-        "00:00 xG by club",
-        "00:27 DEFCON rankings",
-        "00:54 Game-state minutes",
+    ]
+    for report_name in REPORTS:
+        caption_path = root / "output" / report_name / "1.txt"
+        caption_lines = [
+            line.strip() for line in caption_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        descriptions.append(f"{report_name}:")
+        descriptions.extend(caption_lines[1:4])
+        descriptions.append("")
+    descriptions += [
+        "Sources: Official FPL stats and verified FotMob game-state timelines.",
+        "Descriptive statistics are not predictions.",
+        "Music, intro and outro: FPL VORTEX Google Drive media assets.",
+        "No voiceover. Rendered specifically for YouTube Shorts.",
         "",
-        "#FPL #FantasyPremierLeague #PremierLeague #ExpectedGoals #DEFCON",
+        f"#Shorts #FPL #FPLGW{gameweek} #FantasyPremierLeague #PremierLeague #xG #DEFCON #FPLVORTEX",
     ]
     body = {
         "snippet": {
             "title": title,
             "description": "\n".join(descriptions),
-            "tags": ["FPL", "Fantasy Premier League", "Premier League", "xG",
-                     "DEFCON", "Game State", "FPL VORTEX"],
+            "tags": ["YouTube Shorts", "FPL", f"FPL GW{gameweek}", "Fantasy Premier League",
+                     "Premier League", "Expected Goals", "xG", "DEFCON", "Defensive Contributions",
+                     "Game State", "FPL VORTEX"],
             "categoryId": "17",
             "defaultLanguage": "en",
         },
