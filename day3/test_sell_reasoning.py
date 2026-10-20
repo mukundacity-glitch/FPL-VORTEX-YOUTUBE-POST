@@ -260,7 +260,7 @@ def check_notebook_sell_reasoning(path: Path) -> None:
         _d3_desk_by_id=pd.DataFrame([{"player_id": 8001, "player_name": "Example"}]).set_index(
             "player_id", drop=False),
         team_meta_by_id={1: {"short": "EXA"}}, _d3_proj_by_id=pd.DataFrame(),
-        _d3_short_next_fdr=lambda team, position: {
+        _d3_desk_next_fdr=lambda team, position: {
             "score": 2.7, "score_text": "2.7", "visual_class": "fdr-2", "fixture": "Example (H)"},
         resolve_player_photo=lambda row: "", vx_team_jersey_data_uri=lambda team: "",
         _d3_desk_rank_map={}, DAY3_TRANSFER_DESK_SELECTION_MODE="TEST",
