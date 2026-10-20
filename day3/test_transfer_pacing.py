@@ -13,6 +13,7 @@ import unittest
 import wave
 
 from day3.transfer_pacing import compact_transfer_pcm
+from day3.sell_reasoning import sell_narration
 from day3 import test_transfer_desk_timeline as timeline_contract
 
 
@@ -174,7 +175,7 @@ def check_notebook_transfer_pacing(path):
     for hold_count in range(6):
         with tempfile.TemporaryDirectory() as directory:
             ns, _ = timeline_contract.TransferDeskTimelineTests().namespace(Path(directory), hold_count)
-            ns.update(pd=pd, np=np, DAY3_AVAILABILITY=Availability())
+            ns.update(pd=pd, np=np, DAY3_AVAILABILITY=Availability(), sell_narration=sell_narration)
             for rows in ns["DAY3_TRANSFER_DESK"].values():
                 for row in rows:
                     row.update(next_fixture="Club (H)", next_fdr=2.5, xpts=4.1,
