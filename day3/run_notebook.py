@@ -609,14 +609,36 @@ def _patch_defcon_card_motion(source: str) -> str:
 
 
 def _patch_tts_profile(source: str) -> str:
-    """Use a slightly quicker, brighter Ryan delivery without changing the voice."""
-    old = 'RYAN_BASE_PROFILE = {"rate": "+12%", "pitch": "-5Hz", "volume": "+0%"}'
-    new = 'RYAN_BASE_PROFILE = {"rate": "+16%", "pitch": "+4Hz", "volume": "+0%"}'
+    """Match Day 2's effective Ryan profiles while retaining measured word timing."""
+    old = '''# Ryan delivery — keep the project's intended/original speaking profile.
+# Mood labels remain useful for manifests and scene semantics, but they must not
+# speed Ryan up or slow him down simply to force a target video duration.
+# Punctuation and script structure provide emphasis; TTS speed stays constant.
+RYAN_BASE_PROFILE = {"rate": "+12%", "pitch": "-5Hz", "volume": "+0%"}
+
+MOODS = {
+    "intro":    dict(RYAN_BASE_PROFILE),
+    "analysis": dict(RYAN_BASE_PROFILE),
+    "key_stat": dict(RYAN_BASE_PROFILE),
+    "warning":  dict(RYAN_BASE_PROFILE),
+    "outro":    dict(RYAN_BASE_PROFILE),
+}'''
+    new = '''# Match Day 2's effective production profiles, including its runtime rate overrides.
+# Keep volume flat; synthesis still supplies the timing used by every scene.
+RYAN_BASE_PROFILE = {"rate": "+17%", "pitch": "-4Hz", "volume": "+0%"}
+
+MOODS = {
+    "intro":    dict(RYAN_BASE_PROFILE, rate="+13%"),
+    "analysis": dict(RYAN_BASE_PROFILE),
+    "key_stat": dict(RYAN_BASE_PROFILE, rate="+18%", pitch="+0Hz"),
+    "warning":  dict(RYAN_BASE_PROFILE, rate="+11%"),
+    "outro":    dict(RYAN_BASE_PROFILE, rate="+11%"),
+}'''
     count = source.count(old)
     if count != 1:
         raise RuntimeError(f"TTS profile: expected exactly one match, found {count}")
     source = source.replace(old, new, 1)
-    print("✅ GitHub runner TTS polish: Ryan +16% rate / +4Hz pitch")
+    print("✅ Ryan delivery matches Day 2: varied mood rates, -4Hz analysis / +0Hz key stats")
     return source
 
 
