@@ -1,6 +1,9 @@
 """Presentation-only transfer lists; never alter Phase-11 squad decisions."""
 
+from collections.abc import Collection
 import math
+
+import pandas as pd
 
 
 # A blank is at most three points per completed gameweek. Retention is an
@@ -13,7 +16,8 @@ HOLD_PREFERRED_RETAINED_PERCENT = 95.0
 
 
 def select_transfer_desk(players, *, total_managers, recent_performance,
-                         effective_ownership=None, count=5, eligible_hold_ids=None):
+                         effective_ownership=None, count=5,
+                         eligible_hold_ids: Collection[int] | None = None):
     """Rank gross event transfers within direction; rank retained blanks by EO.
 
     Positive net transfers qualify for BUY; negative net transfers qualify for
@@ -22,9 +26,10 @@ def select_transfer_desk(players, *, total_managers, recent_performance,
     substantial ownership, and low selling relative to the estimated owner base.
     HOLD may contain fewer than count players (including none); count is a
     presentation maximum, not evidence that five suitable holds always exist.
+    Current live availability and starting-role eligibility must be supplied by
+    the caller. Missing evidence yields no HOLD picks, never an unchecked list.
     Never fill a short list with unrelated model picks.
     """
-    import pandas as pd
 
     required = {"id", "selected_by_percent", "transfers_in_event", "transfers_out_event"}
     missing = sorted(required - set(players.columns))
@@ -84,9 +89,8 @@ def select_transfer_desk(players, *, total_managers, recent_performance,
         & frame.ownership_score.ge(HOLD_MIN_OWNERSHIP)
         & frame.recent_average_points.le(HOLD_MAX_RECENT_POINTS)
         & frame.retained_percent_estimate.ge(HOLD_MIN_RETAINED_PERCENT)
+        & frame.player_id.isin(() if eligible_hold_ids is None else eligible_hold_ids)
     ].copy()
-    if eligible_hold_ids is not None:
-        hold_candidates = hold_candidates.loc[hold_candidates.player_id.isin(eligible_hold_ids)].copy()
     # Prefer strongly retained blanks, then rank qualified near-misses by ownership.
     hold_candidates["preferred_retention"] = hold_candidates.retained_percent_estimate.ge(
         HOLD_PREFERRED_RETAINED_PERCENT
@@ -196,7 +200,7 @@ if len({r["player_id"] for g in DAY3_TRANSFER_DESK.values() for r in g}) != DAY3
     source = source[:rules_start] + '''    "rules": {
         "buy": "Largest event transfers in among positive net-transfer players",
         "sell": "Largest event transfers out among negative net-transfer players",
-        "hold": "Highest deadline-safe Top-10K EO (official ownership fallback); recent average <=3 points; ownership >=8%; prefer retention >=95%, accept >=80% for thin pools; exclude BUY/SELL leaders",
+        "hold": "Require current verified availability, a fixture, and secure starting-role evidence; highest deadline-safe Top-10K EO (official ownership fallback); recent average <=3 points; ownership >=8%; prefer retention >=95%, accept >=80% for thin pools; exclude BUY/SELL leaders",
     },
 ''' + source[rules_end:]
     reason_start = source.index("def _d3_desk_short_reason(r):")
