@@ -13,7 +13,7 @@ HOLD_PREFERRED_RETAINED_PERCENT = 95.0
 
 
 def select_transfer_desk(players, *, total_managers, recent_performance,
-                         effective_ownership=None, count=5):
+                         effective_ownership=None, count=5, eligible_hold_ids=None):
     """Rank gross event transfers within direction; rank retained blanks by EO.
 
     Positive net transfers qualify for BUY; negative net transfers qualify for
@@ -85,6 +85,8 @@ def select_transfer_desk(players, *, total_managers, recent_performance,
         & frame.recent_average_points.le(HOLD_MAX_RECENT_POINTS)
         & frame.retained_percent_estimate.ge(HOLD_MIN_RETAINED_PERCENT)
     ].copy()
+    if eligible_hold_ids is not None:
+        hold_candidates = hold_candidates.loc[hold_candidates.player_id.isin(eligible_hold_ids)].copy()
     # Prefer strongly retained blanks, then rank qualified near-misses by ownership.
     hold_candidates["preferred_retention"] = hold_candidates.retained_percent_estimate.ge(
         HOLD_PREFERRED_RETAINED_PERCENT
