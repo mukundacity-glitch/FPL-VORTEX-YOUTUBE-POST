@@ -66,11 +66,11 @@ jobs:
           set -euo pipefail
           python xg_defcon_pipeline.py execute
 
-      - name: Produce YouTube-ready video from validated graphics
+      - name: Animate vertical 9:16 YouTube Short with Drive intro outro and music
         shell: bash
         run: |
           set -euo pipefail
-          python xg_defcon_pipeline.py render
+          python xg_defcon_shorts.py
 
       - name: Upload immediately as PUBLIC after this manual workflow dispatch
         shell: bash
@@ -95,6 +95,7 @@ jobs:
           path: |
             ${{ env.XG_DEFCON_ROOT }}/FPL_VORTEX_XG_DEFCON_GAME_STATE.mp4
             ${{ env.XG_DEFCON_ROOT }}/public_upload.json
+            ${{ env.XG_DEFCON_ROOT }}/shorts_manifest.json
             ${{ env.XG_DEFCON_ROOT }}/output/xG/1.png
             ${{ env.XG_DEFCON_ROOT }}/output/xG/1.txt
             ${{ env.XG_DEFCON_ROOT }}/output/DEFCON/1.png
