@@ -285,7 +285,7 @@ def check_notebook_creator_narration(path: Path) -> None:
                 vx_tts_profile=lambda mood: {}, vx_edge_tts_stream=lambda: None,
                 vx_full_word_narration=lambda text, **kwargs: text,
                 vx_full_word_display=lambda text, **kwargs: text,
-                vx_narration_player=lambda pid: names[int(pid)],
+                vx_narration_player=lambda value: names.get(value, str(value)),
                 vx_narration_team=lambda name: str(name),
                 vx_synthesize_audio=synthesize,
             )

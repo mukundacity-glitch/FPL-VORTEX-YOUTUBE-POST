@@ -365,7 +365,7 @@ def creator_elite_narration(
     sample_text = f" It covers {sample} sampled managers." if re.fullmatch(r"\d[\d, ]*", sample) else ""
     source_gw = _integer(namespace.get("ELITE1000_SOURCE_GW"))
     gameweek_text = f" for Gameweek {source_gw}" if source_gw is not None else ""
-    lines = [f"{ELITE_CUES[0]} for FPL{gameweek_text}.{sample_text}"]
+    lines = [f"{ELITE_CUES[0]}: FPL top ten thousand{gameweek_text}.{sample_text}"]
     lines.append(f"{ELITE_CUES[1]}. " + " ".join(
         f"{spoken_player(int(row['player_id']))} has {rate(row.get('ownership'))} ownership."
         for row in leaders))
