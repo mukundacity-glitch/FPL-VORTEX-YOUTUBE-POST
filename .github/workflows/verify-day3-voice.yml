@@ -1,0 +1,67 @@
+name: Verify Day 3 Ryan voice
+on:
+  push:
+    branches:
+      - codex/day3-ryan-voice-check-20261020
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+      DAY3_PLAN_SELECTION: ROLL
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install validation dependencies
+        run: python -m pip install "ipython>=8.27,<10" "pandas>=2.2,<3" "Pillow>=10.4,<12"
+      - name: Compile Day 3 and run its regression tests
+        run: |
+          python -m compileall -q day3
+          python -m unittest discover -s day3 -p 'test_*.py' -v
+      - name: Download source notebook for validation only
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          names = ("GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REFRESH_TOKEN")
+          credentials = {name: os.environ.get(name, "").strip() for name in names}
+          missing = [name for name, value in credentials.items() if not value]
+          if missing:
+              raise SystemExit("Missing Drive credentials: " + ", ".join(missing))
+          body = urllib.parse.urlencode({
+              "client_id": credentials[names[0]],
+              "client_secret": credentials[names[1]],
+              "refresh_token": credentials[names[2]],
+              "grant_type": "refresh_token",
+          }).encode("utf-8")
+          request = urllib.request.Request(
+              "https://oauth2.googleapis.com/token", data=body,
+              headers={"Content-Type": "application/x-www-form-urlencoded"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              access_token = json.load(response)["access_token"]
+          request = urllib.request.Request(
+              "https://www.googleapis.com/drive/v3/files/1zKWruOYPPstyyr42y6q-MKwE3-6qTh0s?alt=media",
+              headers={"Authorization": "Bearer " + access_token},
+          )
+          with urllib.request.urlopen(request, timeout=120) as response:
+              payload = response.read()
+          json.loads(payload)
+          Path("/tmp/day3-voice-validation.ipynb").write_bytes(payload)
+          print("Downloaded Day 3 source for compile-only validation.")
+          PY
+      - name: Validate every patched notebook cell
+        run: python day3/run_notebook.py /tmp/day3-voice-validation.ipynb --validate-only

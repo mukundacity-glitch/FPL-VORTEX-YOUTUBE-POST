@@ -362,6 +362,104 @@ def narrate(name, team, defender=True, multiple=False):
             runner._patch_benching_narration(self.source.replace("clean-sheet chance", "defensive outlook"))
 
 
+
+class RyanProfileTests(unittest.TestCase):
+    source = '''VOICE = "en-GB-RyanNeural"
+# Ryan delivery — keep the project's intended/original speaking profile.
+# Mood labels remain useful for manifests and scene semantics, but they must not
+# speed Ryan up or slow him down simply to force a target video duration.
+# Punctuation and script structure provide emphasis; TTS speed stays constant.
+RYAN_BASE_PROFILE = {"rate": "+12%", "pitch": "-5Hz", "volume": "+0%"}
+
+MOODS = {
+    "intro":    dict(RYAN_BASE_PROFILE),
+    "analysis": dict(RYAN_BASE_PROFILE),
+    "key_stat": dict(RYAN_BASE_PROFILE),
+    "warning":  dict(RYAN_BASE_PROFILE),
+    "outro":    dict(RYAN_BASE_PROFILE),
+}
+
+def vx_tts_profile(mood="analysis"):
+    if mood not in MOODS:
+        raise KeyError(f"Unknown TTS mood: {mood}")
+    return dict(MOODS[mood])
+
+'''
+
+    def setUp(self) -> None:
+        self.namespace: dict[str, Any] = {}
+        exec(runner._patch_tts_profile(self.source), self.namespace)
+
+    def test_all_moods_match_day2_effective_production_profiles(self) -> None:
+        expected = {
+            "intro": {"rate": "+13%", "pitch": "-4Hz", "volume": "+0%"},
+            "analysis": {"rate": "+17%", "pitch": "-4Hz", "volume": "+0%"},
+            "key_stat": {"rate": "+18%", "pitch": "+0Hz", "volume": "+0%"},
+            "warning": {"rate": "+11%", "pitch": "-4Hz", "volume": "+0%"},
+            "outro": {"rate": "+11%", "pitch": "-4Hz", "volume": "+0%"},
+        }
+        self.assertEqual(self.namespace["VOICE"], "en-GB-RyanNeural")
+        self.assertEqual(self.namespace["MOODS"], expected)
+        for mood, profile in expected.items():
+            with self.subTest(mood=mood):
+                self.assertEqual(self.namespace["vx_tts_profile"](mood), profile)
+
+    def test_callers_cannot_mutate_shared_profiles(self) -> None:
+        profile = self.namespace["vx_tts_profile"]("analysis")
+        profile["rate"] = "+99%"
+        self.assertEqual(self.namespace["vx_tts_profile"]("analysis")["rate"], "+17%")
+        self.namespace["MOODS"]["intro"]["pitch"] = "+99Hz"
+        self.assertEqual(self.namespace["MOODS"]["analysis"]["pitch"], "-4Hz")
+        self.assertEqual(self.namespace["RYAN_BASE_PROFILE"]["pitch"], "-4Hz")
+
+    def test_unknown_mood_remains_an_error(self) -> None:
+        with self.assertRaises(KeyError):
+            self.namespace["vx_tts_profile"]("unknown")
+
+    def test_patch_preserves_surrounding_synthesis_and_timing_code(self) -> None:
+        prefix = "# synthesis transport and word boundaries before profile\n"
+        suffix = "\n# audio synthesis and measured duration after profile\n"
+        updated = runner._patch_tts_profile(prefix + self.source + suffix)
+        self.assertTrue(updated.startswith(prefix))
+        self.assertTrue(updated.endswith(suffix))
+        self.assertEqual(updated.replace(
+            '''# Match Day 2's effective production profiles, including its runtime rate overrides.
+# Keep volume flat; synthesis still supplies the timing used by every scene.
+RYAN_BASE_PROFILE = {"rate": "+17%", "pitch": "-4Hz", "volume": "+0%"}
+
+MOODS = {
+    "intro":    dict(RYAN_BASE_PROFILE, rate="+13%"),
+    "analysis": dict(RYAN_BASE_PROFILE),
+    "key_stat": dict(RYAN_BASE_PROFILE, rate="+18%", pitch="+0Hz"),
+    "warning":  dict(RYAN_BASE_PROFILE, rate="+11%"),
+    "outro":    dict(RYAN_BASE_PROFILE, rate="+11%"),
+}''',
+            '''# Ryan delivery — keep the project's intended/original speaking profile.
+# Mood labels remain useful for manifests and scene semantics, but they must not
+# speed Ryan up or slow him down simply to force a target video duration.
+# Punctuation and script structure provide emphasis; TTS speed stays constant.
+RYAN_BASE_PROFILE = {"rate": "+12%", "pitch": "-5Hz", "volume": "+0%"}
+
+MOODS = {
+    "intro":    dict(RYAN_BASE_PROFILE),
+    "analysis": dict(RYAN_BASE_PROFILE),
+    "key_stat": dict(RYAN_BASE_PROFILE),
+    "warning":  dict(RYAN_BASE_PROFILE),
+    "outro":    dict(RYAN_BASE_PROFILE),
+}''',
+            1,
+        ), prefix + self.source + suffix)
+
+    def test_changed_or_duplicate_notebook_profile_is_rejected(self) -> None:
+        for invalid in (
+            self.source.replace('"rate": "+12%"', '"rate": "+99%"'),
+            self.source + self.source,
+        ):
+            with self.subTest(source_length=len(invalid)):
+                with self.assertRaisesRegex(RuntimeError, "TTS profile"):
+                    runner._patch_tts_profile(invalid)
+
+
 class NotebookPreflightTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
