@@ -23,6 +23,7 @@ from day3.transfer_desk import (
 )
 from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_cell
 from day3.narration_pacing import patch_narration_pacing_source
+from day3.availability_patches import patch_availability_source
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1068,6 +1069,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_elite_template_parser(source)
         if cell_index == 35:
             source = patch_narration_pacing_source(source)
+        source = patch_availability_source(cell_index, source)
         source = remove_shortlist_cell(cell_index, source)
         if PREVIEW_CELL_MARKER in source:
             print(f"⏭️ Skipping Colab-only live preview cell {cell_index}.")
