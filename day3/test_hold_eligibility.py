@@ -11,6 +11,7 @@ import unittest
 import pandas as pd
 
 from day3.player_availability import AvailabilityContext
+from day3.run_notebook import _prepare_code_cells
 from day3.transfer_desk import select_transfer_desk
 
 
@@ -154,8 +155,6 @@ class HoldEligibilityTests(unittest.TestCase):
 
 def check_notebook_hold_eligibility(path: Path) -> None:
     """Execute the production notebook's selection call with real gate computation."""
-    from day3.run_notebook import _prepare_code_cells
-
     cells = dict(_prepare_code_cells(path))
     assignments = [
         node for node in ast.parse(cells[24]).body
