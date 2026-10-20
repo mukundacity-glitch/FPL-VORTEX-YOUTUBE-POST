@@ -382,6 +382,8 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_benching_narration",
             "_patch_pitch_player_names",
             "_patch_shared_card_scene_checks",
+            "_patch_defcon_team_numeric_fit",
+            "_patch_defcon_render_preflight",
             "_patch_defcon_gameweek_contract",
             "_patch_defcon_card_motion",
             "_patch_elite_template_parser",
@@ -417,6 +419,38 @@ class NotebookPreflightTests(unittest.TestCase):
             2: "!echo notebook-command\n",
         })
         self.assertEqual(len(runner._prepare_code_cells(self.notebook_path)), 37)
+
+
+class DefconNumericRegressionTests(unittest.TestCase):
+    def test_renderer_fits_after_timeline_ready_but_before_clip_audit(self) -> None:
+        original = (
+            "        await vx_apply_render_scale(page, W, H, DESIGN_W, DESIGN_H)\n\n"
+            '        if key == "03_defcon":\n'
+            "            # Audit the states the viewer will actually see\n"
+        )
+        updated = runner._patch_defcon_render_preflight(original)
+        self.assertIn(
+            'if key == "03_defcon":\n            await vx_prepare_capture(page)\n'
+            "            # Audit",
+            updated,
+        )
+        self.assertEqual(updated.count("await vx_prepare_capture(page)"), 1)
+
+    def test_renderer_patch_refuses_an_unknown_notebook(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "expected one renderer entry point"):
+            runner._patch_defcon_render_preflight("pass\n")
+
+    def test_forecast_fit_waits_until_ready_and_preserves_later_frame_seeks(self) -> None:
+        source = (
+            "  const assertDefconBoardFit=()=>{};\n"
+            "    assertDefconBoardFit();\n"
+            "    return result;\n"
+        )
+        updated = runner._patch_defcon_team_numeric_fit(source)
+        self.assertIn("window.__ready === true", updated)
+        self.assertIn("!window.__vxDefconTeamNumbersFitted", updated)
+        self.assertIn("window.__vxDefconTeamNumbersFitted = true", updated)
+        self.assertIn("window.__seek(0);", updated)
 
 
 if __name__ == "__main__":
