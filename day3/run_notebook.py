@@ -476,7 +476,8 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
     capture_replacement = """    // Team panel starts hidden. Reveal it briefly to fit live xGW numbers,
     // then reset the timeline so the captured video still opens normally.
     const focus=(typeof VX !== 'undefined' ? VX : window.VX)?.defcon_focus;
-    if(window.__ready === true && typeof window.__seek === 'function' &&
+    if(window.__ready === true && window.__vxDefconRenderScaleReady === true &&
+       typeof window.__seek === 'function' &&
        !window.__vxDefconTeamNumbersFitted) {
       if(!focus || focus.team_intro_at == null ||
          !Number.isFinite(Number(focus.team_intro_at)))
@@ -506,6 +507,7 @@ def _patch_defcon_render_preflight(source: str) -> str:
     replacement = (
         '        await vx_apply_render_scale(page, W, H, DESIGN_W, DESIGN_H)\n\n'
         '        if key == "03_defcon":\n'
+        '            await page.evaluate("() => { window.__vxDefconRenderScaleReady = true; }")\n'
         '            await vx_prepare_capture(page)\n'
         '            # Audit the states'
     )
