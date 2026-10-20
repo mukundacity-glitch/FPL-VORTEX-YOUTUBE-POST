@@ -123,6 +123,13 @@ class AvailabilityTests(unittest.TestCase):
             self.assertEqual(context.state(901)["label"], "STATUS UNVERIFIED")
         self.assertFalse(self.context().eligible(999999))
 
+    def test_malformed_chance_does_not_become_available(self) -> None:
+        for invalid in ("bad", -1, 101, float("nan")):
+            with self.subTest(chance=invalid):
+                context = self.context({**self.player, "chance_of_playing_next_round": invalid})
+                self.assertFalse(context.eligible(901))
+                self.assertEqual(context.probability(901), 0)
+
     def test_available_with_null_chance_and_live_status_is_supported(self) -> None:
         self.assertTrue(self.context({
             **self.player, "chance_of_playing_next_round": None,

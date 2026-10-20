@@ -150,7 +150,7 @@ def check_cards(notebook_path: Path, browser_channel: str | None = None) -> None
                             contained:box&&box.left>=outer.left&&box.right<=outer.right&&box.top>=outer.top&&box.bottom<=outer.bottom,
                             clearOfStats:box&&(box.left>=info.right||box.bottom<=info.top||box.top>=info.bottom)};
                         }""")
-                        assert status_result['label'] == status['label'], status_result
+                        assert status_result['label'] == 'NOW: ' + status['label'], status_result
                         assert status_result['color'] == status['color'], status_result
                         assert status_result['contained'] and status_result['clearOfStats'], status_result
                         # Resize the same mounted card; no re-render or player-specific offsets.

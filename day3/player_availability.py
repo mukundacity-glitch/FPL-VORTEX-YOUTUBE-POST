@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,8 +32,10 @@ def player_health(
 ) -> dict[str, Any]:
     status = str(player.get("status") or "").strip().lower()
     field = chance_field(events, gameweek)
-    chance = number(player.get(field)) if field else None
-    if chance is not None and not 0 <= chance <= 100:
+    raw_chance = player.get(field) if field else None
+    chance = number(raw_chance)
+    invalid_chance = raw_chance is not None and (chance is None or not 0 <= chance <= 100)
+    if invalid_chance:
         chance = None
     news = str(player.get("news") or "").strip()
     labels = {"i": "INJURED", "s": "SUSPENDED", "u": "UNAVAILABLE", "n": "UNAVAILABLE"}
@@ -40,7 +43,7 @@ def player_health(
     blocked = status in labels or chance == 0
     if blocked:
         label, color, probability = labels.get(status, "UNAVAILABLE"), "red", 0.0
-    elif not verified or status not in {"a", "d"}:
+    elif not verified or status not in {"a", "d"} or invalid_chance:
         label, color, probability = "STATUS UNVERIFIED", "grey", 0.0
     elif status == "d" or (chance is not None and chance < 100):
         label, color = "DOUBTFUL", "yellow"
@@ -200,7 +203,6 @@ class AvailabilityContext:
         return {str(player_id): dict(state) for player_id, state in self.players.items()}
 
     def save_audit(self, folder: Path) -> None:
-        import json
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "player_availability_audit.json").write_text(json.dumps({
             "source": self.source, "fetched_at": self.fetched_at, "gameweek": self.gameweek,

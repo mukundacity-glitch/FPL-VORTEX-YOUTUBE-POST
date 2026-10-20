@@ -30,7 +30,7 @@ STATUS_JS = r"""
     const state=states[String(id)];
     if(!state||state.color==="none")return "";
     const title="Current status: "+state.reason+(state.news ? " "+state.news : "");
-    return '<span class="vx-player-status" data-color="'+escape(state.color)+'" role="status" title="'+escape(title)+'">'+icon+'<span>'+escape(state.label)+'</span></span>';
+    return '<span class="vx-player-status" data-color="'+escape(state.color)+'" role="status" title="'+escape(title)+'">'+icon+'<span>NOW: '+escape(state.label)+'</span></span>';
   };
   let queued=false;
   const update=()=>{
