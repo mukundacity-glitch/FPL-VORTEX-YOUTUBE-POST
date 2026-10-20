@@ -26,6 +26,7 @@ from day3.narration_pacing import patch_narration_pacing_source
 from day3.availability_patches import patch_availability_source
 from day3.sell_reasoning import patch_sell_reasoning_source
 from day3.creator_narration import patch_creator_narration_source
+from day3.elite_input import patch_elite_input_source
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1069,6 +1070,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_defcon_render_preflight(source)
         if cell_index == ELITE_TOP10K_CELL_INDEX:
             source = _patch_elite_template_parser(source)
+        source = patch_elite_input_source(cell_index, source)
         if cell_index == 35:
             source = patch_narration_pacing_source(source)
         source = patch_availability_source(cell_index, source)

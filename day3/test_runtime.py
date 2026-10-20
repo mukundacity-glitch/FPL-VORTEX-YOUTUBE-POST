@@ -479,6 +479,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "patch_availability_source",
             "patch_sell_reasoning_source",
             "patch_creator_narration_source",
+            "patch_elite_input_source",
             "_patch_pitch_card_entrance",
             "_patch_pitch_reveal_audit",
             "_patch_benching_narration",

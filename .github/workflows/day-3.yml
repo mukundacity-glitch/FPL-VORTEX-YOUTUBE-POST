@@ -5,6 +5,11 @@ run-name: Day 3 • ${{ inputs.plan || 'ROLL' }}
 on:
   workflow_dispatch:
     inputs:
+      elite_page_text:
+        description: "Elite Ownership — paste full fpl.team Top 10k page text (blank = live fetch)"
+        required: false
+        default: ""
+        type: string
       plan:
         description: "My Plan"
         required: true
@@ -2917,6 +2922,7 @@ env:
   PYTHONUNBUFFERED: "1"
   FPL_ENTRY_ID: "145784"
   DAY3_PLAN_SELECTION: ${{ inputs.plan || 'ROLL' }}
+  DAY3_ELITE_PAGE_TEXT: ${{ inputs.elite_page_text || '' }}
   DAY3_PLANNED_CHIP: ${{ inputs.planned_chip || 'Wildcard' }}
   DAY3_OUT_1: ${{ inputs.player_out_1 }}
   DAY3_IN_1: ${{ inputs.player_in_1 }}

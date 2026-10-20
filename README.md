@@ -84,6 +84,10 @@ No credential value is written to logs, source, artifacts, or metadata files.
 
 [`day-3.yml`](.github/workflows/day-3.yml) is a manually dispatched workflow. It downloads the production notebook from Drive, restores the model inputs and media assets, runs the patched notebook in FINAL / FULL_VIDEO mode, uploads one private YouTube draft with its thumbnail, syncs the output to Drive, and exposes the finished video as an Actions artifact.
 
+The **Elite Ownership** field under **Run workflow** starts blank. Paste the full visible text from `https://fpl.team/top/`, including Gameweek, sample size, template XI and bench, seven captains, and current/total chip panels for Top 10k and Overall. Line breaks and flattened text are supported. The paste supplies the slide and its narration for that run; player IDs come from official FPL data. It does not replace official effective ownership calculated from manager picks.
+
+Leave the field blank to fetch the page live. The runner ignores the Drive notebook's saved example text. An explicit incomplete paste fails validation; a paste outside the decision Gameweek or its preceding review Gameweek stops with a request for current data, rather than silently switching sources. The slide and narration retain the actual source Gameweek and sample size. This input does not edit the Drive notebook.
+
 The authentication components are:
 
 | Component | Credentials | Request flow and storage |
