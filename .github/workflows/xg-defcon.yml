@@ -1,0 +1,103 @@
+name: XG-DEFCON
+run-name: XG-DEFCON • Public YouTube • manual run
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fpl-vortex-xg-defcon-public
+  cancel-in-progress: false
+
+jobs:
+  xg-defcon:
+    name: xG + DEFCON + GAME_STATE to public YouTube
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      XG_DEFCON_ROOT: ${{ runner.temp }}/xg-defcon
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout only the current repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install media and Drive tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg rclone
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "numpy>=1.26,<3" \
+            "pandas>=2.2,<3" \
+            "requests>=2.32,<3" \
+            "matplotlib>=3.9,<4" \
+            "Pillow>=10.4,<13" \
+            "ipython>=8.27,<10" \
+            "playwright==1.55.0" \
+            "google-api-python-client>=2.147,<3" \
+            "google-auth>=2.35,<3" \
+            "google-auth-httplib2>=0.2,<1"
+          python -m playwright install --with-deps chromium
+
+      - name: Restore hash-pinned Colab notebook, logo and archived data
+        shell: bash
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          python xg_defcon_pipeline.py prepare
+
+      - name: Execute xG DEFCON and GAME_STATE source (no OAuth credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python xg_defcon_pipeline.py execute
+
+      - name: Produce YouTube-ready video from validated graphics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python xg_defcon_pipeline.py render
+
+      - name: Upload immediately as PUBLIC after this manual workflow dispatch
+        shell: bash
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
+          YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
+          YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
+          YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+        run: |
+          set -euo pipefail
+          python xg_defcon_pipeline.py publish
+
+      - name: Make finished output downloadable in this workflow run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xg-defcon-video-and-graphics-${{ github.run_number }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ env.XG_DEFCON_ROOT }}/FPL_VORTEX_XG_DEFCON_GAME_STATE.mp4
+            ${{ env.XG_DEFCON_ROOT }}/public_upload.json
+            ${{ env.XG_DEFCON_ROOT }}/output/xG/1.png
+            ${{ env.XG_DEFCON_ROOT }}/output/xG/1.txt
+            ${{ env.XG_DEFCON_ROOT }}/output/DEFCON/1.png
+            ${{ env.XG_DEFCON_ROOT }}/output/DEFCON/1.txt
+            ${{ env.XG_DEFCON_ROOT }}/output/GAME_STATE/1.png
+            ${{ env.XG_DEFCON_ROOT }}/output/GAME_STATE/1.txt
