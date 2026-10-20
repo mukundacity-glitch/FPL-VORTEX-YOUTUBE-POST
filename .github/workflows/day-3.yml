@@ -3178,6 +3178,10 @@ jobs:
         shell: bash
         run: python -m day3.check_player_cards "$DAY3_NOTEBOOK_PATH"
 
+      - name: Check changing DEFCON forecast widths in Chromium
+        shell: bash
+        run: python -m day3.check_defcon_forecasts "$DAY3_NOTEBOOK_PATH"
+
       - name: Restore Day 3 model state and production assets
         id: restore_state
         shell: bash
