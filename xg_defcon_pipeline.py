@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 NOTEBOOK_ID = "1s_K8Cvdck5JrpoljjgQnWOtBXq49n9kR"
-NOTEBOOK_SHA256 = "a1412886299ed1f1cbe834533767b14ca575c73ec766933ab818678cd18d3b64"
+NOTEBOOK_EXECUTABLE_SHA256 = "c26ab9d7cd406200962e4d01613b01e9530c43a4c31e5f4614649d80f7441318"
 LOGO_ID = "17RWQXfSOrrCpMt9JbXz6z1J94JSaPQ2Z"
 REPORTS = ("xG", "DEFCON", "GAME_STATE")
 
@@ -37,6 +37,35 @@ def root_path() -> Path:
     if path == Path("/") or path == Path.home().resolve():
         raise RuntimeError(f"Unsafe output location: {path}")
     return path
+
+
+def verified_notebook(path: Path) -> dict[str, Any]:
+    # Outputs and execution metadata change whenever Colab saves; pin executable code instead.
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        cells = document["cells"]
+        if not isinstance(cells, list) or len(cells) != 12:
+            raise ValueError("Expected the reviewed 12-cell notebook")
+        executable_cells = (3, 5, 7, 9)
+        sources: list[str] = []
+        for index in executable_cells:
+            cell = cells[index]
+            if cell.get("cell_type") != "code":
+                raise ValueError(f"Cell {index} is not executable code")
+            source = cell.get("source")
+            if not isinstance(source, (list, str)):
+                raise ValueError(f"Cell {index} source has an invalid type")
+            sources.append("".join(source) if isinstance(source, list) else source)
+        digest = hashlib.sha256("".join(sources).encode("utf-8")).hexdigest()
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"Google Drive notebook cannot be validated: {error}") from error
+    if digest != NOTEBOOK_EXECUTABLE_SHA256:
+        raise RuntimeError(
+            "Google Drive notebook executable cells changed; refusing unreviewed code. "
+            f"Expected SHA256={NOTEBOOK_EXECUTABLE_SHA256}; received SHA256={digest}. "
+            "Review the notebook code and update this pin only after verification."
+        )
+    return document
 
 
 def prepare() -> None:
@@ -86,13 +115,8 @@ def prepare() -> None:
     run_command([
         "rclone", "backend", "copyid", "xg-defcon-drive:", NOTEBOOK_ID, str(notebook)
     ], env=environment)
-    actual_sha = hashlib.sha256(notebook.read_bytes()).hexdigest()
-    if actual_sha != NOTEBOOK_SHA256:
-        notebook.unlink(missing_ok=True)
-        raise RuntimeError(
-            "Google Drive notebook changed. Refusing to execute unreviewed code. "
-            "Review changes and explicitly update the pinned SHA256 in this workflow's pipeline."
-        )
+    verified_notebook(notebook)
+    print("[XG-DEFCON] Notebook executable SHA256 verified; Colab outputs excluded.")
     logo = source / "brand-logo.png"
     run_command([
         "rclone", "backend", "copyid", "xg-defcon-drive:", LOGO_ID, str(logo)
@@ -177,9 +201,7 @@ def read_report_metadata(root: Path) -> dict[str, Any]:
 def execute_notebook() -> None:
     root = root_path()
     notebook = root / "source" / "notebook.ipynb"
-    if hashlib.sha256(notebook.read_bytes()).hexdigest() != NOTEBOOK_SHA256:
-        raise RuntimeError("Pinned notebook hash mismatch before execution")
-    document = json.loads(notebook.read_text(encoding="utf-8"))
+    document = verified_notebook(notebook)
     cells = document.get("cells")
     if not isinstance(cells, list) or len(cells) < 10:
         raise RuntimeError("Notebook cell structure is invalid")
