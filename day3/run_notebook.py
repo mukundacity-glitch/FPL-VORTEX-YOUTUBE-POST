@@ -425,6 +425,72 @@ print(f"✅ DEFCON history through completed GW{_d3_prev_gw}; forecast GW{int(NE
     return source
 
 
+
+def _patch_defcon_team_numeric_fit(source: str) -> str:
+    """Fit changing DEFCON xGW figures into their fixed-width team table cells."""
+    function_anchor = "  const assertDefconBoardFit=()=>{"
+    if source.count(function_anchor) != 1:
+        raise RuntimeError("DEFCON numeric fit: expected one team-board QA function")
+
+    fitter = r"""
+  const fitDefconTeamForecasts=()=>{
+    const numbers=[...document.querySelectorAll('.d3DefTeamForecast')];
+    if(numbers.length!==20) throw Error('DEFCON requires 20 team forecasts before capture');
+    for(const number of numbers){
+      const box=number.getBoundingClientRect();
+      if(box.width<=0 || box.height<=0)
+        throw Error('DEFCON team forecast must be visible while fitting');
+      const range=document.createRange();
+      range.selectNodeContents(number);
+      const fits=()=>{
+        const text=range.getBoundingClientRect();
+        return text.left>=box.left+1 && text.right<=box.right-1
+          && number.scrollWidth<=number.clientWidth+1;
+      };
+      if(fits()) continue;
+      const original=parseFloat(getComputedStyle(number).fontSize);
+      const floor=32;
+      number.style.setProperty('font-size', String(floor)+'px', 'important');
+      if(!fits())
+        throw Error('DEFCON forecast is too wide even at readable minimum: '+
+                    String(number.textContent||'').trim());
+      let low=floor;
+      let high=original;
+      for(let iteration=0;iteration<12;iteration++){
+        const candidate=(low+high)/2;
+        number.style.setProperty('font-size', String(candidate)+'px', 'important');
+        if(fits()) low=candidate;
+        else high=candidate;
+      }
+      number.style.setProperty('font-size', String(Math.max(floor,low-0.5))+'px', 'important');
+      if(!fits())
+        throw Error('DEFCON forecast fit regression: '+String(number.textContent||'').trim());
+    }
+  };
+"""
+    source = source.replace(function_anchor, fitter + function_anchor, 1)
+
+    capture_anchor = """    assertDefconBoardFit();
+    return result;"""
+    capture_replacement = """    // Team panel starts hidden. Reveal it briefly to fit live xGW numbers,
+    // then reset the timeline so the captured video still opens normally.
+    const focus=(typeof VX !== 'undefined' ? VX : window.VX)?.defcon_focus;
+    if(!focus || !Number.isFinite(Number(focus.team_intro_at)) ||
+       typeof window.__seek !== 'function')
+      throw Error('DEFCON focus timeline is missing before numeric fitting');
+    window.__seek(Number(focus.team_intro_at)+0.05);
+    try {
+      fitDefconTeamForecasts();
+    } finally {
+      window.__seek(0);
+    }
+    assertDefconBoardFit();
+    return result;"""
+    if source.count(capture_anchor) != 1:
+        raise RuntimeError("DEFCON numeric fit: expected one capture QA call")
+    print("✅ DEFCON team forecasts auto-fit after fonts load and before 4K capture")
+    return source.replace(capture_anchor, capture_replacement, 1)
+
 def _patch_shared_card_scene_checks(source: str) -> str:
     old = "const lanes=[...body.children];"
     new = "const lanes=[...body.children].filter(el=>el.getClientRects().length && el.clientWidth>0 && el.clientHeight>0).sort((left,right)=>left.getBoundingClientRect().top-right.getBoundingClientRect().top);"
@@ -943,6 +1009,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
         if cell_index == SCENE_DESIGN_CELL_INDEX:
             source = _patch_defcon_gameweek_contract(source)
             source = _patch_shared_card_scene_checks(source)
+            source = _patch_defcon_team_numeric_fit(source)
             source = patch_transfer_desk_source(source)
         if cell_index == SCENE_ANIMATION_CELL_INDEX:
             source = _patch_defcon_card_motion(source)
