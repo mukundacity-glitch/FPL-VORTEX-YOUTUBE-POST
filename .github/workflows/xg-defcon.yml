@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     env:
-      XG_DEFCON_ROOT: ${{ runner.temp }}/xg-defcon
+      XG_DEFCON_ROOT: /tmp/fpl-vortex-xg-defcon-${{ github.run_id }}
       PYTHONUNBUFFERED: "1"
 
     steps:
