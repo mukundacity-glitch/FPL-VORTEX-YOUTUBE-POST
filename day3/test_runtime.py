@@ -475,6 +475,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_tts_profile",
             "_patch_player_card_sample",
             "_patch_narration_tone",
+            "patch_narration_pacing_source",
             "_patch_pitch_card_entrance",
             "_patch_pitch_reveal_audit",
             "_patch_benching_narration",
