@@ -37,6 +37,7 @@ PITCH_SOURCE_CELL_INDEX = 21
 INTRO_OUTRO_SOURCE_CELL_INDEX = 22
 SCENE_DESIGN_CELL_INDEX = 24
 SCENE_ANIMATION_CELL_INDEX = 33
+SCENE_RENDER_CELL_INDEX = 34
 ELITE_TOP10K_CELL_INDEX = 26
 TTS_PROFILE_CELL_INDEX = 10
 PLAYER_CARD_DESIGN_CELL_INDEX = 23
@@ -475,14 +476,18 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
     capture_replacement = """    // Team panel starts hidden. Reveal it briefly to fit live xGW numbers,
     // then reset the timeline so the captured video still opens normally.
     const focus=(typeof VX !== 'undefined' ? VX : window.VX)?.defcon_focus;
-    if(!focus || !Number.isFinite(Number(focus.team_intro_at)) ||
-       typeof window.__seek !== 'function')
-      throw Error('DEFCON focus timeline is missing before numeric fitting');
-    window.__seek(Number(focus.team_intro_at)+0.05);
-    try {
-      fitDefconTeamForecasts();
-    } finally {
-      window.__seek(0);
+    if(window.__ready === true && typeof window.__seek === 'function' &&
+       !window.__vxDefconTeamNumbersFitted) {
+      if(!focus || focus.team_intro_at == null ||
+         !Number.isFinite(Number(focus.team_intro_at)))
+        throw Error('DEFCON focus timeline is incomplete before numeric fitting');
+      window.__seek(Number(focus.team_intro_at)+0.05);
+      try {
+        fitDefconTeamForecasts();
+        window.__vxDefconTeamNumbersFitted = true;
+      } finally {
+        window.__seek(0);
+      }
     }
     assertDefconBoardFit();
     return result;"""
@@ -490,6 +495,24 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
         raise RuntimeError("DEFCON numeric fit: expected one capture QA call")
     print("✅ DEFCON team forecasts auto-fit after fonts load and before 4K capture")
     return source.replace(capture_anchor, capture_replacement, 1)
+
+def _patch_defcon_render_preflight(source: str) -> str:
+    """Fit live DEFCON team metrics after the seek timeline is ready, before clip QA."""
+    anchor = (
+        '        await vx_apply_render_scale(page, W, H, DESIGN_W, DESIGN_H)\n\n'
+        '        if key == "03_defcon":\n'
+        '            # Audit the states'
+    )
+    replacement = (
+        '        await vx_apply_render_scale(page, W, H, DESIGN_W, DESIGN_H)\n\n'
+        '        if key == "03_defcon":\n'
+        '            await vx_prepare_capture(page)\n'
+        '            # Audit the states'
+    )
+    if source.count(anchor) != 1:
+        raise RuntimeError("DEFCON pre-audit numeric fit: expected one renderer entry point")
+    return source.replace(anchor, replacement, 1)
+
 
 def _patch_shared_card_scene_checks(source: str) -> str:
     old = "const lanes=[...body.children];"
@@ -1014,6 +1037,8 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
         if cell_index == SCENE_ANIMATION_CELL_INDEX:
             source = _patch_defcon_card_motion(source)
             source = patch_transfer_desk_animation_source(source)
+        if cell_index == SCENE_RENDER_CELL_INDEX:
+            source = _patch_defcon_render_preflight(source)
         if cell_index == ELITE_TOP10K_CELL_INDEX:
             source = _patch_elite_template_parser(source)
         source = remove_shortlist_cell(cell_index, source)
