@@ -283,11 +283,13 @@ def check_notebook_sell_reasoning(path: Path) -> None:
                     and isinstance(node.target, ast.Tuple)
                     and [item.id for item in node.target.elts if isinstance(item, ast.Name)] == ["_action", "_rows"])
     ns.update(
-        _index=0, _d3_buy_rows=[], _d3_hold_rows=[], _d3_sell_rows=[fixture.record],
+        _index=0, _d3_buy_rows=[], _d3_hold_rows=[],
+        _d3_sell_rows=[{"player_id": 8001, "ownership_score": 20,
+                       "ownership_source": "OFFICIAL_OWNERSHIP",
+                       "retained_percent_estimate": 95, "recent_average_points": 2}],
         DAY3_TRANSFER_DESK={"BUY": [], "HOLD": [], "SELL": []},
         DAY3_TRANSFER_DESK_ORDER=[], DAY3_TRANSFER_DESK_SEQUENCE=[],
         _d3_sell_benchmarks=fixture.benchmarks, analyse_sell=analyse_sell,
-        _d3_desk_record=lambda action, row, index: dict(row, index=index),
     )
     exec(compile(ast.Module(body=[for_loop], type_ignores=[]), "actual-sell-enrichment", "exec"), ns)
     saved_record = ns["DAY3_TRANSFER_DESK"]["SELL"][0]
