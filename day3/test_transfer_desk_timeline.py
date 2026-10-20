@@ -88,15 +88,15 @@ class TransferDeskTimelineTests(unittest.TestCase):
                 cues = info["sync_cues"]
                 self.assertEqual(len(cues["windows"]), 10 + hold_count)
                 self.assertEqual(sum(not row["narrated"] for row in cues["windows"]),
-                                 4 + max(0, hold_count - 3))
+                                 0)
                 ns["validate_animation"]("05_transfer_decision_desk", info)
                 payload = {}
                 ns["validate_payload"]("05_transfer_decision_desk", payload)
                 self.assertEqual(len(payload["transfer_desk_windows"]), 10 + hold_count)
-                expected_holds = min(3, hold_count)
+                expected_holds = hold_count
                 hold_section = ns["TRANSFER_DESK_NARRATION_PLAN"]["sections"][1]
                 self.assertEqual(len(hold_section["players"]), expected_holds)
-                self.assertEqual(len(hold_section["silent_cards"]), max(0, hold_count - 3))
+                self.assertEqual(len(hold_section["silent_cards"]), 0)
                 if hold_count == 0:
                     self.assertIn("No players meet", script)
                 elif hold_count < 5:

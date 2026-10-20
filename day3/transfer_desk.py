@@ -210,6 +210,14 @@ if len({r["player_id"] for g in DAY3_TRANSFER_DESK.values() for r in g}) != DAY3
 
 
 ''' + source[reason_end:]
+    source = _replace(source, '    if index >= 3:\n        return ""\n', "")
+    source = _replace(source, '    identity = f"{name} from {club}"', '''    identity = f"{name} from {club}"
+    if index >= 3:
+        prefix = f"Also in the {role.lower()} list, " if index == 3 else "And "
+        text = prefix + identity + "."
+        if not DAY3_AVAILABILITY.eligible(record["player_id"]):
+            text += " " + DAY3_AVAILABILITY.caution(record["player_id"])
+        return text''')
     source = _replace(source, '    if role == "BUY":\n        horizon =',
                       '    if not record["has_projection"]:\n        outlook = f"The next fixture for {name} is {fixture}; a fresh points projection is unavailable."\n    if role == "BUY":\n        horizon =')
     source = _replace(source, 'if pd.notna(horizon) and np.isfinite(horizon):',
@@ -243,53 +251,100 @@ if len({r["player_id"] for g in DAY3_TRANSFER_DESK.values() for r in g}) != DAY3
 
 
 def patch_transfer_desk_narration_source(source):
-    """Speak only available players and explain any missing HOLD candidates."""
+    """Speak every selected card and explain any missing HOLD candidates."""
     source = _replace(source, '''        if len(records) != 5:
             raise RuntimeError(f"Transfer Desk requires five {action} cards")''', '''        if not records:
             intros[action] += " No players meet the retained-blank criteria this week."
         elif action == "HOLD" and len(records) < 5:
             intros[action] += f" Only {len(records)} players meet the retained-blank criteria this week."''')
-    source = _replace(source, '''for index in range(3)])''', '''for index in range(min(3, len(records)))])''')
-    source = _replace(source, "DESK_3_SPOKEN_2_SILENT_V1", "DESK_UP_TO_3_SPOKEN_V2")
+    source = _replace(source, '''for index in range(3)])''', '''for index in range(len(records))])''')
+    source = _replace(source, "for record in records[:3]]", "for record in records]")
+    source = _replace(source, '''                         "silent_cards": [{"i": int(record["index"]), "player_id": int(record["player_id"]),
+                                           "name": str(record["name"])} for record in records[3:]],
+                         "silent_card_seconds": 4.0''', '''                         "silent_cards": []''')
+    source = _replace(source, "DESK_3_SPOKEN_2_SILENT_V1", "DESK_CONTINUOUS_SPEECH_V3")
     # Keep the timing cue independent of the dynamic shortfall explanation.
     source = _replace(source, '''else intros[action].rstrip(".")''', '''else ("Now the holds" if action == "HOLD" else "Now the sells")''')
     return source
 
 
 def patch_transfer_desk_audio_source(source):
-    """Derive spoken/silent card counts from the qualified presentation list."""
+    """Build a continuous spoken timeline from the qualified presentation list."""
     replacements = [
-        ("DESK_3_SPOKEN_2_SILENT_V1", "DESK_UP_TO_3_SPOKEN_V2"),
-        ('for _desk_index in range(3):', 'for _desk_index in range(min(3, len(DAY3_TRANSFER_DESK[_desk_action]))):'),
+        ("DESK_3_SPOKEN_2_SILENT_V1", "DESK_CONTINUOUS_SPEECH_V3"),
+        ('for _desk_index in range(3):', 'for _desk_index in range(len(DAY3_TRANSFER_DESK[_desk_action])):'),
         ('if len(_desk_player_narrations) != 9 or len(set(_desk_player_narrations)) != 9:',
-         'if len(_desk_player_narrations) != sum(min(3, len(rows)) for rows in DAY3_TRANSFER_DESK.values()) or len(set(_desk_player_narrations)) != len(_desk_player_narrations):'),
+         'if len(_desk_player_narrations) != sum(len(rows) for rows in DAY3_TRANSFER_DESK.values()) or len(set(_desk_player_narrations)) != len(_desk_player_narrations):'),
         ('Transfer Decision Desk must contain 9 unique spoken player narrations.',
-         'Transfer Decision Desk must narrate each selected leading player exactly once.'),
+         'Transfer Decision Desk must narrate each selected player exactly once.'),
         ('''                if len(players) != 3 or len(section["silent_cards"]) != 2:
                     raise RuntimeError(f"Transfer Desk {action} must contain three narrated and two silent cards")''',
          '''                expected = len(DAY3_TRANSFER_DESK[action])
-                if len(players) != min(3, expected) or len(section["silent_cards"]) != max(0, expected - 3):
+                if len(players) != expected or section["silent_cards"]:
                     raise RuntimeError(f"Transfer Desk {action} audio cards differ from qualified selection")
                 if not players:
                     continue'''),
         ('len(set(starts)) != 3', 'len(set(starts)) != len(players)'),
         ('len(windows) != 15 or len(silent_intervals) != 6',
-         'len(windows) != DAY3_TRANSFER_DESK_COUNT or len(silent_intervals) != sum(max(0, len(rows) - 3) for rows in DAY3_TRANSFER_DESK.values())'),
+         'len(windows) != DAY3_TRANSFER_DESK_COUNT or silent_intervals'),
     ]
     for old, new in replacements:
         source = _replace(source, old, new)
+    source = _replace(source, '''                seconds = float(section["silent_card_seconds"])
+                if not math.isfinite(seconds) or seconds <= 0:
+                    raise RuntimeError("Transfer Desk silent-card duration is invalid")
+                silent_frames = round(seconds * sample_rate)
+                for player in section["silent_cards"]:
+                    start = sample_cursor / sample_rate
+                    output.writeframesraw(b"\\x00\\x00" * silent_frames)
+                    sample_cursor += silent_frames
+                    settle = sample_cursor / sample_rate
+                    windows.append(dict(player, action=action, start=start, settle=settle,
+                                        exit_at=settle-min(.34, seconds*.2), narrated=False))
+                    silent_intervals.append({"i": player["i"], "start": start, "end": settle})''', "")
+    source = _replace(source, '''                offset = sample_cursor / sample_rate
+                local_words = []
+                for word in info["words"]:
+                    shifted = dict(word)
+                    start, duration = float(word["start"]), float(word.get("duration", 0.0))
+                    if not math.isfinite(start + duration) or start < 0 or duration < 0:
+                        raise RuntimeError(f"Transfer Desk {action} has invalid word boundaries")
+                    shifted["start"] = start + offset
+                    local_words.append(shifted)
+                if not local_words:
+                    raise RuntimeError(f"Transfer Desk {action} produced no spoken word boundaries")
+                # Some containers omit a trailing silent fraction included in the TTS clock.
+                last_word_end = max(float(word["start"]) + float(word.get("duration", 0.0)) for word in info["words"])
+                padded_frames = max(frame_count, math.ceil(last_word_end * sample_rate))
+                output.writeframesraw(frames)
+                if padded_frames > frame_count:
+                    output.writeframesraw(b"\\x00\\x00" * (padded_frames - frame_count))
+                sample_cursor += padded_frames''',
+                      '''                from day3.transfer_pacing import compact_transfer_pcm
+                last_word_end = max(float(word["start"]) + float(word.get("duration", 0.0))
+                                    for word in info["words"])
+                padded_frames = max(frame_count, math.ceil(last_word_end * sample_rate))
+                frames += b"\\x00\\x00" * (padded_frames - frame_count)
+                frames, measured_words = compact_transfer_pcm(frames, info["words"], sample_rate)
+                offset = sample_cursor / sample_rate
+                local_words = [dict(word, start=float(word["start"]) + offset) for word in measured_words]
+                output.writeframesraw(frames)
+                sample_cursor += len(frames) // 2''')
+    source = _replace(source, "Join measured PCM sections and true silent card windows on one timeline.",
+                      "Join continuous spoken sections with measured card cues and no silent waits.")
+
     return source
 
 
 def patch_transfer_desk_animation_source(source):
     """Validate card identity, order and timing against the same selection."""
-    source = _replace(source, "DESK_3_SPOKEN_2_SILENT_V1", "DESK_UP_TO_3_SPOKEN_V2")
+    source = _replace(source, "DESK_3_SPOKEN_2_SILENT_V1", "DESK_CONTINUOUS_SPEECH_V3")
     source = _replace(source, '''            if len(windows) != 15 or [int(row["i"]) for row in windows] != list(range(15)):
                 raise RuntimeError("Transfer Desk timeline must contain fifteen cards in selection order")
             if [bool(row["narrated"]) for row in windows] != [True, True, True, False, False] * 3:''', '''            expected = [record for action in ("BUY", "HOLD", "SELL") for record in DAY3_TRANSFER_DESK[action]]
             if len(windows) != len(expected) or [(int(row["i"]), int(row["player_id"]), row["action"]) for row in windows] != [(int(row["index"]), int(row["player_id"]), row["action"]) for row in expected]:
                 raise RuntimeError("Transfer Desk timeline differs from qualified cards in selection order")
-            if [bool(row["narrated"]) for row in windows] != [index < 3 for action in ("BUY", "HOLD", "SELL") for index in range(len(DAY3_TRANSFER_DESK[action]))]:''')
+            if [bool(row["narrated"]) for row in windows] != [True] * len(expected):''')
     source = _replace(source, '''                if index and abs(float(window["start"]) - float(windows[index-1]["settle"])) > .001:
                     raise RuntimeError("Transfer Desk card timeline has a gap or overlap")''', '''                if index:
                     gap = float(window["start"]) - float(windows[index-1]["settle"])
@@ -299,5 +354,5 @@ def patch_transfer_desk_animation_source(source):
     source = _replace(source, '''if len(vx["transfer_desk_windows"]) != 15:''', '''if len(vx["transfer_desk_windows"]) != DAY3_TRANSFER_DESK_COUNT:''')
     source = _replace(source, '''f"Transfer Desk animation requires 15 card-flight windows; "''', '''f"Transfer Desk animation requires {DAY3_TRANSFER_DESK_COUNT} card-flight windows; "''')
     source = _replace(source, "Transfer Desk requires three narrated cards followed by two silent cards per action",
-                      "Transfer Desk spoken/silent card order differs from qualified selection")
+                      "Transfer Desk requires speech for every selected card")
     return source
