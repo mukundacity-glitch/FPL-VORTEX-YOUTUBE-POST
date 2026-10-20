@@ -24,7 +24,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ffmpeg
       - name: Install validation dependencies
-        run: python -m pip install "ipython>=8.27,<10" "pandas>=2.2,<3" "Pillow>=10.4,<12"
+        run: python -m pip install "ipython>=8.27,<10" "pandas>=2.2,<3" "Pillow>=10.4,<12" "playwright>=1.46,<2"
       - name: Compile Day 3 and run its regression tests
         run: |
           python -m compileall -q day3
@@ -69,3 +69,45 @@ jobs:
           PY
       - name: Validate every patched notebook cell
         run: python day3/run_notebook.py /tmp/day3-voice-validation.ipynb --validate-only
+      - name: Exercise actual notebook availability and narration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from day3.test_player_availability import check_notebook_availability
+          check_notebook_availability(Path("/tmp/day3-voice-validation.ipynb"))
+          PY
+      - name: Install Chromium for status flag checks
+        run: python -m playwright install --with-deps chromium
+      - name: Check status flags in all production card layouts
+        run: python -m day3.check_player_cards /tmp/day3-voice-validation.ipynb
+      - name: Verify status rules against a fresh official FPL snapshot
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+          from collections import Counter
+          from day3.player_availability import player_health
+
+          request = urllib.request.Request(
+              "https://fantasy.premierleague.com/api/bootstrap-static/?_vx=" + str(time.time_ns()),
+              headers={"User-Agent": "FPL-VORTEX/2.0", "Cache-Control": "no-cache, no-store"},
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              bootstrap = json.load(response)
+          next_events = [event for event in bootstrap["events"] if event.get("is_next") is True]
+          if len(next_events) != 1:
+              raise AssertionError("Fresh official snapshot has no unique next Gameweek")
+          gameweek = int(next_events[0]["id"])
+          states = [
+              player_health(player, bootstrap["events"], gameweek, verified=True)
+              for player in bootstrap["elements"]
+          ]
+          assert states
+          for state in states:
+              if state["status"] in {"i", "s", "u", "n"} or state["chance_percent"] == 0:
+                  assert state["probability"] == 0 and not state["health_clear"]
+              assert not state["recommendation_eligible"]
+          print("Live official snapshot checked:", len(states), "players; status counts", dict(Counter(state["label"] for state in states)))
+          print("No player is classified as a confirmed starter from status data alone.")
+          PY

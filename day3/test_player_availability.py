@@ -190,5 +190,100 @@ class AvailabilityTests(unittest.TestCase):
         self.assertIn("VX_PLAYER_AVAILABILITY", original("<html><head></head><body></body></html>"))
 
 
+
+def check_notebook_availability(notebook_path: Path) -> None:
+    import ast
+    import re
+    import numpy as np
+    from day3.run_notebook import _prepare_code_cells
+
+    cells = dict(_prepare_code_cells(notebook_path))
+
+    def load_function(cell_index, name, namespace):
+        tree = ast.parse(cells[cell_index])
+        functions = [node for node in ast.walk(tree)
+                     if isinstance(node, ast.FunctionDef) and node.name == name]
+        if len(functions) != 1:
+            raise AssertionError(f"Expected one actual notebook function: {name}")
+        exec(compile(ast.Module(body=functions, type_ignores=[]), name, "exec"), namespace)
+        return namespace[name]
+
+    fixture = AvailabilityTests()
+    fixture.setUp()
+    context = fixture.context({**fixture.player, "status": "s", "news": "Suspended until official clearance"})
+    namespace = {"DAY3_AVAILABILITY": context, "pd": pd, "np": np, "re": re}
+    probability = load_function(18, "_vx_phase10_availability", namespace)
+    assert probability({"player_id": 901, "status": "a", "chance_of_playing_next_round": 100}) == 0
+    for name in ("_d3_plan_player_text", "_d3_transfer_plan_player_text"):
+        namespace["vx_narration_player"] = lambda player_id: f"Player {player_id}"
+        text = load_function(30, name, namespace)({"id": 901})
+        assert "Suspended" in text and "official availability update" in text
+        assert "He starts" not in text
+    context.players.clear()
+    records = []
+    for index in range(20):
+        player_id = 1000 + index
+        state = player_health({
+            **fixture.player, "id": player_id, "status": "s" if index == 0 else "a",
+            "news": "Official suspension notice" if index == 0 else "",
+        }, fixture.events, 9, verified=True)
+        state["recommendation_eligible"] = index != 0
+        context.players[player_id] = state
+        records.append({
+            "player_id": player_id, "player_name": f"Player {player_id}", "team_id": 1,
+            "defcon_eligible": True, "minutes_per_appearance": 90.0,
+            "cumulative_dc": 1000 - index, "dc_per90": 12.0,
+            "previous_defcon": 10.0, "xdefcon": 0.0 if index == 0 else 11.0,
+            "next_fixtures": [{"fixture": "Example (H)"}],
+        })
+    candidates = context.annotate(pd.DataFrame(records))
+    namespace.update(_d3_def_features=candidates, PHASE10_DEFCON_MIN_AVG_MINUTES=70)
+    assignments = [
+        node for node in ast.parse(cells[24]).body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "_d3_def_cards" for target in node.targets)
+        and "recommendation_eligible" in ast.unparse(node.value)
+    ]
+    assert len(assignments) == 1
+    exec(compile(ast.Module(body=assignments, type_ignores=[]), "actual-defcon-ranking", "exec"), namespace)
+    ranked = namespace["_d3_def_cards"]
+    assert ranked.iloc[0].player_id == 1001 and ranked.iloc[-1].player_id == 1000
+
+    teams = pd.DataFrame([{
+        "team_id": index + 1, "team_name": f"Club {index + 1}",
+        "dc_for": 1000 - index, "dc_for_per_game": 50.0, "xdefcon": 55.0,
+    } for index in range(20)])
+    namespace.update(
+        DAY3_DEFCON_PLAYERS=ranked, DAY3_DEFCON_TARGETS=ranked.head(5),
+        DAY3_DEFCON_TEAMS=teams, DAY3_DEFCON_TOP_TEAMS=teams.head(5),
+        DAY3_DEFCON_AVOID_TEAMS=teams.tail(3),
+        vx_narration_player=lambda player_id: f"Player {player_id}",
+        vx_narration_team=lambda team_id: f"Club {team_id}",
+    )
+    narrate = load_function(32, "_d3_defcon_narration", namespace)
+    safe_text = narrate()
+    assert "Official suspension notice" not in safe_text
+    assert len(namespace["DEFCON_NARRATION_CUES"]["individual"]) == 5
+
+    # Sparse evidence remains an honest watchlist; it never promotes blocked players.
+    for state in context.players.values():
+        state.update(recommendation_eligible=False, health_clear=False, blocked=True,
+                     label="SUSPENDED", color="red", reason="Suspended: Official suspension notice")
+    watch_text = narrate()
+    assert watch_text.count("not an active target") == 5
+    assert "Official suspension notice" in watch_text
+    assert len(namespace["DEFCON_NARRATION_CUES"]["individual"]) == 5
+
+    namespace.update(
+        DAY3_TRANSFER_DESK={"BUY": [{"player_id": 1001, "team_id": 1,
+                                    "next_fixture": "Example (H)", "next_fdr": 3, "xpts": 0}],
+                           "HOLD": [], "SELL": []},
+    )
+    desk_text = load_function(24, "_d3_desk_narr", namespace)("BUY", 0)
+    assert "not an active recommendation" in desk_text and "Official suspension notice" in desk_text
+    assert "leading target" not in desk_text
+    print("Actual notebook integration: availability, DEFCON ranking/narration, squad plans, market warnings and cue identities PASS")
+
+
 if __name__ == "__main__":
     unittest.main()
