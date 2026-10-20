@@ -46,6 +46,8 @@ def _fixture_state(player: Mapping[str, Any], snapshot: Mapping[str, Any], gamew
     matches = [row for row in snapshot.get("fixtures", [])
                if _integer(row.get("event")) == gameweek and team in (row.get("team_h"), row.get("team_a"))]
     if not matches:
+        if team is not None and snapshot.get("fixtures") and str(snapshot.get("status") or "").upper() == "FINAL":
+            return "BLANK"
         return str(player.get("review_state") or "PENDING").upper()
     states = []
     for match in matches:
@@ -84,24 +86,30 @@ def _bench_totals(
 ) -> dict[str, Any]:
     unused, counted, clean_sheets = [], [], 0
     complete = True
+    sheets_complete = True
     for player in bench:
         official = stats.get(int(player["id"]), {})
         points = _integer(official.get("total_points"))
         multiplier = _integer(player.get("multiplier"))
         if points is None or multiplier is None:
             complete = False
+            if player.get("pos") in {"GK", "DEF", "MID"}:
+                sheets_complete = False
             continue
         if multiplier > 0:
             counted.append(points * multiplier)
         else:
             unused.append(points)
             sheets, minutes = _integer(official.get("clean_sheets")), _integer(official.get("minutes"))
+            if player.get("pos") in {"GK", "DEF", "MID"} and (sheets is None or minutes is None):
+                sheets_complete = False
             if (player.get("pos") in {"GK", "DEF", "MID"} and sheets is not None and sheets > 0
                     and minutes is not None and minutes >= 60 * sheets):
                 clean_sheets += sheets
     return {"complete": complete, "unused_points": sum(unused) if complete else None,
             "counted_points": sum(counted) if complete else None,
-            "unused_clean_sheets": clean_sheets, "unused_count": len(unused),
+            "unused_clean_sheets": clean_sheets if sheets_complete else None,
+            "unused_count": len(unused),
             "counted_count": len(counted)}
 
 
@@ -121,6 +129,8 @@ def _player_line(
         status = {"PENDING": "His fixture has not started.", "LIVE": "His match is still live.",
                   "PARTIAL": "He still has a fixture to play."}[state]
         return f"{name} has {points_text} so far{detail}. {status}"
+    if state == "BLANK":
+        return f"{name} had no fixture in this Gameweek."
     if minutes == 0:
         return f"{name} did not play. His return stayed at {points_text}."
     if bench or int(player["id"]) in auto_ids:
@@ -255,14 +265,14 @@ def creator_review_segments(
                          + (f"Automatic substitutions brought in {_count(int(counted), 'point')}."
                             if bench_audit["counted_count"] else
                             "Those are bench returns, not a guaranteed gain from a different lineup."))
-    sheets = int(bench_audit["unused_clean_sheets"])
+    sheets = bench_audit["unused_clean_sheets"]
     bench_metric = (f"That unused bench included {_count(sheets, 'clean sheet')}."
                     if sheets else "No credited clean sheet stayed on your unused bench.")
-    if partial:
+    if partial and sheets is not None:
         bench_metric = f"Your unused bench has {_count(sheets, 'clean sheet')} recorded so far."
     if chip_code == "bboost":
         bench_metric = "Your bench returns counted through the chip, not automatic substitutions."
-    if not bench_audit["complete"]:
+    if not bench_audit["complete"] or sheets is None:
         bench_metric = "Your bench clean-sheet count needs complete official returns."
     if partial:
         rank_text = f"Your provisional overall rank is {overall_rank:,}." if overall_rank else "Your overall rank is still updating."

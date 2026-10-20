@@ -175,6 +175,22 @@ class CreatorNarrationTests(unittest.TestCase):
         self.assertIn("official return needs an update", text["player_114"])
         self.assertIn("needs complete official returns", text["metric_bench"])
 
+    def test_missing_clean_sheet_field_is_unknown_even_when_points_are_present(self):
+        players, snapshot, current, segments = review_fixture()
+        del snapshot["live"]["elements"][12]["stats"]["clean_sheets"]
+        rewritten, audit = compose(players, snapshot, current, segments)
+        self.assertIsNone(audit["bench"]["unused_clean_sheets"])
+        self.assertIn("needs complete official returns",
+                      next(row["text"] for row in rewritten if row["id"] == "metric_bench"))
+
+    def test_a_completed_blank_gameweek_is_not_called_an_unstarted_fixture(self):
+        players, snapshot, current, segments = review_fixture()
+        snapshot["fixtures"] = [row for row in snapshot["fixtures"] if row["team_h"] != 1]
+        snapshot["live"]["elements"][0]["stats"].update(minutes=0, total_points=0)
+        rewritten, audit = compose(players, snapshot, current, segments)
+        self.assertEqual(audit["player_states"]["100"], "BLANK")
+        self.assertIn("had no fixture", next(row["text"] for row in rewritten if row["id"] == "player_100"))
+
     def test_zero_appearance_and_negative_points_are_reported_without_guessing(self):
         players, snapshot, current, segments = review_fixture()
         snapshot["live"]["elements"][0]["stats"].update(total_points=-1, red_cards=1)
@@ -289,6 +305,9 @@ def check_notebook_creator_narration(path: Path) -> None:
                 vx_narration_team=lambda name: str(name),
                 vx_synthesize_audio=synthesize,
             )
+            namespace.update(teams=snapshot["bootstrap"]["teams"],
+                             players=snapshot["bootstrap"]["elements"])
+            exec(compile(cells[28], "actual-full-word-speech", "exec"), namespace)
             code = compile(cells[29], "actual-review-cell", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
             asyncio.run(eval(code, namespace))
             package = namespace["GW_REVIEW_PACKAGE"]
@@ -296,7 +315,7 @@ def check_notebook_creator_narration(path: Path) -> None:
             assert len([row for row in package["segments"] if row.get("player_id")]) == 15
             assert all(row.get("name_time") is not None for row in package["segments"])
             assert len({row["text"] for row in package["segments"]}) == len(package["segments"])
-            assert "FPL" in package["segments"][0]["text"]
+            assert "Fantasy Premier League" in package["segments"][0]["text"]
             if chip == "bboost":
                 assert package["narration_audit"]["bench"]["unused_points"] == 0
 
@@ -314,6 +333,12 @@ def check_notebook_creator_narration(path: Path) -> None:
     namespace["scripts"] = {"05_elite_1000_trends": text}
     exec(compile(ast.Module(body=[anchors], type_ignores=[]), "actual-elite-anchors", "exec"), namespace)
     cues = namespace["_d3_sync_anchors"]["05_elite_1000_trends"]
+    _, speech_snapshot, _, _ = review_fixture(base_id=400)
+    speech = dict(teams=speech_snapshot["bootstrap"]["teams"], players=speech_snapshot["bootstrap"]["elements"])
+    exec(compile(cells[28], "actual-elite-full-word-speech", "exec"), speech)
+    normalized = speech["vx_full_word_narration"](text, expand_player_context=False)
+    assert speech["vx_full_word_narration"](normalized, expand_player_context=False) == normalized
+    assert [normalized.index(cue) for cue in ELITE_CUES] == sorted(normalized.index(cue) for cue in ELITE_CUES)
     assert cues == list(ELITE_CUES)
     assert [text.index(cue) for cue in cues] == sorted(text.index(cue) for cue in cues)
     assert '"05_elite_1000_trends"' in cells[32] or "'05_elite_1000_trends'" in cells[32]
