@@ -477,6 +477,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_player_card_sample",
             "_patch_narration_tone",
             "patch_narration_pacing_source",
+            "_patch_transition_titles",
             "patch_availability_source",
             "patch_sell_reasoning_source",
             "patch_elite_input_source",

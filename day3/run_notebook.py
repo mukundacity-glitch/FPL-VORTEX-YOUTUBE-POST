@@ -1028,6 +1028,67 @@ def _iter_code_cells(notebook: dict[str, object]) -> Iterable[tuple[int, str]]:
             yield index, source_text
 
 
+def _patch_transition_titles(source: str) -> str:
+    replacements = (
+        (
+            '    ASSEMBLER_VERSION = "VX21-PRODUCTION-PACKAGING-V10-NARRATION-PACING"',
+            '    ASSEMBLER_VERSION = "VX21-PRODUCTION-PACKAGING-V10-NARRATION-PACING-TITLE-FIT-V1"',
+        ),
+        (
+            '        words = str(next_label).replace("•", " ").split()',
+            '        words = str(next_label).replace("•", " ").split()\n'
+            '        if not words:\n'
+            '            raise ValueError("Transition title must not be empty")\n'
+            '        stroke = max(2, int(height * .0016))\n'
+            '        title_padding = stroke * 3\n'
+            '        line_gap = int(height * .008)\n'
+            '        max_text_width = max_title_width - title_padding * 2\n'
+            '        max_title_height = int(height * .905) - title_y',
+        ),
+        (
+            '        for size in range(max(42, int(height*.062)), max(30, int(height*.036)) - 1, -2):',
+            '        for size in range(max(42, int(height*.062)), 9, -1):',
+        ),
+        (
+            '                box=draw.textbbox((0,0), trial, font=fnt, stroke_width=max(1,int(size*.025)))\n'
+            '                if cur and (box[2]-box[0]) > max_title_width:',
+            '                box=draw.textbbox((0,0), trial, font=fnt, stroke_width=stroke)\n'
+            '                if cur and (box[2]-box[0]) > max_text_width:',
+        ),
+        (
+            '            if len(lines) <= 2:\n'
+            '                chosen_font=fnt; chosen_lines=lines; break\n'
+            '        if chosen_font is None:\n'
+            '            chosen_font=_vx21_load_overlay_font(max(30,int(height*.036)), bold=True)\n'
+            '            chosen_lines=[str(next_label)]',
+            '            bounds = [draw.textbbox((0,0), line, font=fnt, stroke_width=stroke) for line in lines]\n'
+            '            text_height = sum(box[3] - box[1] for box in bounds) + line_gap * max(0, len(lines) - 1)\n'
+            '            if (len(lines) <= 2\n'
+            '                    and all(box[2] - box[0] <= max_text_width for box in bounds)\n'
+            '                    and text_height + title_padding * 2 <= max_title_height):\n'
+            '                chosen_font=fnt; chosen_lines=lines; break\n'
+            '        if chosen_font is None:\n'
+            '            raise ValueError(f"Transition title cannot fit safely: {next_label!r}")',
+        ),
+        (
+            '        md=_Draw.Draw(mask); yy=stroke*2\n'
+            '        for li,line in enumerate(chosen_lines):\n'
+            '            md.text((stroke*2,yy), line, font=chosen_font, fill=255, stroke_width=stroke, stroke_fill=255)',
+            '        md=_Draw.Draw(mask); yy=title_padding\n'
+            '        for li,line in enumerate(chosen_lines):\n'
+            '            bounds=draw.textbbox((0,0), line, font=chosen_font, stroke_width=stroke)\n'
+            '            # Pillow offsets glyphs from the text origin; align their ink bounds inside the mask.\n'
+            '            md.text((title_padding-bounds[0],yy-bounds[1]), line, font=chosen_font, fill=255, stroke_width=stroke, stroke_fill=255)',
+        ),
+    )
+    for old, new in replacements:
+        count = source.count(old)
+        if count != 1:
+            raise RuntimeError(f"Transition title fit: expected one source contract, found {count}: {old[:80]}")
+        source = source.replace(old, new, 1)
+    return source
+
+
 def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     cells = list(_iter_code_cells(notebook))
@@ -1074,6 +1135,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
         source = patch_elite_input_source(cell_index, source)
         if cell_index == 35:
             source = patch_narration_pacing_source(source)
+            source = _patch_transition_titles(source)
         # Restore run #120's scripts while retaining newer data, visuals and timing.
         source = patch_availability_source(cell_index, source, narration=False)
         if cell_index == SCENE_DESIGN_CELL_INDEX:
