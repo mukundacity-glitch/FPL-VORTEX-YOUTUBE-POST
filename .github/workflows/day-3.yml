@@ -3272,7 +3272,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python day3/run_notebook.py "$DAY3_NOTEBOOK_PATH" \
+          python -m day3.run_validated "$DAY3_NOTEBOOK_PATH" --output-root "$DAY3_OUTPUT_ROOT" \
             2>&1 | tee "$RUNNER_TEMP/day-3.log"
 
       - name: Upload one private YouTube draft with matching thumbnail

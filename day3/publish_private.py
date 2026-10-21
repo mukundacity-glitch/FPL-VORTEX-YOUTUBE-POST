@@ -5,11 +5,19 @@ import json
 import os
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageOps
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from day3.publication_validation import validate_publication
+from day3.live_evidence import EvidenceChangedError
+from day3.run_validated import discard_rendered_artifacts, run_validated
 
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
@@ -332,7 +340,7 @@ def _verify_private(youtube, video_id: str) -> None:
         raise RuntimeError(f"Upload safety check failed: privacyStatus={privacy!r}")
 
 
-def publish(output_root: Path, plan: str, transfer_mode: str) -> dict[str, Any]:
+def publish(output_root: Path, plan: str, transfer_mode: str, *, evidence_retry: bool = True) -> dict[str, Any]:
     output_root = output_root.resolve()
     final_video = _one_final_video(output_root)
     probe = _probe_video(final_video)
@@ -345,6 +353,15 @@ def publish(output_root: Path, plan: str, transfer_mode: str) -> dict[str, Any]:
     preview_gw, review_gw = _infer_gameweeks(output_root, final_video)
     thumbnail_path = _build_thumbnail(output_root, plan)
     metadata = _metadata(preview_gw, review_gw, plan, transfer_mode)
+    try:
+        validate_publication(output_root)
+    except EvidenceChangedError:
+        notebook = Path(os.environ.get("DAY3_NOTEBOOK_PATH", ""))
+        if not evidence_retry or not notebook.is_file():
+            raise
+        discard_rendered_artifacts(output_root)
+        run_validated(notebook, output_root)
+        return publish(output_root, plan, transfer_mode, evidence_retry=False)
 
     report_path = output_root / "DATA" / "youtube_private_upload.json"
     report: dict[str, Any] = {

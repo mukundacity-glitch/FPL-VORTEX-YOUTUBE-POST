@@ -485,6 +485,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_pitch_reveal_audit",
             "_patch_benching_narration",
             "patch_projected_goals_narration_source",
+            "patch_analysis_source",
             "_patch_pitch_player_names",
             "_patch_shared_card_scene_checks",
             "_patch_defcon_team_numeric_fit",

@@ -37,6 +37,15 @@ STATUS_JS = r"""
     queued=false;
     for(const host of document.querySelectorAll("[data-player-id]")){
       const state=states[String(host.dataset.playerId)];
+      if(state?.projection_verified===false){
+        for(const label of host.querySelectorAll('.pc-stat-label,.pc-info-label')){
+          if(!/NEXT|EXPECTED|PROJECTED|XPTS|XMINS|XDEFCON|START|FORECAST/i.test(label.textContent))continue;
+          const value=label.parentElement.querySelector('.pc-stat-value,.pc-info-value');
+          if(value&&value.textContent!=="—"){
+            value.textContent="—";value.title="Current projection is unverified";
+          }
+        }
+      }
       if(!state||state.color==="none"||host.classList.contains("vx-player-card")||host.querySelector(".vx-player-card"))continue;
       const photo=host.querySelector(".d3Def20Photo,.d3DeskPhoto,.d3BenchPhoto,.playerPhoto,.miniPhoto");
       if(!photo)continue;

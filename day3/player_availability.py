@@ -9,6 +9,8 @@ from typing import Any
 
 import pandas as pd
 
+from day3.live_evidence import collect, date
+
 
 def number(value: Any) -> float | None:
     try:
@@ -81,10 +83,15 @@ class AvailabilityContext:
     def __init__(
         self, bootstrap: dict[str, Any], fixtures: pd.DataFrame, gameweek: int,
         source_state: dict[str, Any], *, fetched_at: str | None = None,
+        research: dict[str, Any] | None = None,
     ) -> None:
         self.gameweek = int(gameweek)
         self.fetched_at = fetched_at or datetime.now(timezone.utc).isoformat()
         self.source = dict(source_state)
+        self.research = research
+        self.official_players = {int(player["id"]): dict(player) for player in bootstrap.get("elements", [])}
+        self.positions = {int(row["id"]): str(row["singular_name_short"]).replace("GKP", "GK")
+                          for row in bootstrap.get("element_types", [])}
         self.verified = source_state.get("source") == "LIVE_FPL_API" and not source_state.get("fallback_used", True)
         self.players = {
             int(player["id"]): player_health(player, bootstrap.get("events", []), self.gameweek,
@@ -93,6 +100,73 @@ class AvailabilityContext:
         }
         self.fixtures = fixtures.copy()
         self.bound = False
+        if research is not None:
+            self.apply_research()
+
+    def apply_research(self) -> None:
+        assert self.research is not None
+        checked = date(self.research.get("checked_at"))
+        fresh = checked is not None and 0 <= (datetime.now(timezone.utc) - checked).total_seconds() <= 3600
+        for player_id, state in self.players.items():
+            player = self.official_players[player_id]
+            reports = self.research.get("news", {}).get("players", {}).get(str(player_id), [])
+            coverage = self.research.get("news", {}).get("coverage", {}).get(str(state["team_id"]), {})
+            state.update(research_reports=reports, evidence_checked_at=self.research.get("checked_at"),
+                         official_position=self.positions.get(int(player["element_type"])))
+            if not fresh or self.research.get("gameweek") != self.gameweek:
+                state.update(health_clear=False, label="EVIDENCE STALE", color="grey", reason="Current Gameweek research needs refreshing.")
+            elif player.get("can_select") is False or player.get("removed") is True:
+                state.update(health_clear=False, blocked=True, label="NOT SELECTABLE", color="red",
+                             reason="Official FPL marks this player unavailable for selection.")
+            elif state["health_clear"] and player.get("scout_risks"):
+                state.update(health_clear=False, label="OFFICIAL SCOUT RISK", color="yellow",
+                             reason="Official FPL lists a current risk that needs checking before a recommendation.")
+            elif state["health_clear"] and any(report.get("unresolved_concern") for report in reports):
+                state.update(health_clear=False, label="TEAM NEWS CHECK", color="yellow",
+                             reason="Recent team news needs checking against official status and role forecasts.")
+            elif state["health_clear"] and not any(coverage.values()):
+                state.update(health_clear=False, label="RESEARCH INCOMPLETE", color="grey",
+                             reason="Current club and credible team-news coverage could not be checked.")
+            if not state["health_clear"]:
+                state["probability"] = 0.0
+
+    def current_history(self, player_id: int) -> list[dict[str, Any]]:
+        if self.research is None:
+            return []
+        player = self.official_players.get(player_id)
+        if not player:
+            return []
+        fixtures = {int(row["id"]): row for row in self.research.get("fixtures", [])}
+        joined_raw = str(player.get("team_join_date", ""))
+        joined = date(joined_raw) or date(joined_raw + "T00:00:00+00:00")
+        result = []
+        for row in self.research.get("histories", {}).get(str(player_id), {}).get("history", []):
+            fixture = fixtures.get(int(row.get("fixture", -1)))
+            played = date(row.get("kickoff_time"))
+            if not fixture or fixture.get("finished") is not True or played is None or played > datetime.now(timezone.utc):
+                continue
+            own_team = fixture.get("team_h") if row.get("was_home") is True else fixture.get("team_a")
+            if int(own_team or -1) != int(player["team"]) or joined is not None and played < joined:
+                continue
+            if number(row.get("starts")) not in {0.0, 1.0} or number(row.get("minutes")) is None:
+                continue
+            result.append(dict(row))
+        return sorted(result, key=lambda row: (row["kickoff_time"], int(row["fixture"])))
+
+    def model_roles(self, existing: pd.DataFrame, player_id: int, player_code: int, season: str) -> pd.DataFrame:
+        if self.research is None:
+            return existing
+        rows = []
+        for row in self.current_history(player_id):
+            age = max(0.0, (datetime.now(timezone.utc) - date(row["kickoff_time"])).total_seconds() / 86400)
+            rows.append({"player_code": player_code, "season_label": season,
+                         "match_id": f'official-prem-{int(row["fixture"])}', "match_date": row["kickoff_time"],
+                         "minutes_played": row["minutes"], "is_starting": row["starts"] == 1,
+                         "appeared": row["minutes"] > 0, "played_60": row["minutes"] >= 60,
+                         "recency_weight": math.exp(-math.log(2) * age / 30),
+                         "rest_days_since_prior_role": float("nan")})
+        # Official current-club starts supersede stale or inferred Core lineups.
+        return pd.DataFrame(rows, columns=list(existing.columns) or None)
 
     def state(self, player_id: Any) -> dict[str, Any]:
         player_id = number(player_id)
@@ -143,6 +217,15 @@ class AvailabilityContext:
                 if pd.notna(row["player_id"]):
                     role_by_id[int(row["player_id"])] = row
 
+        if self.research is not None:
+            role_by_id.clear()
+            for player_id in self.players:
+                history = self.current_history(player_id)
+                if history:
+                    row = history[-1]
+                    role_by_id[player_id] = dict(row, _date=pd.Timestamp(row["kickoff_time"]),
+                                                 is_starting=row["starts"] == 1, minutes_played=row["minutes"])
+
         for model in features.to_dict("records"):
             player_id = int(model["player_id"])
             state = self.state(player_id)
@@ -160,13 +243,17 @@ class AvailabilityContext:
                 and last_start and last_minutes is not None and last_minutes >= 60 and recent
             )
             has_fixture = state["team_id"] in upcoming_teams
+            identity_ok = number(model.get("team_id")) in (None, state["team_id"])
+            if self.research is not None:
+                identity_ok = identity_ok and str(model.get("position")) == state.get("official_position")
             state.update(
                 start_probability=start, expected_minutes=minutes,
                 last_started=bool(last_start), last_minutes=last_minutes,
                 latest_role_date=latest["_date"].isoformat() if latest else None,
                 has_fixture=has_fixture,
                 starting_status="PROJECTED STARTER" if secure else "MINUTES RISK",
-                recommendation_eligible=bool(state["health_clear"] and has_fixture and secure),
+                recommendation_eligible=bool(state["health_clear"] and has_fixture and secure and identity_ok),
+                role_evidence="OFFICIAL_FPL_CURRENT_CLUB_HISTORY" if self.research is not None and latest else "CORE_LEAGUE_HISTORY",
             )
             if state["health_clear"] and not has_fixture:
                 state.update(label="BLANK GAMEWEEK", color="yellow", reason="No fixture in the target Gameweek.")
@@ -178,6 +265,54 @@ class AvailabilityContext:
                     f"{minutes:.0f} expected minutes. Starting eleven is a forecast, not a confirmed lineup."
                 )
         self.bound = True
+
+    def validate_projections(self, frame: pd.DataFrame) -> pd.DataFrame:
+        result = frame.copy()
+        fixtures = {int(row["id"]): row for row in self.fixtures.to_dict("records")
+                    if number(row.get("event")) == self.gameweek}
+        statuses = []
+        for row in result.to_dict("records"):
+            player_id = int(row["player_id"])
+            player = self.official_players.get(player_id, {})
+            fixture_value = number(row.get("fixture_id"))
+            fixture = fixtures.get(int(fixture_value)) if fixture_value is not None else None
+            status = "VERIFIED_MODEL"
+            if number(row.get("team_id")) != number(player.get("team")) or row.get("position") != self.positions.get(int(player.get("element_type", 0))):
+                status = "IDENTITY_OR_TRANSFER_MISMATCH"
+            elif "player_code" in row and number(row.get("player_code")) != number(player.get("code")):
+                status = "IDENTITY_OR_TRANSFER_MISMATCH"
+            elif not fixture or int(player.get("team", -1)) not in {int(fixture["team_h"]), int(fixture["team_a"])}:
+                status = "FIXTURE_MISMATCH"
+            elif row.get("calculation_status") != "READY" or number(row.get("gameweek")) != self.gameweek:
+                status = "MODEL_NOT_READY"
+            elif any(number(row.get(key)) is None or number(row.get(key)) < 0 for key in (
+                    "fixture_expected_points", "expected_minutes", "start_probability", "defcon_expected_contributions", "defcon_points")):
+                status = "MISSING_MODEL_INPUT"
+            elif number(row["expected_minutes"]) > 90 or number(row["start_probability"]) > 1:
+                status = "INVALID_MINUTES_FORECAST"
+            elif not self.state(player_id)["verified"]:
+                status = "STATUS_UNVERIFIED"
+            elif number(row.get("defcon_expected_contributions")) == 0 and not self.state(player_id)["blocked"]:
+                history = self.current_history(player_id)
+                if not history or not (all(number(item.get("minutes")) == 0 for item in history)
+                                       or all(number(item.get("defensive_contribution")) == 0 for item in history)):
+                    status = "ZERO_REQUIRES_VALIDATION"
+            statuses.append(status)
+        result["projection_status"] = statuses
+        result["projection_verified"] = result.projection_status.eq("VERIFIED_MODEL")
+        groups = dict(tuple(result.loc[pd.to_numeric(result.gameweek).eq(self.gameweek)].groupby("player_id")))
+        for player_id in self.players:
+            group = groups.get(player_id, result.iloc[:0])
+            state = self.state(player_id)
+            expected = {fid for fid, fixture in fixtures.items() if state.get("team_id") in {fixture["team_h"], fixture["team_a"]}}
+            valid = bool(len(group)) and group.projection_verified.all() and not group.fixture_id.duplicated().any() and set(group.fixture_id.astype(int)) == expected
+            state["projection_verified"] = bool(valid)
+            if not valid:
+                state["recommendation_eligible"] = False
+                if state["health_clear"] and state.get("has_fixture"):
+                    state.update(label="PROJECTION UNVERIFIED", color="grey",
+                                 reason="A complete, current fixture forecast is not verified.")
+        return result
 
     def eligible_ids(self) -> set[int]:
         return {player_id for player_id in self.players if self.eligible(player_id)}
@@ -224,13 +359,18 @@ class AvailabilityContext:
             "source": self.source, "fetched_at": self.fetched_at, "gameweek": self.gameweek,
             "players": self.public_registry(),
         }, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+        if self.research is not None:
+            (folder / "live_analysis_evidence.json").write_text(json.dumps(self.research, ensure_ascii=False,
+                                                                         indent=2, allow_nan=False), encoding="utf-8")
 
 
 def install_availability(namespace: dict[str, Any]) -> AvailabilityContext:
     data = namespace["data"]
+    research = collect(data["bootstrap"], namespace["fixtures"].to_dict("records"), int(namespace["NEXT_GW"]))
     context = AvailabilityContext(
         data["bootstrap"], namespace["fixtures"], int(namespace["NEXT_GW"]),
         namespace.get("FPL_API_SOURCE_STATUS", {}).get("/bootstrap-static/", {}),
+        research=research,
     )
     namespace["DAY3_AVAILABILITY"] = context
     return context
