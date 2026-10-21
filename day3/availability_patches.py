@@ -8,7 +8,9 @@ def _once(source: str, old: str, new: str) -> str:
     return source.replace(old, new, 1)
 
 
-def patch_availability_source(cell_index: int, source: str) -> str:
+def patch_availability_source(cell_index: int, source: str, *, narration: bool = True) -> str:
+    if not narration and cell_index in {30, 32}:
+        return source
     if cell_index == 5:
         return source + (
             "\nfrom day3.player_availability import install_availability\n"
@@ -79,46 +81,62 @@ DAY3_AVAILABILITY.save_audit(Path(DATA_DIR))
             'def _d3_desk_short_reason(r):\n'
             '    if not DAY3_AVAILABILITY.state(r["player_id"])["health_clear"]:\n'
             '        return DAY3_AVAILABILITY.state(r["player_id"])["label"]')
-        source = _once(source, '    evidence = record.get("recent_performance") or {}',
-            '''    if role in {"BUY", "HOLD"} and not DAY3_AVAILABILITY.eligible(record["player_id"]):
+        if narration:
+            source = _patch_desk_availability_narration(source)
+        source = _once(source, 'subtitle=f"GW{int(NEXT_GW)} • BUY TARGETS • PATIENT HOLDS • SELL CANDIDATES"',
+            'subtitle=f"GW{int(NEXT_GW)} • BUY ACTIVITY • QUALIFIED HOLDS • SELL ACTIVITY"')
+    elif cell_index == 30:
+        return _patch_plan_availability_narration(source)
+    elif cell_index == 32:
+        return _patch_defcon_availability_narration(source)
+    return source
+
+
+def _patch_desk_availability_narration(source: str) -> str:
+    source = _once(source, '    evidence = record.get("recent_performance") or {}',
+        '''    if role in {"BUY", "HOLD"} and not DAY3_AVAILABILITY.eligible(record["player_id"]):
         return (
             f"{identity}. This is transfer-market activity, not an active recommendation. "
             + DAY3_AVAILABILITY.caution(record["player_id"])
             + f" His next fixture is {fixture}."
         )
     evidence = record.get("recent_performance") or {}''')
-        source = _once(source,
-            '    return f"{leads[role][index]} {performance} {outlook} {decision}"',
-            '''    status_note = ""
+    source = _once(source,
+        '    return f"{leads[role][index]} {performance} {outlook} {decision}"',
+        '''    status_note = ""
     if not DAY3_AVAILABILITY.state(record["player_id"])["health_clear"]:
         status_note = DAY3_AVAILABILITY.caution(record["player_id"]) + " "
     return f"{leads[role][index]} {status_note}{performance} {outlook} {decision}"''')
-        source = _once(source, 'subtitle=f"GW{int(NEXT_GW)} • BUY TARGETS • PATIENT HOLDS • SELL CANDIDATES"',
-            'subtitle=f"GW{int(NEXT_GW)} • BUY ACTIVITY • QUALIFIED HOLDS • SELL ACTIVITY"')
-    elif cell_index == 30:
-        for signature in (
-            "    def _d3_plan_player_text(p, bench=False):",
-            "    def _d3_transfer_plan_player_text(p, bench=False, first_goalkeeper=False):",
-        ):
-            source = _once(source, signature, signature + '''
+    return source
+
+
+def _patch_plan_availability_narration(source: str) -> str:
+    for signature in (
+        "    def _d3_plan_player_text(p, bench=False):",
+        "    def _d3_transfer_plan_player_text(p, bench=False, first_goalkeeper=False):",
+    ):
+        source = _once(source, signature, signature + '''
         if not DAY3_AVAILABILITY.eligible(p["id"]):
             return str(vx_narration_player(int(p["id"]))) + ". " + DAY3_AVAILABILITY.caution(p["id"])
 ''')
-        source = _once(source,
-            '            segment["text"] = re.sub(r"\\bmodel\\b", "analysis", segment["text"], flags=re.I)',
-            '''            segment["text"] = re.sub(r"\\bmodel\\b", "analysis", segment["text"], flags=re.I)
+    source = _once(source,
+        '            segment["text"] = re.sub(r"\\bmodel\\b", "analysis", segment["text"], flags=re.I)',
+        '''            segment["text"] = re.sub(r"\\bmodel\\b", "analysis", segment["text"], flags=re.I)
             _player_id = segment.get("player_id")
             if _player_id is not None and not DAY3_AVAILABILITY.eligible(_player_id):
                 segment["text"] = (
                     str(vx_narration_player(int(_player_id))) + ". "
                     + DAY3_AVAILABILITY.caution(_player_id)
                 )''')
-    elif cell_index == 32:
-        source = _once(source,
-            '        opening = "For the next Gameweek, these are the five defensive contribution players I\'m focusing on."',
-            '        opening = "For the next Gameweek, these are the five defensive contribution profiles. Current availability and starting prospects decide which are active targets; flagged profiles are watchlist only."')
-        marker = "        def _team_name(row):"
-        source = _once(source, marker, '''        for _index, _player in enumerate(player_rows):
+    return source
+
+
+def _patch_defcon_availability_narration(source: str) -> str:
+    source = _once(source,
+        '        opening = "For the next Gameweek, these are the five defensive contribution players I\'m focusing on."',
+        '        opening = "For the next Gameweek, these are the five defensive contribution profiles. Current availability and starting prospects decide which are active targets; flagged profiles are watchlist only."')
+    marker = "        def _team_name(row):"
+    source = _once(source, marker, '''        for _index, _player in enumerate(player_rows):
             _player_id = int(_player["player_id"])
             if not DAY3_AVAILABILITY.eligible(_player_id):
                 _cue = individual[_index][0]

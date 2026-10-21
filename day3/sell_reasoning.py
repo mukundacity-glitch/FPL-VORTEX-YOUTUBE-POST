@@ -236,7 +236,7 @@ def _once(source: str, old: str, new: str) -> str:
     return source.replace(old, new, 1)
 
 
-def patch_sell_reasoning_source(source: str) -> str:
+def patch_sell_reasoning_source(source: str, *, narration: bool = True) -> str:
     source = "from day3.sell_reasoning import analyse_sell, sell_narration, sell_projection_benchmarks\n" + source
     source = _once(source, "_index = 0\nfor _action, _rows in (",
         '_d3_sell_benchmarks = sell_projection_benchmarks(_d3_desk_model, DAY3_AVAILABILITY.eligible_ids())\n'
@@ -247,6 +247,14 @@ def patch_sell_reasoning_source(source: str) -> str:
             _record["sell_analysis"] = analyse_sell(
                 _record, DAY3_AVAILABILITY.state(_record["player_id"]), _d3_sell_benchmarks,
             )''')
+    if narration:
+        source = _patch_sell_narration(source)
+    source = _once(source, '"sell": "Largest event transfers out among negative net-transfer players",',
+        '"sell": "Market-volume watchlist; explain verified availability, minutes, recent returns and canonical model FDR; weigh positional projection counter-evidence; no assumed replacement gains",')
+    return source
+
+
+def _patch_sell_narration(source: str) -> str:
     source = _once(source, '    identity = f"{name} from {club}"\n    if index >= 3:',
         '    identity = f"{name} from {club}"\n    if index >= 3 and role != "SELL":')
     source = _once(source, '    points = float(record["xpts"])',
@@ -254,6 +262,4 @@ def patch_sell_reasoning_source(source: str) -> str:
         return sell_narration(record, identity, DAY3_AVAILABILITY.state(record["player_id"]),
                               brief=index >= 3, fixture_text=fixture)
     points = float(record["xpts"])''')
-    source = _once(source, '"sell": "Largest event transfers out among negative net-transfer players",',
-        '"sell": "Market-volume watchlist; explain verified availability, minutes, recent returns and canonical model FDR; weigh positional projection counter-evidence; no assumed replacement gains",')
     return source

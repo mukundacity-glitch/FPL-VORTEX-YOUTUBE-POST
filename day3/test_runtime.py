@@ -479,12 +479,10 @@ class NotebookPreflightTests(unittest.TestCase):
             "patch_narration_pacing_source",
             "patch_availability_source",
             "patch_sell_reasoning_source",
-            "patch_creator_narration_source",
             "patch_elite_input_source",
             "_patch_pitch_card_entrance",
             "_patch_pitch_reveal_audit",
             "_patch_benching_narration",
-            "patch_bench_sell_source",
             "_patch_pitch_player_names",
             "_patch_shared_card_scene_checks",
             "_patch_defcon_team_numeric_fit",
@@ -497,7 +495,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "patch_transfer_desk_animation_source",
             "remove_shortlist_cell",
         ):
-            self.patch_stack.enter_context(patch.object(runner, function_name, side_effect=lambda *args: args[-1]))
+            self.patch_stack.enter_context(patch.object(runner, function_name, side_effect=lambda *args, **kwargs: args[-1]))
 
     def write_notebook(self, overrides: dict[int, str]) -> None:
         cells = [

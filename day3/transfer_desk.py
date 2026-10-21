@@ -219,8 +219,6 @@ if len({r["player_id"] for g in DAY3_TRANSFER_DESK.values() for r in g}) != DAY3
     if index >= 3:
         prefix = f"Also in the {role.lower()} list, " if index == 3 else "And "
         text = prefix + identity + "."
-        if not DAY3_AVAILABILITY.eligible(record["player_id"]):
-            text += " " + DAY3_AVAILABILITY.caution(record["player_id"])
         return text''')
     source = _replace(source, '    if role == "BUY":\n        horizon =',
                       '    if not record["has_projection"]:\n        outlook = f"The next fixture for {name} is {fixture}; a fresh points projection is unavailable."\n    if role == "BUY":\n        horizon =')

@@ -25,9 +25,7 @@ from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_c
 from day3.narration_pacing import patch_narration_pacing_source
 from day3.availability_patches import patch_availability_source
 from day3.sell_reasoning import patch_sell_reasoning_source
-from day3.creator_narration import patch_creator_narration_source
 from day3.elite_input import patch_elite_input_source
-from day3.decision_consistency import patch_bench_sell_source
 from day3.tts_runtime import patch_tts_runtime_source
 
 
@@ -1060,7 +1058,6 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_pitch_reveal_audit(source)
         if cell_index == SHARED_NARRATION_CELL_INDEX:
             source = _patch_benching_narration(source)
-            source = patch_bench_sell_source(source)
             source = patch_transfer_desk_audio_source(source)
         if cell_index == SCENE_DESIGN_CELL_INDEX:
             source = _patch_defcon_gameweek_contract(source)
@@ -1077,10 +1074,10 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
         source = patch_elite_input_source(cell_index, source)
         if cell_index == 35:
             source = patch_narration_pacing_source(source)
-        source = patch_availability_source(cell_index, source)
+        # Restore run #120's scripts while retaining newer data, visuals and timing.
+        source = patch_availability_source(cell_index, source, narration=False)
         if cell_index == SCENE_DESIGN_CELL_INDEX:
-            source = patch_sell_reasoning_source(source)
-        source = patch_creator_narration_source(cell_index, source)
+            source = patch_sell_reasoning_source(source, narration=False)
         source = remove_shortlist_cell(cell_index, source)
         if PREVIEW_CELL_MARKER in source:
             print(f"⏭️ Skipping Colab-only live preview cell {cell_index}.")
