@@ -362,7 +362,6 @@ def narrate(name, team, defender=True, multiple=False):
             runner._patch_benching_narration(self.source.replace("clean-sheet chance", "defensive outlook"))
 
 
-
 class RyanProfileTests(unittest.TestCase):
     source = '''VOICE = "en-GB-RyanNeural"
 # Ryan delivery — keep the project's intended/original speaking profile.
@@ -473,19 +472,13 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_narration_exports",
             "_patch_outro_social_icon",
             "_patch_tts_profile",
-            "patch_tts_runtime_source",
-            "_patch_player_card_sample",
-            "_patch_narration_tone",
             "patch_narration_pacing_source",
             "_patch_transition_titles",
-            "patch_availability_source",
-            "patch_sell_reasoning_source",
-            "patch_elite_input_source",
+            "_patch_player_card_sample",
+            "_patch_narration_tone",
             "_patch_pitch_card_entrance",
             "_patch_pitch_reveal_audit",
             "_patch_benching_narration",
-            "patch_projected_goals_narration_source",
-            "patch_analysis_source",
             "_patch_pitch_player_names",
             "_patch_shared_card_scene_checks",
             "_patch_defcon_team_numeric_fit",
@@ -498,7 +491,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "patch_transfer_desk_animation_source",
             "remove_shortlist_cell",
         ):
-            self.patch_stack.enter_context(patch.object(runner, function_name, side_effect=lambda *args, **kwargs: args[-1]))
+            self.patch_stack.enter_context(patch.object(runner, function_name, side_effect=lambda *args: args[-1]))
 
     def write_notebook(self, overrides: dict[int, str]) -> None:
         cells = [

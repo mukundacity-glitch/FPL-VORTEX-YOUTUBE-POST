@@ -13,8 +13,6 @@ from PIL import Image
 
 from day3.run_notebook import PLAYER_CARD_DESIGN_CELL_INDEX, SCENE_DESIGN_CELL_INDEX, _patch_player_card_sample
 from day3.remove_shortlists import remove_shortlist_cell
-from day3.availability_patches import patch_availability_source
-from day3.availability_visuals import decorate_availability_html
 
 
 # Deliberately fictional artwork/data; no external requests or production model execution.
@@ -36,7 +34,7 @@ def check_cards(notebook_path: Path, browser_channel: str | None = None) -> None
         Image.new('RGB', (8, 8), '#03133f').save(Path(assets) / '4.png')
         os.environ['DAY1_ASSET_DIR'] = assets
         try:
-            exec(compile(patch_availability_source(23, _patch_player_card_sample(source)), '<production-player-card>', 'exec'), namespace)
+            exec(compile(_patch_player_card_sample(source), '<production-player-card>', 'exec'), namespace)
         finally:
             if previous_assets is None:
                 os.environ.pop('DAY1_ASSET_DIR', None)
@@ -99,16 +97,10 @@ def check_cards(notebook_path: Path, browser_channel: str | None = None) -> None
             for width, height in ((1202, 1642), (1500, 1594), (1090, 1460), (800, 1100), (700, 1000)):
                 for host in ('d3DefHeroHost', 'd3DeskHeroHost', 'review'):
                     for variant in variants:
-                        status = [
-                            {'label': 'SUSPENDED', 'color': 'red'},
-                            {'label': 'DOUBTFUL', 'color': 'yellow'},
-                            {'label': 'STATUS UNVERIFIED', 'color': 'grey'},
-                        ][checks % 3]
-                        registry = {'1': status | {'reason': 'Synthetic live status fixture', 'news': ''}}
-                        page.set_content(decorate_availability_html('<html><head>' + namespace['PLAYER_CARD_CSS'] + ''.join(scene_css)
+                        page.set_content('<html><head>' + namespace['PLAYER_CARD_CSS'] + ''.join(scene_css)
                             + '<style>:root{--vx-dense:Arial}.vx-player-card{font-family:Arial!important}</style></head><body class="vxPremium"><div id="host" class="' + host
                             + f'" style="width:{width}px!important;height:{height}px!important"></div>'
-                            + secondary_fitter + namespace['PLAYER_CARD_JS'] + '</body></html>', registry))
+                            + secondary_fitter + namespace['PLAYER_CARD_JS'] + '</body></html>')
                         page.evaluate('data=>window.VXPlayerCard.mount(document.getElementById("host"),data)', payload | variant)
                         # Production scenes remove data-pc-fit, then a card may be resized
                         # or revealed later. Capture must still refit it with loaded fonts.
@@ -141,18 +133,6 @@ def check_cards(notebook_path: Path, browser_channel: str | None = None) -> None
                         assert result['badges'] == expected_badges, result
                         if width == 1202:
                             assert result['label'] >= 38 and result['value'] >= 56, result
-                        status_result = page.evaluate("""()=>{
-                          const badge=document.querySelector('.vx-player-status');
-                          const card=document.querySelector('.vx-player-card');
-                          const box=badge?.getBoundingClientRect(), outer=card.getBoundingClientRect();
-                          const info=card.querySelector('.pc-info-stack').getBoundingClientRect();
-                          return {label:badge?.textContent.trim(),color:badge?.dataset.color,
-                            contained:box&&box.left>=outer.left&&box.right<=outer.right&&box.top>=outer.top&&box.bottom<=outer.bottom,
-                            clearOfStats:box&&(box.left>=info.right||box.bottom<=info.top||box.top>=info.bottom)};
-                        }""")
-                        assert status_result['label'] == 'NOW: ' + status['label'], status_result
-                        assert status_result['color'] == status['color'], status_result
-                        assert status_result['contained'] and status_result['clearOfStats'], status_result
                         # Resize the same mounted card; no re-render or player-specific offsets.
                         page.evaluate('''async()=>{
                           const host=document.getElementById('host');
@@ -163,7 +143,7 @@ def check_cards(notebook_path: Path, browser_channel: str | None = None) -> None
                         checks += 1
         finally:
             browser.close()
-    print(f'✅ Shared card browser QA: {checks} layouts, availability flags, long labels/names, blank/double fixtures and live resizing')
+    print(f'✅ Shared card browser QA: {checks} layouts, long labels/names, blank/double fixtures and live resizing')
 
 
 if __name__ == '__main__':

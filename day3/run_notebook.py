@@ -23,14 +23,6 @@ from day3.transfer_desk import (
 )
 from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_cell
 from day3.narration_pacing import patch_narration_pacing_source
-from day3.availability_patches import patch_availability_source
-from day3.sell_reasoning import patch_sell_reasoning_source
-from day3.elite_input import patch_elite_input_source
-from day3.tts_runtime import patch_tts_runtime_source
-from day3.projected_goals_narration import patch_projected_goals_narration_source
-from day3.analysis_patches import patch_analysis_source
-from day3.publication_validation import save_render_contract
-from day3.live_evidence import EvidenceChangedError
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1108,7 +1100,6 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_narration_exports(source)
         if cell_index == TTS_PROFILE_CELL_INDEX:
             source = _patch_tts_profile(source)
-            source = patch_tts_runtime_source(source)
         if cell_index == PLAYER_CARD_DESIGN_CELL_INDEX:
             source = _patch_player_card_sample(source)
         if cell_index == FULL_WORD_NARRATION_CELL_INDEX:
@@ -1124,7 +1115,6 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
         if cell_index == SHARED_NARRATION_CELL_INDEX:
             source = _patch_benching_narration(source)
             source = patch_transfer_desk_audio_source(source)
-            source = patch_projected_goals_narration_source(source)
         if cell_index == SCENE_DESIGN_CELL_INDEX:
             source = _patch_defcon_gameweek_contract(source)
             source = _patch_shared_card_scene_checks(source)
@@ -1137,18 +1127,10 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_defcon_render_preflight(source)
         if cell_index == ELITE_TOP10K_CELL_INDEX:
             source = _patch_elite_template_parser(source)
-        source = patch_elite_input_source(cell_index, source)
         if cell_index == 35:
             source = patch_narration_pacing_source(source)
             source = _patch_transition_titles(source)
-        source = patch_availability_source(cell_index, source, narration=True)
-        if cell_index != SHARED_NARRATION_CELL_INDEX:
-            source = patch_analysis_source(cell_index, source)
-        if cell_index == SCENE_DESIGN_CELL_INDEX:
-            source = patch_sell_reasoning_source(source, narration=False)
         source = remove_shortlist_cell(cell_index, source)
-        if cell_index == SHARED_NARRATION_CELL_INDEX:
-            source = patch_analysis_source(cell_index, source)
         if PREVIEW_CELL_MARKER in source:
             print(f"⏭️ Skipping Colab-only live preview cell {cell_index}.")
             continue
@@ -1176,13 +1158,10 @@ def run_notebook(notebook_path: Path) -> None:
         result = shell.run_cell(source, store_history=False, silent=False)
         error = result.error_before_exec or result.error_in_exec
         if error is not None:
-            if isinstance(error, EvidenceChangedError):
-                raise error
             raise RuntimeError(f"Day 3 notebook cell {cell_index} failed") from error
         if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
             purge_shortlist_artifacts(shell.user_ns["OUTPUT_ROOT"], shell.user_ns["WORK_ROOT"])
 
-    save_render_contract(shell.user_ns)
     print("✅ Final Day 3 notebook execution completed.")
 
 
@@ -1199,11 +1178,7 @@ def main() -> None:
         cells = _prepare_code_cells(notebook_path)
         print(f"✅ Day 3 preflight passed: {len(cells)} patched code cells compile")
     else:
-        try:
-            run_notebook(notebook_path)
-        except EvidenceChangedError as error:
-            print(f"Live evidence changed: {error}", file=sys.stderr)
-            raise SystemExit(75) from error
+        run_notebook(notebook_path)
 
 
 if __name__ == "__main__":

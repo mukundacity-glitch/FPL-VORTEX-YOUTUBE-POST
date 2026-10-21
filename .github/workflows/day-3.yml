@@ -5,11 +5,6 @@ run-name: Day 3 • ${{ inputs.plan || 'ROLL' }}
 on:
   workflow_dispatch:
     inputs:
-      elite_page_text:
-        description: "Elite Ownership — paste full fpl.team Top 10k page text (blank = live fetch)"
-        required: false
-        default: ""
-        type: string
       plan:
         description: "My Plan"
         required: true
@@ -2922,7 +2917,6 @@ env:
   PYTHONUNBUFFERED: "1"
   FPL_ENTRY_ID: "145784"
   DAY3_PLAN_SELECTION: ${{ inputs.plan || 'ROLL' }}
-  DAY3_ELITE_PAGE_TEXT: ${{ inputs.elite_page_text || '' }}
   DAY3_PLANNED_CHIP: ${{ inputs.planned_chip || 'Wildcard' }}
   DAY3_OUT_1: ${{ inputs.player_out_1 }}
   DAY3_IN_1: ${{ inputs.player_in_1 }}
@@ -3272,7 +3266,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m day3.run_validated "$DAY3_NOTEBOOK_PATH" --output-root "$DAY3_OUTPUT_ROOT" \
+          python day3/run_notebook.py "$DAY3_NOTEBOOK_PATH" \
             2>&1 | tee "$RUNNER_TEMP/day-3.log"
 
       - name: Upload one private YouTube draft with matching thumbnail

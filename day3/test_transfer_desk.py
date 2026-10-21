@@ -21,9 +21,7 @@ class TransferDeskSelectionTests(unittest.TestCase):
     def select(self, **kwargs):
         return select_transfer_desk(self.players, total_managers=1_000_000,
                                     recent_performance=self.evidence,
-                                    effective_ownership=kwargs.pop("effective_ownership", self.eo),
-                                    eligible_hold_ids=kwargs.pop("eligible_hold_ids", set(self.players.id)),
-                                    **kwargs)
+                                    effective_ownership=kwargs.pop("effective_ownership", self.eo), **kwargs)
 
     def ids(self, group):
         return [row["player_id"] for row in group]
