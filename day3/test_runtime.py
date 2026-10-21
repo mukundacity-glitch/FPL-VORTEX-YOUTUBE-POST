@@ -473,6 +473,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_narration_exports",
             "_patch_outro_social_icon",
             "_patch_tts_profile",
+            "patch_tts_runtime_source",
             "_patch_player_card_sample",
             "_patch_narration_tone",
             "patch_narration_pacing_source",

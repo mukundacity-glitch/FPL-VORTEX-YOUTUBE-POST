@@ -28,6 +28,7 @@ from day3.sell_reasoning import patch_sell_reasoning_source
 from day3.creator_narration import patch_creator_narration_source
 from day3.elite_input import patch_elite_input_source
 from day3.decision_consistency import patch_bench_sell_source
+from day3.tts_runtime import patch_tts_runtime_source
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1044,6 +1045,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_narration_exports(source)
         if cell_index == TTS_PROFILE_CELL_INDEX:
             source = _patch_tts_profile(source)
+            source = patch_tts_runtime_source(source)
         if cell_index == PLAYER_CARD_DESIGN_CELL_INDEX:
             source = _patch_player_card_sample(source)
         if cell_index == FULL_WORD_NARRATION_CELL_INDEX:
