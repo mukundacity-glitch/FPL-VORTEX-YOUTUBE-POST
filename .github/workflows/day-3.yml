@@ -3182,7 +3182,36 @@ jobs:
         shell: bash
         run: python -m day3.check_defcon_forecasts "$DAY3_NOTEBOOK_PATH"
 
-      - name: Restore Day 3 model state and production assets
+      - name: Restore and validate Day 3 production assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DAY1_ASSET_DIR"
+          rclone copy "day1-assets:" "$DAY1_ASSET_DIR" \
+            --create-empty-src-dirs --transfers 4 --checkers 8
+
+          missing_assets=()
+          for asset_name in opening.mp4 outro.mp4 popup.mp4 Background_music.mp3 1.png 2.png 3.png 4.png 5.png 8.png 9.png 10.png; do
+            if [[ ! -s "$DAY1_ASSET_DIR/$asset_name" ]]; then
+              missing_assets+=("$asset_name")
+            fi
+          done
+          if (( ${#missing_assets[@]} )); then
+            echo "::error::Required production assets missing from Drive: ${missing_assets[*]}"
+            echo "Restore the original files to https://drive.google.com/drive/folders/$DAY1_ASSET_FOLDER_ID" >&2
+            exit 1
+          fi
+
+          python -m day3.prepare_assets "$DAY1_ASSET_DIR"
+          for asset_name in 6.png 7.png trans.mp4; do
+            if [[ ! -s "$DAY1_ASSET_DIR/$asset_name" ]]; then
+              echo "::error::Prepared production asset is missing: $asset_name"
+              exit 1
+            fi
+          done
+          echo "Day 3 production assets restored"
+
+      - name: Restore Day 3 model state
         id: restore_state
         shell: bash
         run: |
@@ -3219,22 +3248,6 @@ jobs:
           restore_optional "FPL_VORTEX_DATA/05_MODEL_HISTORY"
           restore_optional "FPL_VORTEX_DATA/06_SNAPSHOTS"
           restore_optional "FPL_VORTEX_DATA/07_LOGS"
-
-          mkdir -p "$DAY1_ASSET_DIR"
-          # This Drive folder is dedicated to production assets. Restore it whole so
-          # notebook asset additions cannot be silently omitted by a stale allowlist.
-          rclone copy "day1-assets:" "$DAY1_ASSET_DIR" \
-            --create-empty-src-dirs --transfers 4 --checkers 8
-
-          python -m day3.prepare_assets "$DAY1_ASSET_DIR"
-
-          for asset_name in opening.mp4 outro.mp4 popup.mp4 trans.mp4 Background_music.mp3 1.png 2.png 3.png 4.png 5.png 6.png 7.png 8.png 9.png 10.png; do
-            if [[ ! -s "$DAY1_ASSET_DIR/$asset_name" ]]; then
-              echo "Required production asset is missing: $asset_name" >&2
-              exit 1
-            fi
-          done
-          echo "Day 3 production assets restored"
 
       - name: Reset only previous Day 3 render outputs
         shell: bash
@@ -3335,4 +3348,5 @@ jobs:
           if-no-files-found: warn
           compression-level: 0
           retention-days: 14
+
 
