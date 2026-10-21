@@ -23,6 +23,7 @@ from day3.transfer_desk import (
 )
 from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_cell
 from day3.narration_pacing import patch_narration_pacing_source
+from day3.popup_audio import patch_popup_audio_source
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1130,6 +1131,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
         if cell_index == 35:
             source = patch_narration_pacing_source(source)
             source = _patch_transition_titles(source)
+            source = patch_popup_audio_source(source)
         source = remove_shortlist_cell(cell_index, source)
         if PREVIEW_CELL_MARKER in source:
             print(f"⏭️ Skipping Colab-only live preview cell {cell_index}.")
@@ -1183,5 +1185,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
