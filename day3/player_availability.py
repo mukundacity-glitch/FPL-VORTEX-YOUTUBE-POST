@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -192,11 +193,26 @@ class AvailabilityContext:
 
     def caution(self, player_id: Any, *, include_news: bool = True) -> str:
         state = self.state(player_id)
-        message = state["reason"] if include_news else state["label"].lower().capitalize() + "."
+        name = str(state["name"])
+        reason = state["reason"] if include_news else state["label"].lower().capitalize() + "."
+        # Several cards can share a status or provider notice; keep every sentence tied to its player.
+        sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", reason)
+                     if sentence.strip()]
+        message = " ".join(f"{name}: {sentence.rstrip('.!?')}." for sentence in sentences)
+        if include_news and state["label"] == "MINUTES RISK":
+            evidence = []
+            start = number(state.get("start_probability"))
+            minutes = number(state.get("expected_minutes"))
+            if start is not None and 0 <= start <= 1:
+                evidence.append(f"a {100 * start:.0f} percent start probability")
+            if minutes is not None and 0 <= minutes <= 90:
+                evidence.append(f"{minutes:.0f} expected minutes")
+            if evidence:
+                message += f" The current forecast for {name} is " + " and ".join(evidence) + "."
         if state["blocked"] or not state["health_clear"]:
-            message += " Reassess only after an official availability update; a stated return date does not confirm fitness or a start."
+            message += f" Reassess {name} only after an official availability update; a stated return date does not confirm fitness or a start."
         elif not state["recommendation_eligible"]:
-            message += " Wait for stronger minutes evidence before treating him as a target."
+            message += f" Wait for stronger minutes evidence before treating {name} as a target."
         return message
 
     def public_registry(self) -> dict[str, Any]:
@@ -218,3 +234,4 @@ def install_availability(namespace: dict[str, Any]) -> AvailabilityContext:
     )
     namespace["DAY3_AVAILABILITY"] = context
     return context
+

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -93,6 +94,47 @@ class AvailabilityTests(unittest.TestCase):
         features = self.features.copy()
         features["start_probability"] = 0.4
         self.assertFalse(self.context(features=features).eligible(901))
+
+    def test_shared_cautions_keep_each_sentence_specific_to_the_player(self) -> None:
+        for label in ("MINUTES RISK", "SUSPENDED", "STATUS UNVERIFIED", "BLANK GAMEWEEK"):
+            for include_news in (True, False):
+                with self.subTest(label=label, include_news=include_news):
+                    context = self.context()
+                    context.players.clear()
+                    for index in range(5):
+                        player_id = 1000 + index
+                        state = player_health({**self.player, "id": player_id,
+                                               "web_name": f"Player {player_id}"},
+                                              self.events, 9, verified=True)
+                        state.update(
+                            label=label, recommendation_eligible=False,
+                            health_clear=label in {"MINUTES RISK", "BLANK GAMEWEEK"},
+                            blocked=label == "SUSPENDED",
+                            reason=("A secure starting role is not supported by current forecasts "
+                                    "and the latest completed league lineup.")
+                            if label == "MINUTES RISK" else "Shared provider notice. Awaiting an update.",
+                            start_probability=0.4, expected_minutes=35.0,
+                        )
+                        context.players[player_id] = state
+                    text = " ".join(context.caution(player_id, include_news=include_news)
+                                    for player_id in context.players)
+                    sentences = [re.sub(r"\s+", " ", sentence.strip().lower())
+                                 for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()]
+                    self.assertEqual(len(sentences), len(set(sentences)))
+                    for player_id in context.players:
+                        self.assertIn(f"Player {player_id}", context.caution(player_id))
+                    if label == "MINUTES RISK" and include_news:
+                        self.assertIn("40 percent", text)
+                        self.assertIn("35 expected minutes", text)
+
+    def test_missing_forecasts_do_not_become_zero_minute_claims(self) -> None:
+        context = self.context(roles=pd.DataFrame(), features=pd.DataFrame([{
+            "player_id": 901, "start_probability": None, "expected_minutes": float("nan"),
+        }]))
+        text = context.caution(901)
+        self.assertIn("secure starting role", text)
+        self.assertNotIn("0 expected minutes", text)
+        self.assertNotIn("nan", text)
 
     def test_old_missing_and_cup_lineups_never_confirm_a_league_start(self) -> None:
         for change in (
@@ -232,6 +274,7 @@ def check_notebook_availability(notebook_path: Path) -> None:
         player_id = 1000 + index
         state = player_health({
             **fixture.player, "id": player_id, "status": "s" if index == 0 else "a",
+            "web_name": f"Player {player_id}",
             "news": "Official suspension notice" if index == 0 else "",
         }, fixture.events, 9, verified=True)
         state["recommendation_eligible"] = index != 0
@@ -258,7 +301,7 @@ def check_notebook_availability(notebook_path: Path) -> None:
 
     teams = pd.DataFrame([{
         "team_id": index + 1, "team_name": f"Club {index + 1}",
-        "dc_for": 1000 - index, "dc_for_per_game": 50.0, "xdefcon": 55.0,
+        "dc_for": 1000 - index, "dc_for_per_game": 50.0 + index, "xdefcon": 55.0 + index,
     } for index in range(20)])
     namespace.update(
         DAY3_DEFCON_PLAYERS=ranked, DAY3_DEFCON_TARGETS=ranked.head(5),
@@ -268,7 +311,19 @@ def check_notebook_availability(notebook_path: Path) -> None:
         vx_narration_team=lambda team_id: f"Club {team_id}",
     )
     narrate = load_function(32, "_d3_defcon_narration", namespace)
+
+    def check_sentence_guard(text: str) -> None:
+        guards = [node for node in ast.walk(ast.parse(cells[32]))
+                  if isinstance(node, ast.For) and isinstance(node.target, ast.Tuple)
+                  and [getattr(target, "id", None) for target in node.target.elts]
+                  == ["_scene_key", "_scene_text"] and "_duplicates =" in ast.unparse(node)]
+        assert len(guards) == 1
+        guard_namespace = {**namespace, "scripts": {"03_defcon": text}, "_scene_sentence_sets": {}}
+        exec(compile(ast.Module(body=guards, type_ignores=[]), "actual-scene-sentence-guard", "exec"),
+             guard_namespace)
+
     safe_text = narrate()
+    check_sentence_guard(safe_text)
     assert "Official suspension notice" not in safe_text
     assert len(namespace["DEFCON_NARRATION_CUES"]["individual"]) == 5
 
@@ -277,9 +332,24 @@ def check_notebook_availability(notebook_path: Path) -> None:
         state.update(recommendation_eligible=False, health_clear=False, blocked=True,
                      label="SUSPENDED", color="red", reason="Suspended: Official suspension notice")
     watch_text = narrate()
+    check_sentence_guard(watch_text)
     assert watch_text.count("not an active target") == 5
     assert "Official suspension notice" in watch_text
     assert len(namespace["DEFCON_NARRATION_CUES"]["individual"]) == 5
+
+    # Run #121 failed with several healthy players sharing the same minutes-risk warning.
+    for state in context.players.values():
+        state.update(health_clear=True, blocked=False, label="MINUTES RISK", color="yellow",
+                     reason="A secure starting role is not supported by current forecasts and the latest completed league lineup.",
+                     start_probability=0.4, expected_minutes=35.0)
+    risk_text = narrate()
+    check_sentence_guard(risk_text)
+    assert risk_text.count("not an active target") == 5
+    assert [row["player_id"] for row in namespace["DEFCON_NARRATION_CUES"]["individual"]] == ranked.head(5).player_id.tolist()
+
+    for state in context.players.values():
+        state.update(health_clear=False, blocked=True, label="SUSPENDED",
+                     reason="Suspended: Official suspension notice")
 
     namespace.update(
         DAY3_TRANSFER_DESK={"BUY": [{"player_id": 1001, "team_id": 1,
@@ -294,3 +364,4 @@ def check_notebook_availability(notebook_path: Path) -> None:
 
 if __name__ == "__main__":
     unittest.main()
+
