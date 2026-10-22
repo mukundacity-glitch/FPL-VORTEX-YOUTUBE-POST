@@ -17,6 +17,7 @@ from .controls import (CHIPS, POSITIONS, TASKS, chip_slug, controls_for_chip,
                        request_controls, requested_chips, save_selection, selected_squad)
 from .render_qa import close_renderer, verify_exported_visuals
 from .forecast_compat import patch_forecast_loader
+from .tts_compat import patch_narration_loader
 
 
 def replace_assignments(source: str, replacements: dict[str, Any]) -> str:
@@ -152,6 +153,7 @@ def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tu
             source = source.replace(marker, "\nfrom wc_fh.manual_plans import install_manual_narration\ninstall_manual_narration()\n" + marker, 1)
         if label == "14":
             source = patch_render(source)
+            source = patch_narration_loader(source)
             # Colab's extra viewer calls .draw() on a Remotion renderer; delivery QA already verifies the 4K exports.
             lines = source.splitlines(keepends=True)
             for node in reversed(ast.parse(source).body):
