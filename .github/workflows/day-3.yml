@@ -3285,6 +3285,7 @@ jobs:
       - name: Upload one private YouTube draft with matching thumbnail
         shell: bash
         run: |
+          python -m day3.verify_evidence --output-root "$DAY3_OUTPUT_ROOT"
           python day3/publish_private.py \
             --output-root "$DAY3_OUTPUT_ROOT" \
             --plan "$DAY3_PLAN" \

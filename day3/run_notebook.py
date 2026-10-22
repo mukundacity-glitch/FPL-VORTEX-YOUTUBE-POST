@@ -24,6 +24,7 @@ from day3.transfer_desk import (
 from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_cell
 from day3.narration_pacing import patch_narration_pacing_source
 from day3.popup_audio import patch_popup_audio_source
+from day3.evidence_pipeline import patch_evidence_pipeline
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1133,6 +1134,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_transition_titles(source)
             source = patch_popup_audio_source(source)
         source = remove_shortlist_cell(cell_index, source)
+        source = patch_evidence_pipeline(cell_index, source)
         if PREVIEW_CELL_MARKER in source:
             print(f"⏭️ Skipping Colab-only live preview cell {cell_index}.")
             continue
@@ -1164,6 +1166,8 @@ def run_notebook(notebook_path: Path) -> None:
         if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
             purge_shortlist_artifacts(shell.user_ns["OUTPUT_ROOT"], shell.user_ns["WORK_ROOT"])
 
+    from day3.verify_evidence import finalize_evidence_bundle
+    finalize_evidence_bundle(shell.user_ns)
     print("✅ Final Day 3 notebook execution completed.")
 
 
