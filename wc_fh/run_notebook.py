@@ -18,6 +18,7 @@ from .controls import (CHIPS, POSITIONS, TASKS, chip_slug, controls_for_chip,
 from .render_qa import close_renderer, verify_exported_visuals
 from .forecast_compat import patch_forecast_loader
 from .tts_compat import patch_narration_loader
+from .masterplan_capture import patch_masterplan_capture
 
 
 def replace_assignments(source: str, replacements: dict[str, Any]) -> str:
@@ -154,6 +155,7 @@ def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tu
         if label == "14":
             source = patch_render(source)
             source = patch_narration_loader(source)
+            source = patch_masterplan_capture(source)
             # Colab's extra viewer calls .draw() on a Remotion renderer; delivery QA already verifies the 4K exports.
             lines = source.splitlines(keepends=True)
             for node in reversed(ast.parse(source).body):
