@@ -16,6 +16,7 @@ from .catalog import build_catalog, save_catalog
 from .controls import (CHIPS, POSITIONS, TASKS, chip_slug, controls_for_chip,
                        request_controls, requested_chips, save_selection, selected_squad)
 from .render_qa import close_renderer, verify_exported_visuals
+from .forecast_compat import patch_forecast_loader
 
 
 def replace_assignments(source: str, replacements: dict[str, Any]) -> str:
@@ -131,6 +132,8 @@ def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tu
             continue
         if label == "0":
             source = patch_setup(source, controls)
+        if label == "1":
+            source = patch_forecast_loader(source)
         if label == "11":
             lines = source.splitlines(keepends=True)
             function = next(node for node in ast.parse(source).body
@@ -312,3 +315,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

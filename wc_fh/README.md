@@ -48,9 +48,12 @@ Only `.github/workflows/wc-fh.yml` and `wc_fh/` belong to this feature. Day 1/2/
 
 ## Checks
 
+The runner installs exact club-name aliases after Cell 1 verifies and imports the pinned forecast module. This reconciles provider spellings such as ESPN's `AFC Bournemouth` and FPL's `Bournemouth` for both fixture and roster checks. The upstream model checksum, completed-match coverage, home/away identity, kickoff, score, uniqueness and red-card-count requirements still apply. Unknown names are not guessed; add a verified exact alias and a regression case if a provider introduces another spelling.
+
 The headless runner validates scene data and narration before rendering, then checks visuals only after actual PCM narration has supplied measured cue times. Pillow scenes retain frame, image-aspect, pitch-aspect and text-overlap checks. Remotion scenes use their native render/still path. Every selected video must also have four decoded native 4K PNGs and four measured scene timelines before upload; the reports artifact includes scene manifests and `*_visual_qa.json`. The browser renderer closes before Python shuts down its thread pools, including on failure.
 
 ```bash
 python -m unittest discover -s wc_fh -p 'test_*.py' -v
 python -m wc_fh.run_notebook /path/to/current-notebook.ipynb --validate-only
 ```
+
