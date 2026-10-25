@@ -154,11 +154,11 @@ class Day1ReviewContractTests(unittest.TestCase):
             source,
         )
         self.assertIn(
-            'elif _review_all_fixtures_complete:\\n    # Completed fixtures are not sufficient',
+            "elif _review_all_fixtures_complete:" + chr(10) + "    # Completed fixtures are not sufficient",
             source,
         )
         self.assertIn(
-            'GW_REVIEW_STATUS = "LIVE/PARTIAL"\\n    print(',
+            'GW_REVIEW_STATUS = "LIVE/PARTIAL"' + chr(10) + "    print(",
             source,
         )
 
