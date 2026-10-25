@@ -4,14 +4,105 @@ import json
 import re
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+from day3 import live_evidence
 from day3 import run_notebook as runner
 from day3.chip_plan import DAY3_CHIP_PLAN_SCENE, DAY3_PLANNED_CHIP_OPTIONS, chip_plan_copy
 from day3.publish_private import _one_final_video
+
+
+class LiveEvidencePollingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        now = datetime.now(timezone.utc)
+        self.old_deadline = (now - timedelta(days=1)).isoformat()
+        self.next_deadline = (now + timedelta(days=3)).isoformat()
+        self.kickoff = (now - timedelta(hours=2)).isoformat()
+        self.bootstrap = {
+            "events": [
+                {"id": 1, "deadline_time": self.old_deadline},
+                {"id": 2, "deadline_time": self.next_deadline},
+            ],
+            "teams": [{"id": 1, "name": "Home FC"}, {"id": 2, "name": "Away FC"}],
+            "elements": [{
+                "id": 11, "code": 1011, "team": 1, "team_join_date": None,
+                "element_type": 3, "status": "a", "chance_of_playing_next_round": 100,
+                "minutes": 0, "starts": 0, "defensive_contribution": 0,
+                "first_name": "Test", "second_name": "Player", "web_name": "Player",
+                "now_cost": 50,
+            }],
+            "element_types": [{"id": 3, "singular_name_short": "FWD"}],
+        }
+        self.live_payload = {
+            "elements": [{
+                "id": 11,
+                "stats": {"minutes": 0, "starts": 0, "defensive_contribution": 0},
+                "explain": [],
+            }]
+        }
+
+    def fixture(self, finished: bool, provisional: bool) -> dict[str, Any]:
+        return {
+            "id": 701, "event": 1, "team_h": 1, "team_a": 2,
+            "kickoff_time": self.kickoff, "started": True, "finished": finished,
+            "finished_provisional": provisional, "team_h_score": 0, "team_a_score": 0,
+            "stats": [],
+        }
+
+    def test_capture_reloads_until_fixture_has_verified_final_statistics(self) -> None:
+        fixture_states = [
+            self.fixture(False, False),  # match is in progress
+            self.fixture(True, False),   # match ended, stats are still provisional
+            self.fixture(True, True),    # final stats are verified
+        ]
+        state = {"fixtures": 0}
+
+        def loader(path: str) -> Any:
+            if path == "/bootstrap-static/":
+                return self.bootstrap
+            if path == "/fixtures/":
+                index = min(state["fixtures"], len(fixture_states) - 1)
+                state["fixtures"] += 1
+                return [fixture_states[index]]
+            if path == "/event/1/live/":
+                return self.live_payload
+            raise AssertionError(f"Unexpected FPL path: {path}")
+
+        with patch.object(live_evidence.time, "sleep") as sleep:
+            snapshot = live_evidence.capture_evidence(
+                {"next_gw": 2, "api_fallback_used": False},
+                loader=loader,
+                poll_interval_seconds=0,
+                max_wait_seconds=30,
+            )
+
+        self.assertEqual(state["fixtures"], 3)
+        self.assertEqual(snapshot["history_gameweeks"], [1])
+        self.assertEqual(snapshot["next_gw"], 2)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_wait_timeout_reports_the_exact_fixture_and_stops_safely(self) -> None:
+        def loader(path: str) -> Any:
+            if path == "/bootstrap-static/":
+                return self.bootstrap
+            if path == "/fixtures/":
+                return [self.fixture(False, False)]
+            raise AssertionError(f"Unexpected FPL path: {path}")
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"fixture #701 \(Home FC vs Away FC;.*No video was rendered from incomplete data",
+        ):
+            live_evidence.capture_evidence(
+                {"next_gw": 2, "api_fallback_used": False},
+                loader=loader,
+                poll_interval_seconds=0,
+                max_wait_seconds=0,
+            )
 
 
 class FinalVideoSelectionTests(unittest.TestCase):

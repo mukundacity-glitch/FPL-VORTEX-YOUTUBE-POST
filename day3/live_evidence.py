@@ -12,9 +12,11 @@ from typing import Any, Callable
 
 
 API_ROOT = "https://fantasy.premierleague.com/api"
-VERSION = "DAY3-LIVE-EVIDENCE-V1"
+VERSION = "DAY3-LIVE-EVIDENCE-V2-VERIFIED-RETRY"
 RULE_SOURCE = "https://www.premierleague.com/en/news/4361991/"
 DC_THRESHOLDS = {"DEF": 10, "MID": 12, "FWD": 12}
+EVIDENCE_POLL_INTERVAL_SECONDS = 60.0
+EVIDENCE_MAX_WAIT_SECONDS = 3 * 60 * 60
 
 
 def number(value: Any, label: str, minimum: float = 0.0) -> float:
@@ -136,14 +138,75 @@ def dc_forecast(rate90: Any, position: str, minutes_pmf: list[tuple[float, float
     return expected, min(appearance, probability)
 
 
-def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
-                   live_events: dict[int, dict[str, Any]], cutoff: str) -> dict[str, Any]:
+
+def _upcoming_event(bootstrap: dict[str, Any], cutoff: str) -> dict[str, Any]:
+    """Return the official event with the nearest deadline still in the future."""
     now = datetime.fromisoformat(cutoff.replace("Z", "+00:00"))
-    next_events = [event for event in bootstrap["events"]
-                   if datetime.fromisoformat(event["deadline_time"].replace("Z", "+00:00")) > now]
+    next_events = [
+        event for event in bootstrap["events"]
+        if datetime.fromisoformat(event["deadline_time"].replace("Z", "+00:00")) > now
+    ]
     if not next_events:
         raise RuntimeError("No upcoming official FPL deadline")
-    target = min(next_events, key=lambda event: event["deadline_time"])
+    return min(next_events, key=lambda event: event["deadline_time"])
+
+
+def _fixture_verified_final(fixture: dict[str, Any]) -> bool:
+    return bool(fixture.get("finished")) and bool(fixture.get("finished_provisional", True))
+
+
+def _completed_prior_fixtures(fixtures: list[dict[str, Any]], next_gw: int) -> list[dict[str, Any]]:
+    return [
+        row for row in fixtures
+        if row.get("event") is not None
+        and int(row["event"]) < next_gw
+        and _fixture_verified_final(row)
+    ]
+
+
+def _unfinished_prior_fixtures(fixtures: list[dict[str, Any]], next_gw: int) -> list[dict[str, Any]]:
+    """Started earlier-Gameweek fixtures that do not yet have verified final stats."""
+    return sorted(
+        [
+            row for row in fixtures
+            if row.get("event") is not None
+            and int(row["event"]) < next_gw
+            and row.get("started")
+            and not _fixture_verified_final(row)
+        ],
+        key=lambda row: (
+            int(row.get("event") or 0),
+            str(row.get("kickoff_time") or ""),
+            int(row.get("id") or 0),
+        ),
+    )
+
+
+def _describe_fixture_status(fixture: dict[str, Any], bootstrap: dict[str, Any]) -> str:
+    teams = {int(row["id"]): str(row.get("name") or f"Team {row['id']}") for row in bootstrap.get("teams", [])}
+
+    def team_name(value: Any) -> str:
+        try:
+            team_id = int(value)
+        except (TypeError, ValueError):
+            return f"team {value}"
+        return teams.get(team_id, f"team {team_id}")
+
+    return (
+        f"GW{fixture.get('event', '?')} fixture #{fixture.get('id', '?')} "
+        f"({team_name(fixture.get('team_h'))} vs {team_name(fixture.get('team_a'))}; "
+        f"kickoff={fixture.get('kickoff_time') or 'unknown'}; "
+        f"started={bool(fixture.get('started'))}, finished={bool(fixture.get('finished'))}, "
+        f"finished_provisional={fixture.get('finished_provisional', True)})"
+    )
+
+
+def _describe_fixtures(fixtures: list[dict[str, Any]], bootstrap: dict[str, Any]) -> str:
+    return "; ".join(_describe_fixture_status(row, bootstrap) for row in fixtures)
+
+def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
+                   live_events: dict[int, dict[str, Any]], cutoff: str) -> dict[str, Any]:
+    target = _upcoming_event(bootstrap, cutoff)
     next_gw = int(target["id"])
     teams = {int(row["id"]): row for row in bootstrap["teams"]}
     master = {int(row["id"]): row for row in bootstrap["elements"]}
@@ -152,12 +215,13 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
         raise RuntimeError("Duplicate official player or fixture identity")
     positions = {int(row["id"]): str(row["singular_name_short"]).replace("GKP", "GK")
                  for row in bootstrap["element_types"]}
-    completed = [row for row in fixtures if row.get("event") is not None and int(row["event"]) < next_gw
-                 and row.get("finished") and row.get("finished_provisional", True)]
-    unfinished = [row for row in fixtures if row.get("event") is not None and int(row["event"]) < next_gw
-                  and not row.get("finished") and row.get("started")]
+    completed = _completed_prior_fixtures(fixtures, next_gw)
+    unfinished = _unfinished_prior_fixtures(fixtures, next_gw)
     if unfinished:
-        raise RuntimeError("An earlier Gameweek is still in progress; wait for verified final statistics")
+        raise RuntimeError(
+            "An earlier Gameweek fixture is not verified final: "
+            + _describe_fixtures(unfinished, bootstrap)
+        )
     history_gws = sorted({int(row["event"]) for row in completed})
     if set(history_gws) != set(live_events):
         raise RuntimeError("Official event history does not cover the completed fixture set")
@@ -271,22 +335,79 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
     return snapshot
 
 
-def capture_evidence(data: dict[str, Any], loader: Callable[[str], Any] = get_json) -> dict[str, Any]:
+def capture_evidence(
+    data: dict[str, Any],
+    loader: Callable[[str], Any] = get_json,
+    *,
+    poll_interval_seconds: float = EVIDENCE_POLL_INTERVAL_SECONDS,
+    max_wait_seconds: float = EVIDENCE_MAX_WAIT_SECONDS,
+) -> dict[str, Any]:
+    """
+    Capture consistent official evidence, waiting for started fixtures to be verified final.
+
+    The notebook's initial bootstrap/fixtures can become stale while a match is live.
+    Refresh both official endpoints on every attempt; never bypass the final-statistics
+    guard or build a snapshot from a partially updated Gameweek.
+    """
     if data.get("api_fallback_used"):
         raise RuntimeError("Day 3 narration requires fresh official data; cached fallback is forbidden")
-    bootstrap = data["bootstrap"]
-    fixtures = json.loads(data["fixtures"].to_json(orient="records", date_format="iso"))
-    cutoff = datetime.now(timezone.utc).isoformat()
-    history_gws = sorted(int(value) for value in data["review_ready_gws"])
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        responses = list(executor.map(lambda gameweek: loader(f"/event/{gameweek}/live/"), history_gws))
-    snapshot = build_evidence(bootstrap, fixtures, dict(zip(history_gws, responses)), cutoff)
-    snapshot["_event_payloads"] = dict(zip(history_gws, responses))
-    snapshot["_bootstrap"] = bootstrap
-    if snapshot["next_gw"] != int(data["next_gw"]):
-        raise RuntimeError("The official deadline changed during data capture")
-    return snapshot
+    if poll_interval_seconds < 0 or max_wait_seconds < 0:
+        raise ValueError("Day 3 evidence wait intervals must be non-negative")
 
+    requested_next_gw = int(data["next_gw"])
+    wait_started = time.monotonic()
+
+    while True:
+        # Re-fetch official sources every attempt. A single snapshot can straddle
+        # a live match's completion, so never reuse the notebook's older fixture map.
+        bootstrap = loader("/bootstrap-static/")
+        fixtures = loader("/fixtures/")
+        if not isinstance(bootstrap, dict) or not isinstance(fixtures, list):
+            raise RuntimeError("Official FPL bootstrap/fixtures responses have an unexpected shape")
+
+        cutoff = datetime.now(timezone.utc).isoformat()
+        target = _upcoming_event(bootstrap, cutoff)
+        current_next_gw = int(target["id"])
+        if current_next_gw != requested_next_gw:
+            raise RuntimeError(
+                "The official FPL deadline changed during Day 3 data capture "
+                f"(started for GW{requested_next_gw}, now GW{current_next_gw}); "
+                "restart Day 3 so all projections use one Gameweek."
+            )
+
+        unfinished = _unfinished_prior_fixtures(fixtures, current_next_gw)
+        if unfinished:
+            elapsed = time.monotonic() - wait_started
+            remaining = max_wait_seconds - elapsed
+            details = _describe_fixtures(unfinished, bootstrap)
+            if remaining <= 0:
+                raise RuntimeError(
+                    f"Day 3 waited {max_wait_seconds / 60:.0f} minutes, but official FPL "
+                    f"still reports earlier-Gameweek fixture(s) without verified final "
+                    f"statistics: {details}. No video was rendered from incomplete data."
+                )
+            delay = min(poll_interval_seconds, remaining)
+            print(
+                f"[DAY 3] Waiting for official final statistics ({elapsed / 60:.1f} min elapsed; "
+                f"retry in {delay:.0f}s): {details}"
+            )
+            time.sleep(delay)
+            continue
+
+        completed = _completed_prior_fixtures(fixtures, current_next_gw)
+        history_gws = sorted({int(row["event"]) for row in completed})
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            responses = list(executor.map(
+                lambda gameweek: loader(f"/event/{gameweek}/live/"),
+                history_gws,
+            ))
+        live_events = dict(zip(history_gws, responses))
+        snapshot = build_evidence(bootstrap, fixtures, live_events, cutoff)
+        snapshot["_event_payloads"] = live_events
+        snapshot["_bootstrap"] = bootstrap
+        if snapshot["next_gw"] != requested_next_gw:
+            raise RuntimeError("The official deadline changed during data capture")
+        return snapshot
 
 def live_role(snapshot: dict[str, Any], player_id: int) -> dict[str, float]:
     player = snapshot["players"][int(player_id)]
