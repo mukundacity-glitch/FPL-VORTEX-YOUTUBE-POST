@@ -144,7 +144,7 @@ class Day1ReviewContractTests(unittest.TestCase):
     def test_official_score_lock_precedes_final_review(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn(
-            "event_scores_locked_gws = event_data_checked_gws | event_previous_gws",
+            "event_scores_locked_gws = event_data_checked_gws",
             source,
         )
         self.assertIn("int(review_gw) in event_scores_locked_gws", source)
