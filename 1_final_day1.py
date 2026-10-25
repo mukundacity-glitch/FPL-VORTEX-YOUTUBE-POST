@@ -5416,10 +5416,10 @@ if GW_REVIEW_STATUS not in {"FINAL", "LIVE/PARTIAL"}:
     raise RuntimeError(f"Resolved invalid GW_REVIEW_STATUS={GW_REVIEW_STATUS!r}")
 GW_REVIEW_FIXTURE_STATE = dict(data.get("review_fixture_state") or {})
 
-# Once every fixture is complete, the review is finalized from the entry feeds
-# themselves: picks/history/live/player totals/ranks must agree and, while FPL
-# still labels the event current, the same valid result must remain stable
-# across two fresh polls. No score, rank, Gameweek or chip is hard-coded.
+# A review can be marked FINAL only after FPL's official score-lock signal and
+# a consistent entry-feed reconciliation. Before lock, completed fixtures remain
+# provisional because player points, automatic substitutions and ranks can change.
+# No score, rank, Gameweek or chip is hard-coded.
 _review_fixture_total = int(GW_REVIEW_FIXTURE_STATE.get("fixtures", 0) or 0)
 _review_fixture_completed = int(GW_REVIEW_FIXTURE_STATE.get("completed", 0) or 0)
 _review_all_fixtures_complete = (
