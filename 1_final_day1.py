@@ -873,9 +873,11 @@ def fetch_fpl_data() -> dict[str, Any]:
     #   2) minutes >= 90
     #   3) finished OR finished_provisional
     #   4) both final-score fields are present
-    # A review Gameweek additionally needs a terminal event lifecycle signal
-    # (finished, data_checked, or is_previous) AND every fixture in that event
-    # must satisfy the full fixture contract above.
+    # A review candidate needs a terminal lifecycle signal (finished,
+    # data_checked, or is_previous) AND every fixture in that event must
+    # satisfy the full fixture contract above. "finished" identifies completed
+    # fixtures; it does NOT mean FPL has locked the Gameweek points. In 2026/27,
+    # final scoring is locked at 09:00 UK time on the day after its last match.
     def _flag(frame: pd.DataFrame, column: str) -> pd.Series:
         if column not in frame.columns:
             raise ValueError(f"Official FPL payload missing required flag: {column}")
@@ -935,6 +937,9 @@ def fetch_fpl_data() -> dict[str, Any]:
     event_previous_gws = set(events.loc[event_previous_signal, "id"].astype(int).tolist())
     event_current_gws = set(events.loc[event_current_signal, "id"].astype(int).tolist())
     event_terminal_gws = event_finished_gws | event_data_checked_gws | event_previous_gws
+    # Only these lifecycle flags establish official score lock. event.finished
+    # is retained above for candidate selection, not for final-score claims.
+    event_scores_locked_gws = event_data_checked_gws | event_previous_gws
     fixture_finished_gws = {gw for gw, done in fixture_completion_by_gw.items() if done}
 
     # ------------------------------------------------------------------
@@ -1018,7 +1023,7 @@ def fetch_fpl_data() -> dict[str, Any]:
         review_status = (
             "FINAL"
             if (
-                int(review_gw) in set(event_terminal_gws)
+                int(review_gw) in event_scores_locked_gws
                 and fixture_completion_by_gw.get(int(review_gw), False)
             )
             else "LIVE/PARTIAL"
@@ -5421,6 +5426,17 @@ _review_all_fixtures_complete = (
     _review_fixture_total > 0
     and _review_fixture_completed == _review_fixture_total
 )
+_review_event_row = next(
+    (
+        row for row in data["bootstrap"].get("events", [])
+        if int(row.get("id") or 0) == REVIEW_GW
+    ),
+    {},
+)
+_review_official_scores_locked = bool(
+    _review_event_row.get("data_checked")
+    or _review_event_row.get("is_previous")
+)
 
 
 def _vx_review_clear_entry_cache():
@@ -5585,7 +5601,7 @@ _review_finalisation_errors, _review_signature, _review_parts = _vx_review_valid
     _review_snapshot
 )
 
-if _review_all_fixtures_complete:
+if _review_all_fixtures_complete and _review_official_scores_locked:
     import time as _vx_review_time
 
     _settlement_wait_seconds = 15 * 60
@@ -5594,24 +5610,9 @@ if _review_all_fixtures_complete:
     _last_valid_signature = _review_signature if not _review_finalisation_errors else None
     _stable_valid_polls = 1 if _last_valid_signature is not None else 0
 
-    # If FPL already exposes an official terminal event, one internally
-    # consistent snapshot is enough. Otherwise require two identical fresh
-    # valid snapshots so an intermediate rank/points state cannot be published.
-    _event_row = next(
-        (
-            row for row in data["bootstrap"].get("events", [])
-            if int(row.get("id") or 0) == REVIEW_GW
-        ),
-        {},
-    )
-    _official_terminal = bool(
-        _event_row.get("finished")
-        or _event_row.get("data_checked")
-        or _event_row.get("is_previous")
-    )
-    # Even when FPL marks the event terminal, require two matching fresh
-    # entry/live signatures. Terminal flags can precede the last propagation
-    # step on individual entry feeds; two equal polls prevent that race.
+    # The official score-lock flag is confirmed before entering this poll loop.
+    # Still require two matching fresh entry/live signatures because the lock
+    # can become visible before all entry/player feeds finish propagating.
     _required_stable_polls = 2
 
     while (
@@ -5663,6 +5664,15 @@ if _review_all_fixtures_complete:
     print(
         f"✅ GW{REVIEW_GW} entry settlement confirmed from matching official "
         "points/rank/player feeds"
+    )
+elif _review_all_fixtures_complete:
+    # Completed fixtures are not sufficient to publish a final score before
+    # FPL's official 09:00 UK next-day scoring lock.
+    GW_REVIEW_STATUS = "LIVE/PARTIAL"
+    print(
+        f"⏳ GW{REVIEW_GW} fixtures are complete, but the official FPL score lock "
+        "is not confirmed. Continuing with a clearly provisional review; "
+        "points and ranks may still change."
     )
 elif GW_REVIEW_STATUS == "FINAL" and _review_finalisation_errors:
     raise RuntimeError(
