@@ -937,9 +937,9 @@ def fetch_fpl_data() -> dict[str, Any]:
     event_previous_gws = set(events.loc[event_previous_signal, "id"].astype(int).tolist())
     event_current_gws = set(events.loc[event_current_signal, "id"].astype(int).tolist())
     event_terminal_gws = event_finished_gws | event_data_checked_gws | event_previous_gws
-    # Only these lifecycle flags establish official score lock. event.finished
-    # is retained above for candidate selection, not for final-score claims.
-    event_scores_locked_gws = event_data_checked_gws | event_previous_gws
+    # data_checked is the official FPL score-lock signal. is_previous only
+    # identifies the prior event and can change before the 09:00 UK score lock.
+    event_scores_locked_gws = event_data_checked_gws
     fixture_finished_gws = {gw for gw, done in fixture_completion_by_gw.items() if done}
 
     # ------------------------------------------------------------------
@@ -5416,8 +5416,8 @@ if GW_REVIEW_STATUS not in {"FINAL", "LIVE/PARTIAL"}:
     raise RuntimeError(f"Resolved invalid GW_REVIEW_STATUS={GW_REVIEW_STATUS!r}")
 GW_REVIEW_FIXTURE_STATE = dict(data.get("review_fixture_state") or {})
 
-# A review can be marked FINAL only after FPL's official score-lock signal and
-# a consistent entry-feed reconciliation. Before lock, completed fixtures remain
+# A review can be marked FINAL only after FPL's official data_checked score-lock signal
+# and a consistent entry-feed reconciliation. Before lock, completed fixtures remain
 # provisional because player points, automatic substitutions and ranks can change.
 # No score, rank, Gameweek or chip is hard-coded.
 _review_fixture_total = int(GW_REVIEW_FIXTURE_STATE.get("fixtures", 0) or 0)
@@ -5433,10 +5433,7 @@ _review_event_row = next(
     ),
     {},
 )
-_review_official_scores_locked = bool(
-    _review_event_row.get("data_checked")
-    or _review_event_row.get("is_previous")
-)
+_review_official_scores_locked = bool(_review_event_row.get("data_checked"))
 
 
 def _vx_review_clear_entry_cache():
