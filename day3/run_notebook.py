@@ -24,6 +24,7 @@ from day3.transfer_desk import (
 from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_cell
 from day3.narration_pacing import patch_narration_pacing_source
 from day3.popup_audio import patch_popup_audio_source
+from day3.run_package import capture_safely, start_package
 from day3.evidence_pipeline import patch_evidence_pipeline
 
 
@@ -1151,24 +1152,36 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
 
 def run_notebook(notebook_path: Path) -> None:
     cells = _prepare_code_cells(notebook_path)
-    _install_colab_compatibility()
-    shell = InteractiveShell.instance()
-    shell.autoawait = True
-    shell.user_ns["__name__"] = "__main__"
-    shell.user_ns["__file__"] = str(notebook_path)
+    recorder = start_package(notebook_path, cells, Path(__file__).resolve().parents[1])
+    shell = None
+    execution_error = None
+    try:
+        _install_colab_compatibility()
+        shell = InteractiveShell.instance()
+        shell.autoawait = True
+        shell.user_ns["__name__"] = "__main__"
+        shell.user_ns["__file__"] = str(notebook_path)
 
-    for cell_index, source in cells:
-        print(f"\n{'=' * 76}\n▶ DAY 3 NOTEBOOK CELL {cell_index}\n{'=' * 76}", flush=True)
-        result = shell.run_cell(source, store_history=False, silent=False)
-        error = result.error_before_exec or result.error_in_exec
-        if error is not None:
-            raise RuntimeError(f"Day 3 notebook cell {cell_index} failed") from error
-        if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
-            purge_shortlist_artifacts(shell.user_ns["OUTPUT_ROOT"], shell.user_ns["WORK_ROOT"])
+        for cell_index, source in cells:
+            capture_safely(recorder, "before_cell", cell_index, source, shell.user_ns)
+            print(f"\n{'=' * 76}\n▶ DAY 3 NOTEBOOK CELL {cell_index}\n{'=' * 76}", flush=True)
+            result = shell.run_cell(source, store_history=False, silent=False)
+            error = result.error_before_exec or result.error_in_exec
+            if error is not None:
+                raise RuntimeError(f"Day 3 notebook cell {cell_index} failed") from error
+            if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
+                purge_shortlist_artifacts(shell.user_ns["OUTPUT_ROOT"], shell.user_ns["WORK_ROOT"])
+            capture_safely(recorder, "after_cell", cell_index, shell.user_ns)
 
-    from day3.verify_evidence import finalize_evidence_bundle
-    finalize_evidence_bundle(shell.user_ns)
-    print("✅ Final Day 3 notebook execution completed.")
+        from day3.verify_evidence import finalize_evidence_bundle
+        finalize_evidence_bundle(shell.user_ns)
+        print("✅ Final Day 3 notebook execution completed.")
+    except BaseException as error:
+        execution_error = error
+        raise
+    finally:
+        namespace = shell.user_ns if shell is not None else {}
+        capture_safely(recorder, "finish", namespace, execution_error)
 
 
 def main() -> None:
