@@ -141,6 +141,27 @@ class Day1ReviewContractTests(unittest.TestCase):
             self.assertIn(f'"{field}": 0.0', source)
         self.assertIn('Number(timing.pitch_at ?? 0)', source)
 
+    def test_official_score_lock_precedes_final_review(self) -> None:
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "event_scores_locked_gws = event_data_checked_gws | event_previous_gws",
+            source,
+        )
+        self.assertIn("int(review_gw) in event_scores_locked_gws", source)
+        self.assertNotIn("int(review_gw) in set(event_terminal_gws)", source)
+        self.assertIn(
+            "if _review_all_fixtures_complete and _review_official_scores_locked:",
+            source,
+        )
+        self.assertIn(
+            'elif _review_all_fixtures_complete:\\n    # Completed fixtures are not sufficient',
+            source,
+        )
+        self.assertIn(
+            'GW_REVIEW_STATUS = "LIVE/PARTIAL"\\n    print(',
+            source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
