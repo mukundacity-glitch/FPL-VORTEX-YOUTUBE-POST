@@ -951,6 +951,54 @@ def _repair_python311_fstrings(payload: dict) -> bool:
     print("[DAY 2] Repaired all five Python 3.11-safe Scene 5 HTML expressions")
     return True
 
+
+def _patch_scene2_player_validation(payload: dict) -> bool:
+    """Normalize HTML entities before checking ranked player names in Scene 2."""
+    old_check = (
+        "if player_name and _s2_html.escape(player_name) "
+        "not in _on_disk.upper():"
+    )
+    new_check = (
+        "if player_name and _s2_html.unescape(player_name).casefold() "
+        "not in _s2_html.unescape(_on_disk).casefold():"
+    )
+
+    matches = []
+    already_patched = False
+    for index, cell in enumerate(payload.get("cells") or []):
+        if cell.get("cell_type") != "code":
+            continue
+        source = _cell_source(cell)
+        if old_check in source:
+            matches.append((index, source))
+        if new_check in source:
+            already_patched = True
+
+    if not matches:
+        if already_patched:
+            print("[DAY 2] Scene 2 player-name validation: already normalized")
+            return False
+        raise RuntimeError(
+            "Scene 2 player-validation anchor not found; refusing to run "
+            "without verifying the HTML-entity-safe check"
+        )
+    if len(matches) != 1:
+        raise RuntimeError(
+            "Expected exactly one Scene 2 player-validation check; "
+            f"found {len(matches)}"
+        )
+
+    index, source = matches[0]
+    patched = source.replace(old_check, new_check, 1)
+    compile(patched, f"DAY2_FINAL.ipynb::cell-{index}", "exec")
+    _set_cell_source(payload["cells"][index], patched)
+    print(
+        "[DAY 2] Scene 2 player-name validation: patched HTML entity "
+        "decoding + case-insensitive comparison"
+    )
+    return True
+
+
 def _sync_repaired_notebook(payload: dict, notebook_path: Path) -> None:
     """Persist only the source repair back to the same Drive notebook."""
     if not os.environ.get("RCLONE_CONFIG"):
@@ -1112,6 +1160,7 @@ def execute_notebook(notebook_path: Path, quality: str) -> None:
     _configure_edge_transport()
     asyncio.run(_verify_edge_ryan())
     payload = json.loads(notebook_path.read_text(encoding="utf-8"))
+    _patch_scene2_player_validation(payload)
     repaired = _repair_python311_fstrings(payload)
     replaced = _replace_last_data_slide(payload)
     _audit_notebook(payload)
