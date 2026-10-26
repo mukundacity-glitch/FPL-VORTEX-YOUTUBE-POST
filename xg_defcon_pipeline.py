@@ -151,10 +151,13 @@ def prepare() -> None:
             )
         except subprocess.CalledProcessError as error:
             raise RuntimeError(
-                f"Required Google Drive media is missing from the shared asset folder: {asset_name}"
+                f"Could not restore Google Drive media from the shared asset folder: "
+                f"{asset_name} (rclone exit {error.returncode})"
             ) from error
         if not destination.is_file() or destination.stat().st_size < 1000:
-            raise RuntimeError(f"Required Google Drive media is missing: {filename}")
+            raise RuntimeError(
+                f"Required Google Drive media is missing or empty: {asset_name}"
+            )
     config.unlink(missing_ok=True)
     print("[XG-DEFCON] Pinned notebook, logo, and current intro/outro/music assets restored by filename.")
 
