@@ -134,30 +134,29 @@ def prepare() -> None:
             run_command(["rclone", "copy", remote, str(local), "--transfers", "4"], env=environment)
         else:
             print(f"[XG-DEFCON] Optional archive is unavailable: {asset_name}")
-    music_remote = "xg-defcon-assets:Background_music.mp3"
-    music_check = subprocess.run([
-        "rclone", "lsf", music_remote
-    ], env=environment, capture_output=True, text=True)
-    if music_check.returncode == 0:
-        run_command([
-            "rclone", "copyto", music_remote, str(source / "background.mp3")
-        ], env=environment)
-    # Load the established FPL VORTEX assets, without modifying any Google Drive files.
+    # Load current media by name from the shared asset folder. Drive file IDs can
+    # change when a source asset is replaced, while these approved filenames are
+    # already the contract used by the other FPL VORTEX workflows.
     media_files = {
-        "opening.mp4": "1KlxpGOUrC-2-rNMZINuZWbfL05nQj0U-",
-        "outro.mp4": "1M4w9Adk1H9xsVLQHCIcf6HdUn4XOqPmg",
-        "background.mp3": "1Vmwc1Qlvx1Vi1DHJ3BEOzbqG8oOUusXW",
+        "opening.mp4": "opening.mp4",
+        "outro.mp4": "outro.mp4",
+        "background.mp3": "Background_music.mp3",
     }
-    for filename, file_id in media_files.items():
+    for filename, asset_name in media_files.items():
         destination = source / filename
-        run_command(
-            ["rclone", "backend", "copyid", "xg-defcon-drive:", file_id, str(destination)],
-            env=environment,
-        )
+        try:
+            run_command(
+                ["rclone", "copyto", f"xg-defcon-assets:{asset_name}", str(destination)],
+                env=environment,
+            )
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(
+                f"Required Google Drive media is missing from the shared asset folder: {asset_name}"
+            ) from error
         if not destination.is_file() or destination.stat().st_size < 1000:
             raise RuntimeError(f"Required Google Drive media is missing: {filename}")
     config.unlink(missing_ok=True)
-    print("[XG-DEFCON] Pinned notebook, logo, intro/outro and licensed music assets restored.")
+    print("[XG-DEFCON] Pinned notebook, logo, and current intro/outro/music assets restored by filename.")
 
 
 def read_report_metadata(root: Path) -> dict[str, Any]:
