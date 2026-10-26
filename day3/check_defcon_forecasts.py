@@ -65,8 +65,7 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
         "<!doctype html><html><head><style>:root{--vx-dense:Arial,sans-serif}"
         ".d3DefTeamRow{width:850px;height:130px}</style>"
         + stylesheet
-        + '<style>body.vxPremium .d3Def20Fdr{width:232px;box-sizing:border-box}'
-          'body.vxPremium .d3Def20FdrFixture{font-family:"Arial Narrow",Arial,sans-serif}</style>'
+        + '<style>body.vxPremium .d3Def20Fdr{width:280px;box-sizing:border-box}</style>'
         + "</head><body class=\"vxPremium\">"
         + rows
         + fixture_labels
