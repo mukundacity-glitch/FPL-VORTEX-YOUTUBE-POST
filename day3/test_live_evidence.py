@@ -15,7 +15,7 @@ import pandas as pd
 from day3.evidence_narration import next_fixture_packs, player_analysis, team_analysis, validated_fixture_forecasts
 from day3.live_evidence import (
     VERSION, assert_snapshot_current, audit_fixture_rows, availability, build_evidence, dc_forecast, digest,
-    live_role, material_state, player_projection,
+    live_role, material_state, player_projection, save_snapshot,
 )
 from day3.verify_evidence import file_hash, verify_bundle
 
@@ -67,6 +67,23 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(live_role(snapshot, 22)["start"], 1)
         self.assertEqual(player_projection(snapshot, 11)["actions"], 12)
         self.assertEqual(player_projection(snapshot, 22)["actions"], 8)
+
+    def test_snapshot_excludes_legacy_fixture_difficulty_fields(self) -> None:
+        baseline = self.snapshot()
+        for fixture in self.fixtures:
+            fixture.update(team_a_difficulty=4, team_h_difficulty=2)
+
+        snapshot = self.snapshot()
+        forbidden = {"team_a_difficulty", "team_h_difficulty"}
+        self.assertEqual(snapshot["source_hash"], baseline["source_hash"])
+        self.assertTrue(all(forbidden.isdisjoint(fixture) for fixture in snapshot["fixtures"]))
+        self.assertTrue(all(forbidden.issubset(fixture.keys()) for fixture in self.fixtures))
+
+        with tempfile.TemporaryDirectory() as directory:
+            save_snapshot(snapshot, Path(directory))
+            serialized = (Path(directory) / "day3_live_evidence.json").read_text(encoding="utf-8")
+        self.assertNotIn("team_a_difficulty", serialized)
+        self.assertNotIn("team_h_difficulty", serialized)
 
     def test_missing_forecast_is_not_a_blank_or_zero(self) -> None:
         snapshot = self.snapshot()
