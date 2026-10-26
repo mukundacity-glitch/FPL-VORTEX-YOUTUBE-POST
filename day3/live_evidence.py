@@ -359,7 +359,15 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
         }
     snapshot = {
         "version": VERSION, "cutoff": cutoff, "next_gw": next_gw, "deadline": target["deadline_time"],
-        "history_gameweeks": history_gws, "players": output, "teams": teams, "fixtures": fixtures,
+        "history_gameweeks": history_gws, "players": output, "teams": teams,
+        # Legacy FPL difficulty fields are deliberately excluded: Day 3 uses its
+        # independently computed fixture model, and the clean-room contract forbids
+        # retaining the stale team_a_difficulty/team_h_difficulty source values.
+        "fixtures": [
+            {key: value for key, value in row.items()
+             if key not in {"team_a_difficulty", "team_h_difficulty"}}
+            for row in fixtures
+        ],
         "event_ids": [int(event["id"]) for event in bootstrap["events"]],
         "source_hash": digest(material_state(bootstrap, fixtures)),
         "sources": [API_ROOT + "/bootstrap-static/", API_ROOT + "/fixtures/"]
