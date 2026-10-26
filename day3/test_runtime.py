@@ -126,7 +126,7 @@ class LiveEvidencePollingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             RuntimeError,
-            r"fixture #701 \\(Home FC vs Away FC;.*No video was rendered from incomplete data",
+            r"fixture #701 \(Home FC vs Away FC;.*No video was rendered from incomplete data",
         ):
             live_evidence.capture_evidence(
                 {"next_gw": 2, "api_fallback_used": False},
