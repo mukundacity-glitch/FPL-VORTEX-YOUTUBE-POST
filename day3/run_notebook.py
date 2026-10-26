@@ -475,13 +475,16 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
     // score. Fit the label instead of truncating the name or letting it clip.
     const fixtureLabels=[...document.querySelectorAll('.d3Def20FdrFixture')];
     for(const label of fixtureLabels){
-      const box=label.getBoundingClientRect();
-      if(box.width<=0 || box.height<=0) continue;
+      const initialBox=label.getBoundingClientRect();
+      if(initialBox.width<=0 || initialBox.height<=0) continue;
       const range=document.createRange();
       range.selectNodeContents(label);
       const fits=()=>{
+        // A flex item may shrink to the text's intrinsic width after fitting, so
+        // use a one-pixel tolerance at its edges rather than demanding inner padding.
+        const box=label.getBoundingClientRect();
         const text=range.getBoundingClientRect();
-        return text.left>=box.left+1 && text.right<=box.right-1
+        return text.left>=box.left-1 && text.right<=box.right+1
           && label.scrollWidth<=label.clientWidth+1;
       };
       if(fits()) continue;
