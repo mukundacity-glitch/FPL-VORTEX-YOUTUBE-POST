@@ -696,22 +696,18 @@ class DefconNumericRegressionTests(unittest.TestCase):
             "  };\n"
         )
         updated = runner._patch_defcon_team_numeric_fit(source)
-        self.assertIn("const layoutReport = window.vxLayoutReport;", updated)
-        self.assertLess(
-            updated.index("window.vxLayoutReport = (...reportArgs) =>"),
-            updated.index("result = prepare ? await prepare(...args)"),
-        )
         self.assertLess(
             updated.index("fitDefconTeamForecasts();"),
-            updated.index("return layoutReport(...reportArgs);"),
+            updated.index("result = prepare ? await prepare(...args)"),
         )
+        self.assertIn("await document.fonts.ready;", updated)
         self.assertIn("window.__ready === true", updated)
         self.assertIn("window.__vxDefconRenderScaleReady === true", updated)
         self.assertIn("!window.__vxDefconTeamNumbersFitted", updated)
         self.assertIn("window.__vxDefconTeamNumbersFitted = true", updated)
         self.assertIn("window.__seek(0);", updated)
         self.assertIn("finally {", updated)
-        self.assertIn("window.vxLayoutReport = layoutReport;", updated)
+        self.assertIn("captured in a closure", updated)
 
 
 if __name__ == "__main__":
