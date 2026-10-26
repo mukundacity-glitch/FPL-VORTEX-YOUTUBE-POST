@@ -510,30 +510,45 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
 """
     source = source.replace(function_anchor, fitter + function_anchor, 1)
 
-    capture_anchor = """    assertDefconBoardFit();
-    return result;"""
-    capture_replacement = """    // Team panel starts hidden. Reveal it briefly to fit live xGW numbers,
-    // then reset the timeline so the captured video still opens normally.
-    const focus=(typeof VX !== 'undefined' ? VX : window.VX)?.defcon_focus;
-    if(window.__ready === true && window.__vxDefconRenderScaleReady === true &&
-       typeof window.__seek === 'function' &&
-       !window.__vxDefconTeamNumbersFitted) {
-      if(!focus || focus.team_intro_at == null ||
-         !Number.isFinite(Number(focus.team_intro_at)))
-        throw Error('DEFCON focus timeline is incomplete before numeric fitting');
-      window.__seek(Number(focus.team_intro_at)+0.05);
-      try {
-        fitDefconTeamForecasts();
-        window.__vxDefconTeamNumbersFitted = true;
-      } finally {
-        window.__seek(0);
-      }
+    capture_anchor = "    const result=prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});"
+    capture_replacement = """    const layoutReport = window.vxLayoutReport;
+    if (typeof layoutReport === "function") {
+      let fittedBeforeLayoutAudit = false;
+      window.vxLayoutReport = (...reportArgs) => {
+        if (!fittedBeforeLayoutAudit &&
+            window.__ready === true &&
+            window.__vxDefconRenderScaleReady === true &&
+            typeof window.__seek === "function" &&
+            !window.__vxDefconTeamNumbersFitted) {
+          fittedBeforeLayoutAudit = true;
+          const focus = (typeof VX !== "undefined" ? VX : window.VX)?.defcon_focus;
+          if (!focus || focus.team_intro_at == null ||
+              !Number.isFinite(Number(focus.team_intro_at)))
+            throw Error("DEFCON focus timeline is incomplete before numeric fitting");
+          window.__seek(Number(focus.team_intro_at) + 0.05);
+          try {
+            fitDefconTeamForecasts();
+            window.__vxDefconTeamNumbersFitted = true;
+          } finally {
+            window.__seek(0);
+          }
+        }
+        return layoutReport(...reportArgs);
+      };
     }
-    assertDefconBoardFit();
-    return result;"""
+    let result;
+    try {
+      result = prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});
+    } finally {
+      if (typeof layoutReport === "function") window.vxLayoutReport = layoutReport;
+    }"""
     if source.count(capture_anchor) != 1:
-        raise RuntimeError("DEFCON numeric fit: expected one capture QA call")
-    print("✅ DEFCON team forecasts and fixture labels auto-fit before 4K capture")
+        raise RuntimeError("DEFCON numeric fit: expected one capture prepare invocation")
+    qa_anchor = """    assertDefconBoardFit();
+    return result;"""
+    if source.count(qa_anchor) != 1:
+        raise RuntimeError("DEFCON numeric fit: expected one post-capture board QA call")
+    print("✅ DEFCON fixture fitting runs before premium layout validation")
     return source.replace(capture_anchor, capture_replacement, 1)
 
 def _patch_defcon_render_preflight(source: str) -> str:
