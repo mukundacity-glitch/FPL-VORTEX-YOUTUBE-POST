@@ -470,6 +470,39 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
       if(!fits())
         throw Error('DEFCON forecast fit regression: '+String(number.textContent||'').trim());
     }
+
+    // Live club names can be wider than the fixture chip when paired with its FDR
+    // score. Fit the label instead of truncating the name or letting it clip.
+    const fixtureLabels=[...document.querySelectorAll('.d3Def20FdrFixture')];
+    for(const label of fixtureLabels){
+      const box=label.getBoundingClientRect();
+      if(box.width<=0 || box.height<=0) continue;
+      const range=document.createRange();
+      range.selectNodeContents(label);
+      const fits=()=>{
+        const text=range.getBoundingClientRect();
+        return text.left>=box.left+1 && text.right<=box.right-1
+          && label.scrollWidth<=label.clientWidth+1;
+      };
+      if(fits()) continue;
+      const original=parseFloat(getComputedStyle(label).fontSize);
+      const floor=25;
+      label.style.setProperty('font-size', String(floor)+'px', 'important');
+      if(!fits())
+        throw Error('DEFCON fixture label is too wide at readable minimum: '+
+                    String(label.textContent||'').trim());
+      let low=floor;
+      let high=Math.max(floor,original);
+      for(let iteration=0;iteration<12;iteration++){
+        const candidate=(low+high)/2;
+        label.style.setProperty('font-size', String(candidate)+'px', 'important');
+        if(fits()) low=candidate;
+        else high=candidate;
+      }
+      label.style.setProperty('font-size', String(Math.max(floor,low-0.5))+'px', 'important');
+      if(!fits())
+        throw Error('DEFCON fixture label fit regression: '+String(label.textContent||'').trim());
+    }
   };
 """
     source = source.replace(function_anchor, fitter + function_anchor, 1)
@@ -497,7 +530,7 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
     return result;"""
     if source.count(capture_anchor) != 1:
         raise RuntimeError("DEFCON numeric fit: expected one capture QA call")
-    print("✅ DEFCON team forecasts auto-fit after fonts load and before 4K capture")
+    print("✅ DEFCON team forecasts and fixture labels auto-fit before 4K capture")
     return source.replace(capture_anchor, capture_replacement, 1)
 
 def _patch_defcon_render_preflight(source: str) -> str:
