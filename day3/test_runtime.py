@@ -85,6 +85,56 @@ class LiveEvidencePollingTests(unittest.TestCase):
         self.assertEqual(snapshot["next_gw"], 2)
         self.assertEqual(sleep.call_count, 2)
 
+    def test_score_locked_gameweek_overrides_stale_fixture_finished_flag(self) -> None:
+        # The API can leave fixture.finished=False after the event's official
+        # data_checked score lock. Provisional fixture data is accepted only
+        # for that locked event, then still reconciled against live/bootstrap stats.
+        self.bootstrap["events"][0].update(finished=True, data_checked=True)
+        state = {"fixtures": 0}
+        stale_fixture = self.fixture(False, True)
+
+        def loader(path: str) -> Any:
+            if path == "/bootstrap-static/":
+                return self.bootstrap
+            if path == "/fixtures/":
+                state["fixtures"] += 1
+                return [stale_fixture]
+            if path == "/event/1/live/":
+                return self.live_payload
+            raise AssertionError(f"Unexpected FPL path: {path}")
+
+        with patch.object(live_evidence.time, "sleep") as sleep:
+            snapshot = live_evidence.capture_evidence(
+                {"next_gw": 2, "api_fallback_used": False},
+                loader=loader,
+                poll_interval_seconds=0,
+                max_wait_seconds=0,
+            )
+
+        self.assertEqual(state["fixtures"], 1)
+        self.assertEqual(snapshot["history_gameweeks"], [1])
+        self.assertEqual(snapshot["next_gw"], 2)
+        sleep.assert_not_called()
+
+    def test_provisional_fixture_still_waits_without_official_score_lock(self) -> None:
+        def loader(path: str) -> Any:
+            if path == "/bootstrap-static/":
+                return self.bootstrap
+            if path == "/fixtures/":
+                return [self.fixture(False, True)]
+            raise AssertionError(f"Unexpected FPL path: {path}")
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"fixture #701 \\(Home FC vs Away FC;.*No video was rendered from incomplete data",
+        ):
+            live_evidence.capture_evidence(
+                {"next_gw": 2, "api_fallback_used": False},
+                loader=loader,
+                poll_interval_seconds=0,
+                max_wait_seconds=0,
+            )
+
     def test_wait_timeout_reports_the_exact_fixture_and_stops_safely(self) -> None:
         def loader(path: str) -> Any:
             if path == "/bootstrap-static/":
