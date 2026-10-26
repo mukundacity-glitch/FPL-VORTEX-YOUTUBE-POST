@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 
 API_ROOT = "https://fantasy.premierleague.com/api"
-VERSION = "DAY3-LIVE-EVIDENCE-V2-VERIFIED-RETRY"
+VERSION = "DAY3-LIVE-EVIDENCE-V3-DATA-CHECKED-LOCK"
 RULE_SOURCE = "https://www.premierleague.com/en/news/4361991/"
 DC_THRESHOLDS = {"DEF": 10, "MID": 12, "FWD": 12}
 EVIDENCE_POLL_INTERVAL_SECONDS = 60.0
@@ -151,28 +151,62 @@ def _upcoming_event(bootstrap: dict[str, Any], cutoff: str) -> dict[str, Any]:
     return min(next_events, key=lambda event: event["deadline_time"])
 
 
-def _fixture_verified_final(fixture: dict[str, Any]) -> bool:
-    return bool(fixture.get("finished")) and bool(fixture.get("finished_provisional", True))
+def _score_locked_gameweeks(bootstrap: dict[str, Any] | None) -> set[int]:
+    """Official FPL score lock; fixture flags can lag behind the Gameweek lock."""
+    if not isinstance(bootstrap, dict):
+        return set()
+    return {
+        int(event["id"])
+        for event in bootstrap.get("events", [])
+        if event.get("id") is not None and bool(event.get("data_checked"))
+    }
 
 
-def _completed_prior_fixtures(fixtures: list[dict[str, Any]], next_gw: int) -> list[dict[str, Any]]:
+def _fixture_verified_final(
+    fixture: dict[str, Any], score_locked_gameweeks: set[int] | None = None
+) -> bool:
+    if bool(fixture.get("finished")) and bool(fixture.get("finished_provisional", True)):
+        return True
+
+    # FPL occasionally leaves fixture.finished=False after a match has ended.
+    # Only override that stale fixture flag when the same official Gameweek is
+    # score-locked (data_checked=True) and this fixture is marked provisionally
+    # finished. The live payload is still reconciled against bootstrap totals below.
+    event_id = fixture.get("event")
+    return (
+        bool(fixture.get("started"))
+        and bool(fixture.get("finished_provisional"))
+        and event_id is not None
+        and int(event_id) in (score_locked_gameweeks or set())
+    )
+
+
+def _completed_prior_fixtures(
+    fixtures: list[dict[str, Any]], next_gw: int,
+    bootstrap: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    score_locked = _score_locked_gameweeks(bootstrap)
     return [
         row for row in fixtures
         if row.get("event") is not None
         and int(row["event"]) < next_gw
-        and _fixture_verified_final(row)
+        and _fixture_verified_final(row, score_locked)
     ]
 
 
-def _unfinished_prior_fixtures(fixtures: list[dict[str, Any]], next_gw: int) -> list[dict[str, Any]]:
+def _unfinished_prior_fixtures(
+    fixtures: list[dict[str, Any]], next_gw: int,
+    bootstrap: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Started earlier-Gameweek fixtures that do not yet have verified final stats."""
+    score_locked = _score_locked_gameweeks(bootstrap)
     return sorted(
         [
             row for row in fixtures
             if row.get("event") is not None
             and int(row["event"]) < next_gw
             and row.get("started")
-            and not _fixture_verified_final(row)
+            and not _fixture_verified_final(row, score_locked)
         ],
         key=lambda row: (
             int(row.get("event") or 0),
@@ -215,8 +249,8 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
         raise RuntimeError("Duplicate official player or fixture identity")
     positions = {int(row["id"]): str(row["singular_name_short"]).replace("GKP", "GK")
                  for row in bootstrap["element_types"]}
-    completed = _completed_prior_fixtures(fixtures, next_gw)
-    unfinished = _unfinished_prior_fixtures(fixtures, next_gw)
+    completed = _completed_prior_fixtures(fixtures, next_gw, bootstrap)
+    unfinished = _unfinished_prior_fixtures(fixtures, next_gw, bootstrap)
     if unfinished:
         raise RuntimeError(
             "An earlier Gameweek fixture is not verified final: "
@@ -375,7 +409,7 @@ def capture_evidence(
                 "restart Day 3 so all projections use one Gameweek."
             )
 
-        unfinished = _unfinished_prior_fixtures(fixtures, current_next_gw)
+        unfinished = _unfinished_prior_fixtures(fixtures, current_next_gw, bootstrap)
         if unfinished:
             elapsed = time.monotonic() - wait_started
             remaining = max_wait_seconds - elapsed
@@ -394,7 +428,7 @@ def capture_evidence(
             time.sleep(delay)
             continue
 
-        completed = _completed_prior_fixtures(fixtures, current_next_gw)
+        completed = _completed_prior_fixtures(fixtures, current_next_gw, bootstrap)
         history_gws = sorted({int(row["event"]) for row in completed})
         with ThreadPoolExecutor(max_workers=6) as executor:
             responses = list(executor.map(
