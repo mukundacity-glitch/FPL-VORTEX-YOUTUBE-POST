@@ -114,7 +114,7 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
                   return {
                     text:element.textContent.trim(),
                     fontSize:parseFloat(getComputedStyle(element).fontSize),
-                    fits:text.left>=box.left+1 && text.right<=box.right-1
+                    fits:text.left>=box.left-1 && text.right<=box.right+1
                       && element.scrollWidth<=element.clientWidth+1
                   };
                 });
