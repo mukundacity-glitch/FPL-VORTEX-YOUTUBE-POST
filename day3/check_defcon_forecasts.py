@@ -55,12 +55,21 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
         '</div>'
         for index, value in enumerate(sample_values)
     )
+    fixture_labels = "".join(
+        '<div class="d3Def20Fdr"><span class="d3Def20FdrFixture">'
+        + label
+        + '</span><strong class="d3Def20FdrScore">2.8</strong></div>'
+        for label in ("Crystal Palace H", "Bournemouth A")
+    )
     page_html = (
         "<!doctype html><html><head><style>:root{--vx-dense:Arial,sans-serif}"
         ".d3DefTeamRow{width:850px;height:130px}</style>"
         + stylesheet
+        + '<style>body.vxPremium .d3Def20Fdr{width:232px;box-sizing:border-box}'
+          'body.vxPremium .d3Def20FdrFixture{font-family:"Arial Narrow",Arial,sans-serif}</style>'
         + "</head><body class=\"vxPremium\">"
         + rows
+        + fixture_labels
         + "<script>(()=>{" + fitter
         + "window.testDefconNumericFit=fitDefconTeamForecasts;})();</script>"
         + "</body></html>"
@@ -96,7 +105,31 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
                 raise AssertionError("DEFCON fitter used unreadable type below 32px")
             if result[0]["fontSize"] >= 61:
                 raise AssertionError("104.4 regression value was not resized to fit")
-            print("✅ DEFCON 20-team live forecast browser test passed, including 104.4 and 9999.9")
+
+            label_result = page.evaluate("""()=>{
+                return [...document.querySelectorAll('.d3Def20FdrFixture')].map(element=>{
+                  const box=element.getBoundingClientRect();
+                  const range=document.createRange();
+                  range.selectNodeContents(element);
+                  const text=range.getBoundingClientRect();
+                  return {
+                    text:element.textContent.trim(),
+                    fontSize:parseFloat(getComputedStyle(element).fontSize),
+                    fits:text.left>=box.left+1 && text.right<=box.right-1
+                      && element.scrollWidth<=element.clientWidth+1
+                  };
+                });
+            }""")
+            if len(label_result) != 2:
+                raise AssertionError(f"Expected 2 long fixture-label regressions; found {len(label_result)}")
+            label_overflow = [item for item in label_result if not item["fits"]]
+            if label_overflow:
+                raise AssertionError(f"DEFCON fixture label clips after fit: {label_overflow}")
+            if any(item["fontSize"] < 25 for item in label_result):
+                raise AssertionError("DEFCON fixture label fitter used unreadable type below 25px")
+            if all(item["fontSize"] >= 29 for item in label_result):
+                raise AssertionError("Long DEFCON fixture labels were not resized")
+            print("✅ DEFCON 20-team forecast and long-fixture-label browser tests passed")
         finally:
             browser.close()
 
