@@ -684,18 +684,34 @@ class DefconNumericRegressionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "expected one renderer entry point"):
             runner._patch_defcon_render_preflight("pass\n")
 
-    def test_forecast_fit_waits_until_ready_and_preserves_later_frame_seeks(self) -> None:
+    def test_forecast_fit_runs_before_premium_layout_validation(self) -> None:
         source = (
             "  const assertDefconBoardFit=()=>{};\n"
+            "  const prepare=window.vxPrepareCapture;\n"
+            "  window.vxPrepareCapture=async(...args)=>{\n"
+            "    await window.vxDefconCardsReady;\n"
+            "    const result=prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});\n"
             "    assertDefconBoardFit();\n"
             "    return result;\n"
+            "  };\n"
         )
         updated = runner._patch_defcon_team_numeric_fit(source)
+        self.assertIn("const layoutReport = window.vxLayoutReport;", updated)
+        self.assertLess(
+            updated.index("window.vxLayoutReport = (...reportArgs) =>"),
+            updated.index("result = prepare ? await prepare(...args)"),
+        )
+        self.assertLess(
+            updated.index("fitDefconTeamForecasts();"),
+            updated.index("return layoutReport(...reportArgs);"),
+        )
         self.assertIn("window.__ready === true", updated)
         self.assertIn("window.__vxDefconRenderScaleReady === true", updated)
         self.assertIn("!window.__vxDefconTeamNumbersFitted", updated)
         self.assertIn("window.__vxDefconTeamNumbersFitted = true", updated)
         self.assertIn("window.__seek(0);", updated)
+        self.assertIn("finally {", updated)
+        self.assertIn("window.vxLayoutReport = layoutReport;", updated)
 
 
 if __name__ == "__main__":
