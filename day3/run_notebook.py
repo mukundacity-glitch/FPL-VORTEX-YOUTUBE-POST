@@ -511,37 +511,28 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
     source = source.replace(function_anchor, fitter + function_anchor, 1)
 
     capture_anchor = "    const result=prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});"
-    capture_replacement = """    const layoutReport = window.vxLayoutReport;
-    if (typeof layoutReport === "function") {
-      let fittedBeforeLayoutAudit = false;
-      window.vxLayoutReport = (...reportArgs) => {
-        if (!fittedBeforeLayoutAudit &&
-            window.__ready === true &&
-            window.__vxDefconRenderScaleReady === true &&
-            typeof window.__seek === "function" &&
-            !window.__vxDefconTeamNumbersFitted) {
-          fittedBeforeLayoutAudit = true;
-          const focus = (typeof VX !== "undefined" ? VX : window.VX)?.defcon_focus;
-          if (!focus || focus.team_intro_at == null ||
-              !Number.isFinite(Number(focus.team_intro_at)))
-            throw Error("DEFCON focus timeline is incomplete before numeric fitting");
-          window.__seek(Number(focus.team_intro_at) + 0.05);
-          try {
-            fitDefconTeamForecasts();
-            window.__vxDefconTeamNumbersFitted = true;
-          } finally {
-            window.__seek(0);
-          }
-        }
-        return layoutReport(...reportArgs);
-      };
+    capture_replacement = """\
+    if (prepare && window.__ready === true &&
+        window.__vxDefconRenderScaleReady === true &&
+        typeof window.__seek === "function" &&
+        !window.__vxDefconTeamNumbersFitted) {
+      const focus = (typeof VX !== "undefined" ? VX : window.VX)?.defcon_focus;
+      if (!focus || focus.team_intro_at == null ||
+          !Number.isFinite(Number(focus.team_intro_at)))
+        throw Error("DEFCON focus timeline is incomplete before numeric fitting");
+      // Fit before entering prepare(): its QA may use a layout-report function
+      // captured in a closure, so replacing window.vxLayoutReport is too late.
+      await document.fonts.ready;
+      window.__seek(Number(focus.team_intro_at) + 0.05);
+      try {
+        fitDefconTeamForecasts();
+        window.__vxDefconTeamNumbersFitted = true;
+      } finally {
+        window.__seek(0);
+      }
     }
-    let result;
-    try {
-      result = prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});
-    } finally {
-      if (typeof layoutReport === "function") window.vxLayoutReport = layoutReport;
-    }"""
+    const result = prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});\
+"""
     if source.count(capture_anchor) != 1:
         raise RuntimeError("DEFCON numeric fit: expected one capture prepare invocation")
     qa_anchor = """    assertDefconBoardFit();

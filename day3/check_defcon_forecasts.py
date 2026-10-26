@@ -162,10 +162,12 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
                     window.__labelsAtPremiumQa = clipped;
                     return {passed: clipped.length === 0, clippedText: clipped};
                 };
+                // Mirror production nested wrappers: QA captures the original report function.
+                const capturedLayoutReport = window.vxLayoutReport;
                 window.vxPrepareCapture = async () => {
                     await window.vxPremiumReady;
                     await document.fonts.ready;
-                    const report = window.vxLayoutReport();
+                    const report = capturedLayoutReport();
                     if (!report.passed) throw Error('Premium slide QA failed: ' + JSON.stringify(report));
                     return report;
                 };
