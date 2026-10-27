@@ -325,7 +325,7 @@ def _patch_full_word_abbreviation_normalization(source: str) -> str:
         return source
 
     pattern = re.compile(
-        r"(?m)^(?P<indent>[ \\t]*)for\\s+\\(?\\s*\\w+\\s*,\\s*\\w+\\s*\\)?\\s+in\\s+_full_word_scripts\\.items\\(\\)\\s*:"
+        r"(?m)^(?P<indent>[ \t]*)for\s+\(?\s*\w+\s*,\s*\w+\s*\)?\s+in\s+_full_word_scripts\.items\(\)\s*:"
     )
     matches = list(pattern.finditer(source))
     if len(matches) > 1:
@@ -335,14 +335,14 @@ def _patch_full_word_abbreviation_normalization(source: str) -> str:
 
     def normalization_block(indent: str) -> str:
         return (
-            f"{indent}{marker}\\n"
-            f"{indent}import re as _vx_narration_re\\n"
-            f"{indent}_full_word_scripts = {{\\n"
-            f"{indent}    _vx_key: _vx_narration_re.sub(r\"\\\\bAPI\\\\b\", "
-            f"\"application programming interface\", _vx_script)\\n"
-            f"{indent}    if _vx_key == \"03_defcon\" and isinstance(_vx_script, str) else _vx_script\\n"
-            f"{indent}    for _vx_key, _vx_script in _full_word_scripts.items()\\n"
-            f"{indent}}}\\n"
+            f"{indent}{marker}\n"
+            f"{indent}import re as _vx_narration_re\n"
+            f"{indent}_full_word_scripts = {{\n"
+            f"{indent}    _vx_key: _vx_narration_re.sub(r\"\\bAPI\\b\", "
+            f"\"application programming interface\", _vx_script)\n"
+            f"{indent}    if _vx_key == \"03_defcon\" and isinstance(_vx_script, str) else _vx_script\n"
+            f"{indent}    for _vx_key, _vx_script in _full_word_scripts.items()\n"
+            f"{indent}}}\n"
         )
 
     if matches:
@@ -385,7 +385,7 @@ def _patch_full_word_abbreviation_normalization(source: str) -> str:
     assignment = assignments[0]
     lines = source.splitlines(keepends=True)
     assignment_line = lines[assignment.lineno - 1]
-    indent_match = re.match(r"^[ \\t]*", assignment_line)
+    indent_match = re.match(r"^[ \t]*", assignment_line)
     indent = indent_match.group(0) if indent_match else ""
     lines.insert(assignment.end_lineno, normalization_block(indent))
     print("✅ DEFCON narration: expanded API after script dictionary construction")
