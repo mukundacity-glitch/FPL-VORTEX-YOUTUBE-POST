@@ -109,6 +109,8 @@ The notebook's canonical FPL snapshot distinguishes `review_gw` (which may be `L
 
 The Day 3 runner validates every player's DEFCON cutoff and the complete model-history list against `review_ready_gws`. Player and team cumulative totals use that same history, and the board labels its completed cutoff explicitly. A stale/mixed player cutoff or missing model-history event still stops the run. Once GW6 becomes review-ready, DEFCON must advance to GW6. The patch does not change the model formulas or the live review's gameweek selection.
 
+Live evidence is strict by default: it waits for verified final FPL statistics and fails rather than publishing incomplete data. `DAY3_ACCEPT_PROVISIONAL`, `DAY3_ALLOW_PARTIAL_GAMEWEEK`, and `DAY3_EVIDENCE_MAX_WAIT_MINUTES` are explicit operator overrides for stale FPL fixture flags or an API outage; see [`day3/LIVE_EVIDENCE.md`](day3/LIVE_EVIDENCE.md). Cell 18's DEFCON animation anchors are rebuilt from the same full-word narration used for speech, so the live-evidence narration cannot drift from the exact-sync preflight.
+
 After applying a runner fix, start a new **Day 3** workflow on `main`. Re-running a failed job retains the old run's source commit.
 
 

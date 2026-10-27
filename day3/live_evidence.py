@@ -467,21 +467,26 @@ def capture_evidence(
     """
     Capture consistent official evidence for every earlier-Gameweek fixture.
 
-    * accept_provisional (env DAY3_ACCEPT_PROVISIONAL, default on): a started match FPL marks
-      provisionally finished is final enough; FPL can leave finished=False for days.
+    * accept_provisional (env DAY3_ACCEPT_PROVISIONAL, default off): a started match FPL marks
+      provisionally finished is final enough; FPL can leave finished=False for days. Opt in only
+      when the Gameweek's score lock is unavailable and the live/bootstrap reconciliation is enough.
     * Matches still in play are polled for up to max_wait_seconds
       (env DAY3_EVIDENCE_MAX_WAIT_MINUTES).
-    * allow_partial (env DAY3_ALLOW_PARTIAL_GAMEWEEK, default on): when the wait expires, finished
+    * allow_partial (env DAY3_ALLOW_PARTIAL_GAMEWEEK, default off): when the wait expires, finished
       matches are used and the rest are reported as pending / not yet played instead of failing.
+      This is an explicit override of the "no video from incomplete data" guard.
+
+    Strict final-statistics verification is the default so a stray environment variable cannot
+    silently publish a video built from provisional or partial evidence.
     """
     if data.get("api_fallback_used"):
         raise RuntimeError("Day 3 narration requires fresh official data; cached fallback is forbidden")
     if max_wait_seconds is None:
         max_wait_seconds = _env_wait_seconds()
     if accept_provisional is None:
-        accept_provisional = _env_flag("DAY3_ACCEPT_PROVISIONAL", True)
+        accept_provisional = _env_flag("DAY3_ACCEPT_PROVISIONAL", False)
     if allow_partial is None:
-        allow_partial = _env_flag("DAY3_ALLOW_PARTIAL_GAMEWEEK", True)
+        allow_partial = _env_flag("DAY3_ALLOW_PARTIAL_GAMEWEEK", False)
     if poll_interval_seconds < 0 or max_wait_seconds < 0:
         raise ValueError("Day 3 evidence wait intervals must be non-negative")
 

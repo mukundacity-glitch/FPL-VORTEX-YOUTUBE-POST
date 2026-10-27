@@ -41,6 +41,32 @@ No injury, coaching, tactical, xGC or press-conference claim is manufactured
 when its source is unavailable. Official FPL news is attributed as such;
 independently checked press-conference coverage is not claimed.
 
+## Live-evidence environment switches
+
+`capture_evidence` waits for verified final statistics by default. A started
+fixture that FPL leaves `finished=False` is accepted only when its Gameweek is
+score-locked (`data_checked=True`); when the wait expires without verified data,
+the run fails instead of publishing incomplete evidence. Two explicit overrides
+exist for an FPL API outage or stale fixture flags:
+
+- `DAY3_ACCEPT_PROVISIONAL=1` accepts a started, provisionally finished fixture
+  without a Gameweek score lock. Live/bootstrap reconciliation still applies.
+- `DAY3_ALLOW_PARTIAL_GAMEWEEK=1` excludes still-unverified fixtures from the
+  completed history, marks them `pending_final_stats` and continues with the
+  verified matches.
+- `DAY3_EVIDENCE_MAX_WAIT_MINUTES` overrides the default three-hour wait.
+
+Both overrides default to off. They are workflow-dispatch/operator decisions,
+not silent runtime defaults, because the strict guard is what prevents "no video
+was rendered from incomplete data" from becoming optional by accident.
+
+The runner also normalizes `DEFCON_NARRATION_CUES` with the same full-word
+narration pass as the final `03_defcon` script before Cell 18's exact-sync
+preflight. The live-evidence narration replaces the notebook's original cue
+generator, so raw cue text must not be compared against expanded player or club
+names. This keeps the five player cards and team board animation anchors tied to
+the exact spoken words.
+
 ## Publication contract
 
 The runner seals all selected, exact TTS narration exports and the final combined
