@@ -47,6 +47,54 @@ PLAYER_CARD_DESIGN_CELL_INDEX = 23
 FULL_WORD_NARRATION_CELL_INDEX = 28
 
 
+_NARRATION_TEMPLATE_FUNCTIONS = {"player_analysis", "team_analysis", "defcon_narration"}
+# These are intentional source/data identifiers, not spoken abbreviations.
+_NARRATION_SOURCE_TOKEN_ALLOWLIST = {
+    "DC", "DEF", "DEFCON", "FDR", "FPL", "GK",
+    "INJURED", "SUSPENDED", "UNAVAILABLE",
+}
+_CAPITAL_NARRATION_TOKEN = re.compile(r"\\b[A-Z]{2,}\\b")
+
+
+def _preflight_narration_templates(source: str | None = None) -> None:
+    """Fail early if a DEFCON speech-template contains an unexpanded all-caps token."""
+    if source is None:
+        source = Path(__file__).with_name("evidence_narration.py").read_text(encoding="utf-8")
+
+    tree = ast.parse(source)
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in _NARRATION_TEMPLATE_FUNCTIONS
+    }
+    missing = _NARRATION_TEMPLATE_FUNCTIONS - functions.keys()
+    if missing:
+        raise RuntimeError(
+            "Fast narration template preflight could not locate required helper(s): "
+            + ", ".join(sorted(missing))
+        )
+
+    problems: list[str] = []
+    for name, function in functions.items():
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                continue
+            for match in _CAPITAL_NARRATION_TOKEN.finditer(node.value):
+                token = match.group(0)
+                if token not in _NARRATION_SOURCE_TOKEN_ALLOWLIST:
+                    problems.append(f"{name}:{node.lineno}: {token}")
+
+    if problems:
+        details = ", ".join(sorted(set(problems)))
+        raise RuntimeError(
+            "Fast narration template preflight failed before expensive renders; "
+            f"unexpanded capital abbreviation(s): {details}"
+        )
+
+    print("✅ Fast DEFCON narration-template preflight passed before rendering.")
+
+
 def _replace_once(source: str, pattern: str, replacement: str, label: str) -> str:
     updated, count = re.subn(pattern, replacement, source, count=1, flags=re.MULTILINE)
     if count != 1:
@@ -1277,6 +1325,7 @@ def _patch_transition_titles(source: str) -> str:
 
 
 def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
+    _preflight_narration_templates()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     cells = list(_iter_code_cells(notebook))
     if len(cells) < 30:
