@@ -21,10 +21,10 @@ class FullWordNarrationAbbreviationPatchTests(unittest.TestCase):
         runner._preflight_narration_templates()
 
         bad_source = (
-            'def player_analysis():\\n    return "The API still gives a playing chance."\\n'
-            'def team_analysis():\\n    return "Recorded evidence is available."\\n'
-            'def defcon_narration():\\n    return "No tactical conclusion is assumed."\\n'
-            'def unrelated_metadata():\\n    return "API documentation is not spoken."\\n'
+            'def player_analysis():\n    return "The API still gives a playing chance."\n'
+            'def team_analysis():\n    return "Recorded evidence is available."\n'
+            'def defcon_narration():\n    return "No tactical conclusion is assumed."\n'
+            'def unrelated_metadata():\n    return "API documentation is not spoken."\n'
         )
         with self.assertRaisesRegex(RuntimeError, "API"):
             runner._preflight_narration_templates(bad_source)
