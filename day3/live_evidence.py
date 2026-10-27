@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +17,27 @@ VERSION = "DAY3-LIVE-EVIDENCE-V3-DATA-CHECKED-LOCK"
 RULE_SOURCE = "https://www.premierleague.com/en/news/4361991/"
 DC_THRESHOLDS = {"DEF": 10, "MID": 12, "FWD": 12}
 EVIDENCE_POLL_INTERVAL_SECONDS = 60.0
-EVIDENCE_MAX_WAIT_SECONDS = 3 * 60 * 60
+EVIDENCE_MAX_WAIT_SECONDS = 3 * 60 * 60  # default only; override with DAY3_EVIDENCE_MAX_WAIT_MINUTES
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _env_wait_seconds() -> float:
+    raw = os.environ.get("DAY3_EVIDENCE_MAX_WAIT_MINUTES")
+    if raw is None or not raw.strip():
+        return float(EVIDENCE_MAX_WAIT_SECONDS)
+    try:
+        minutes = float(raw)
+    except ValueError as error:
+        raise ValueError(f"DAY3_EVIDENCE_MAX_WAIT_MINUTES must be a number, got {raw!r}") from error
+    if minutes < 0 or not math.isfinite(minutes):
+        raise ValueError("DAY3_EVIDENCE_MAX_WAIT_MINUTES must be non-negative")
+    return minutes * 60
 
 
 def number(value: Any, label: str, minimum: float = 0.0) -> float:
@@ -61,16 +82,36 @@ def get_json(path: str) -> Any:
     raise RuntimeError("Official FPL request failed")
 
 
-def material_state(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]]) -> dict[str, Any]:
-    fields = ("id", "code", "team", "team_join_date", "element_type", "status", "chance_of_playing_next_round", "news",
-              "minutes", "starts", "defensive_contribution")
+def material_state(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
+                   pending_fixture_ids: Any = ()) -> dict[str, Any]:
+    pending = {int(value) for value in pending_fixture_ids}
+    volatile = {"minutes", "starts", "defensive_contribution"}
+    fields = ["id", "code", "team", "team_join_date", "element_type", "status", "chance_of_playing_next_round", "news",
+              "minutes", "starts", "defensive_contribution"]
+    if pending:
+        # Matches still in play change these totals by design; availability is still tracked.
+        fields = [name for name in fields if name not in volatile]
     fixture_fields = ("id", "event", "team_h", "team_a", "kickoff_time", "started", "finished",
                       "finished_provisional", "team_h_score", "team_a_score", "stats")
+
+    def fixture_state(row: dict[str, Any]) -> dict[str, Any]:
+        if int(row["id"]) in pending:
+            # Pending fixtures are reported as not yet final, whatever their live state.
+            return {key: row.get(key) for key in ("id", "event", "team_h", "team_a", "kickoff_time")}
+        state = {key: row.get(key) for key in fixture_fields}
+        # A started, provisionally finished match is over; FPL setting finished=True later
+        # must not invalidate evidence. Bonus/BPS are confirmed late and are never narrated.
+        state["finished"] = bool(row.get("finished")) or (
+            bool(row.get("started")) and bool(row.get("finished_provisional")))
+        state["stats"] = [item for item in (row.get("stats") or [])
+                          if not isinstance(item, dict) or item.get("identifier") not in {"bonus", "bps"}]
+        return state
+
     return {
         "players": [{key: row.get(key) for key in fields} for row in sorted(bootstrap["elements"], key=lambda row: row["id"])],
-        "fixtures": [{key: row.get(key) for key in fixture_fields} for row in sorted(fixtures, key=lambda row: row["id"])],
-        "events": [{key: row.get(key) for key in ("id", "deadline_time", "finished", "data_checked")}
-                   for row in bootstrap["events"]],
+        "fixtures": [fixture_state(row) for row in sorted(fixtures, key=lambda row: row["id"])],
+        # Event lock flags are not evidence; the underlying statistics are hashed above.
+        "events": [{key: row.get(key) for key in ("id", "deadline_time")} for row in bootstrap["events"]],
     }
 
 
@@ -163,40 +204,42 @@ def _score_locked_gameweeks(bootstrap: dict[str, Any] | None) -> set[int]:
 
 
 def _fixture_verified_final(
-    fixture: dict[str, Any], score_locked_gameweeks: set[int] | None = None
+    fixture: dict[str, Any], score_locked_gameweeks: set[int] | None = None,
+    accept_provisional: bool = False,
 ) -> bool:
     if bool(fixture.get("finished")) and bool(fixture.get("finished_provisional", True)):
         return True
 
-    # FPL occasionally leaves fixture.finished=False after a match has ended.
-    # Only override that stale fixture flag when the same official Gameweek is
-    # score-locked (data_checked=True) and this fixture is marked provisionally
-    # finished. The live payload is still reconciled against bootstrap totals below.
+    # A started match that FPL marks provisionally finished is over; FPL can leave
+    # fixture.finished=False for days. Accepting it is safe because build_evidence still
+    # reconciles every player's live minutes and DEFCON against bootstrap totals.
+    started_and_over = bool(fixture.get("started")) and bool(fixture.get("finished_provisional"))
+    if not started_and_over:
+        return False
+    if accept_provisional:
+        return True
+
+    # Otherwise only override the stale flag when the Gameweek is score-locked (data_checked).
     event_id = fixture.get("event")
-    return (
-        bool(fixture.get("started"))
-        and bool(fixture.get("finished_provisional"))
-        and event_id is not None
-        and int(event_id) in (score_locked_gameweeks or set())
-    )
+    return event_id is not None and int(event_id) in (score_locked_gameweeks or set())
 
 
 def _completed_prior_fixtures(
     fixtures: list[dict[str, Any]], next_gw: int,
-    bootstrap: dict[str, Any] | None = None,
+    bootstrap: dict[str, Any] | None = None, accept_provisional: bool = False,
 ) -> list[dict[str, Any]]:
     score_locked = _score_locked_gameweeks(bootstrap)
     return [
         row for row in fixtures
         if row.get("event") is not None
         and int(row["event"]) < next_gw
-        and _fixture_verified_final(row, score_locked)
+        and _fixture_verified_final(row, score_locked, accept_provisional)
     ]
 
 
 def _unfinished_prior_fixtures(
     fixtures: list[dict[str, Any]], next_gw: int,
-    bootstrap: dict[str, Any] | None = None,
+    bootstrap: dict[str, Any] | None = None, accept_provisional: bool = False,
 ) -> list[dict[str, Any]]:
     """Started earlier-Gameweek fixtures that do not yet have verified final stats."""
     score_locked = _score_locked_gameweeks(bootstrap)
@@ -206,7 +249,7 @@ def _unfinished_prior_fixtures(
             if row.get("event") is not None
             and int(row["event"]) < next_gw
             and row.get("started")
-            and not _fixture_verified_final(row, score_locked)
+            and not _fixture_verified_final(row, score_locked, accept_provisional)
         ],
         key=lambda row: (
             int(row.get("event") or 0),
@@ -239,7 +282,9 @@ def _describe_fixtures(fixtures: list[dict[str, Any]], bootstrap: dict[str, Any]
     return "; ".join(_describe_fixture_status(row, bootstrap) for row in fixtures)
 
 def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
-                   live_events: dict[int, dict[str, Any]], cutoff: str) -> dict[str, Any]:
+                   live_events: dict[int, dict[str, Any]], cutoff: str, *,
+                   accept_provisional: bool = False,
+                   pending_fixture_ids: Any = ()) -> dict[str, Any]:
     target = _upcoming_event(bootstrap, cutoff)
     next_gw = int(target["id"])
     teams = {int(row["id"]): row for row in bootstrap["teams"]}
@@ -249,18 +294,25 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
         raise RuntimeError("Duplicate official player or fixture identity")
     positions = {int(row["id"]): str(row["singular_name_short"]).replace("GKP", "GK")
                  for row in bootstrap["element_types"]}
-    completed = _completed_prior_fixtures(fixtures, next_gw, bootstrap)
-    unfinished = _unfinished_prior_fixtures(fixtures, next_gw, bootstrap)
-    if unfinished:
+    allowed_pending = {int(value) for value in pending_fixture_ids}
+    completed = _completed_prior_fixtures(fixtures, next_gw, bootstrap, accept_provisional)
+    unfinished = _unfinished_prior_fixtures(fixtures, next_gw, bootstrap, accept_provisional)
+    blocking = [row for row in unfinished if int(row["id"]) not in allowed_pending]
+    if blocking:
         raise RuntimeError(
             "An earlier Gameweek fixture is not verified final: "
-            + _describe_fixtures(unfinished, bootstrap)
+            + _describe_fixtures(blocking, bootstrap)
         )
+    # Started-but-unverified fixtures are reported as not yet played and excluded from history.
+    pending_rows = unfinished
+    pending_ids = {int(row["id"]) for row in pending_rows}
     history_gws = sorted({int(row["event"]) for row in completed})
     if set(history_gws) != set(live_events):
         raise RuntimeError("Official event history does not cover the completed fixture set")
     observations: dict[int, list[dict[str, Any]]] = {player_id: [] for player_id in master}
     event_totals: dict[int, list[dict[str, float]]] = {player_id: [] for player_id in master}
+    pending_minutes_total: dict[int, float] = {player_id: 0.0 for player_id in master}
+    pending_dc_total: dict[int, float] = {player_id: 0.0 for player_id in master}
     for gameweek in history_gws:
         seen: set[int] = set()
         for element in live_events[gameweek].get("elements", []):
@@ -275,6 +327,7 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
             actions = number(stats.get("defensive_contribution"), "official DC")
             starts = number(stats.get("starts"), "official starts")
             explained_minutes = 0.0
+            pending_minutes = pending_dc = 0.0
             fixture_ids: set[int] = set()
             for match in element.get("explain", []):
                 fixture_id = int(match["fixture"])
@@ -288,6 +341,11 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
                 if match_minutes > 90:
                     raise RuntimeError("Per-fixture player minutes exceed 90")
                 explained_minutes += match_minutes
+                if fixture_id in pending_ids:
+                    # Live or unverified match: keep it out of the verified history.
+                    pending_minutes += match_minutes
+                    pending_dc += number(match_stats.get("defensive_contribution", {}).get("value", 0), "pending DC")
+                    continue
                 award = number(match_stats.get("defensive_contribution", {}).get("points", 0), "DC award")
                 if award not in {0, 2}:
                     raise RuntimeError("DC award violates the verified per-fixture scoring rule")
@@ -295,7 +353,10 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
                                                 "dc_hit": int(award > 0), "gameweek": gameweek})
             if not math.isclose(explained_minutes, minutes, abs_tol=1e-6):
                 raise RuntimeError(f"Player {player_id} GW{gameweek}: minutes do not reconcile")
-            event_totals[player_id].append({"gameweek": gameweek, "minutes": minutes, "dc": actions, "starts": starts})
+            pending_minutes_total[player_id] += pending_minutes
+            pending_dc_total[player_id] += pending_dc
+            event_totals[player_id].append({"gameweek": gameweek, "minutes": minutes - pending_minutes,
+                                            "dc": actions - pending_dc, "starts": starts})
     output: dict[int, dict[str, Any]] = {}
     for player_id, player in master.items():
         team_id = int(player["team"])
@@ -304,9 +365,14 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
         totals = event_totals[player_id]
         minutes = sum(row["minutes"] for row in totals)
         actions = sum(row["dc"] for row in totals)
-        if not math.isclose(minutes, number(player.get("minutes"), "season minutes"), abs_tol=1e-6):
+        # Bootstrap may or may not already include minutes from a match that is still pending.
+        season_minutes = number(player.get("minutes"), "season minutes")
+        if not (math.isclose(minutes, season_minutes, abs_tol=1e-6)
+                or math.isclose(minutes + pending_minutes_total[player_id], season_minutes, abs_tol=1e-6)):
             raise RuntimeError(f"Player {player_id}: bootstrap/history season minutes conflict")
-        if not math.isclose(actions, number(player.get("defensive_contribution"), "season DC"), abs_tol=1e-6):
+        season_dc = number(player.get("defensive_contribution"), "season DC")
+        if not (math.isclose(actions, season_dc, abs_tol=1e-6)
+                or math.isclose(actions + pending_dc_total[player_id], season_dc, abs_tol=1e-6)):
             raise RuntimeError(f"Player {player_id}: bootstrap/history DC conflict")
         appearances = sum(row["minutes"] > 0 for row in observations[player_id])
         matches = sorted([row for row in completed if team_id in (int(row["team_h"]), int(row["team_a"]))],
@@ -357,6 +423,7 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
             "news_added": player.get("news_added"), "transferred": transferred,
             "last_dc": next((row["dc"] for row in totals if row["gameweek"] == max(history_gws)), None) if history_gws else None,
         }
+    completed_ids = {int(row["id"]) for row in completed}
     snapshot = {
         "version": VERSION, "cutoff": cutoff, "next_gw": next_gw, "deadline": target["deadline_time"],
         "history_gameweeks": history_gws, "players": output, "teams": teams,
@@ -364,12 +431,23 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
         # independently computed fixture model, and the clean-room contract forbids
         # retaining the stale team_a_difficulty/team_h_difficulty source values.
         "fixtures": [
-            {key: value for key, value in row.items()
-             if key not in {"team_a_difficulty", "team_h_difficulty"}}
+            {**{key: value for key, value in row.items()
+                if key not in {"team_a_difficulty", "team_h_difficulty"}},
+             # Completed fixtures read as finished; pending ones read as not yet played.
+             **({"finished": True} if int(row["id"]) in completed_ids else {}),
+             **({"finished": False, "pending_final_stats": True} if int(row["id"]) in pending_ids else {})}
             for row in fixtures
         ],
+        "partial_gameweek": bool(pending_ids),
+        "pending_fixture_ids": sorted(pending_ids),
+        "pending_fixtures": [
+            {"id": int(row["id"]), "event": row.get("event"), "home": teams[int(row["team_h"])]["name"],
+             "away": teams[int(row["team_a"])]["name"], "kickoff_time": row.get("kickoff_time"),
+             "started": bool(row.get("started"))}
+            for row in pending_rows
+        ],
         "event_ids": [int(event["id"]) for event in bootstrap["events"]],
-        "source_hash": digest(material_state(bootstrap, fixtures)),
+        "source_hash": digest(material_state(bootstrap, fixtures, pending_ids)),
         "sources": [API_ROOT + "/bootstrap-static/", API_ROOT + "/fixtures/"]
                    + [API_ROOT + f"/event/{gameweek}/live/" for gameweek in history_gws],
         "rules_source": RULE_SOURCE, "projection_method": "Current-season DC/90 times recency-weighted official fixture minutes; Poisson threshold per fixture. Uncalibrated independent estimate.",
@@ -382,17 +460,28 @@ def capture_evidence(
     loader: Callable[[str], Any] = get_json,
     *,
     poll_interval_seconds: float = EVIDENCE_POLL_INTERVAL_SECONDS,
-    max_wait_seconds: float = EVIDENCE_MAX_WAIT_SECONDS,
+    max_wait_seconds: float | None = None,
+    accept_provisional: bool | None = None,
+    allow_partial: bool | None = None,
 ) -> dict[str, Any]:
     """
-    Capture consistent official evidence, waiting for started fixtures to be verified final.
+    Capture consistent official evidence for every earlier-Gameweek fixture.
 
-    The notebook's initial bootstrap/fixtures can become stale while a match is live.
-    Refresh both official endpoints on every attempt; never bypass the final-statistics
-    guard or build a snapshot from a partially updated Gameweek.
+    * accept_provisional (env DAY3_ACCEPT_PROVISIONAL, default on): a started match FPL marks
+      provisionally finished is final enough; FPL can leave finished=False for days.
+    * Matches still in play are polled for up to max_wait_seconds
+      (env DAY3_EVIDENCE_MAX_WAIT_MINUTES).
+    * allow_partial (env DAY3_ALLOW_PARTIAL_GAMEWEEK, default on): when the wait expires, finished
+      matches are used and the rest are reported as pending / not yet played instead of failing.
     """
     if data.get("api_fallback_used"):
         raise RuntimeError("Day 3 narration requires fresh official data; cached fallback is forbidden")
+    if max_wait_seconds is None:
+        max_wait_seconds = _env_wait_seconds()
+    if accept_provisional is None:
+        accept_provisional = _env_flag("DAY3_ACCEPT_PROVISIONAL", True)
+    if allow_partial is None:
+        allow_partial = _env_flag("DAY3_ALLOW_PARTIAL_GAMEWEEK", True)
     if poll_interval_seconds < 0 or max_wait_seconds < 0:
         raise ValueError("Day 3 evidence wait intervals must be non-negative")
 
@@ -417,26 +506,35 @@ def capture_evidence(
                 "restart Day 3 so all projections use one Gameweek."
             )
 
-        unfinished = _unfinished_prior_fixtures(fixtures, current_next_gw, bootstrap)
+        pending_ids: set[int] = set()
+        unfinished = _unfinished_prior_fixtures(fixtures, current_next_gw, bootstrap, accept_provisional)
         if unfinished:
             elapsed = time.monotonic() - wait_started
             remaining = max_wait_seconds - elapsed
             details = _describe_fixtures(unfinished, bootstrap)
             if remaining <= 0:
-                raise RuntimeError(
-                    f"Day 3 waited {max_wait_seconds / 60:.0f} minutes, but official FPL "
-                    f"still reports earlier-Gameweek fixture(s) without verified final "
-                    f"statistics: {details}. No video was rendered from incomplete data."
+                if not allow_partial:
+                    raise RuntimeError(
+                        f"Day 3 waited {max_wait_seconds / 60:.0f} minutes, but official FPL "
+                        f"still reports earlier-Gameweek fixture(s) without verified final "
+                        f"statistics: {details}. No video was rendered from incomplete data."
+                    )
+                pending_ids = {int(row["id"]) for row in unfinished}
+                print(
+                    f"[DAY 3] PARTIAL GAMEWEEK: {len(pending_ids)} fixture(s) still have no verified "
+                    f"final statistics after {max_wait_seconds / 60:.0f} minutes and are reported as "
+                    f"not yet played; finished matches are used as normal: {details}"
                 )
-            delay = min(poll_interval_seconds, remaining)
-            print(
-                f"[DAY 3] Waiting for official final statistics ({elapsed / 60:.1f} min elapsed; "
-                f"retry in {delay:.0f}s): {details}"
-            )
-            time.sleep(delay)
-            continue
+            else:
+                delay = min(poll_interval_seconds, remaining)
+                print(
+                    f"[DAY 3] Waiting for official final statistics ({elapsed / 60:.1f} min elapsed; "
+                    f"retry in {delay:.0f}s): {details}"
+                )
+                time.sleep(delay)
+                continue
 
-        completed = _completed_prior_fixtures(fixtures, current_next_gw, bootstrap)
+        completed = _completed_prior_fixtures(fixtures, current_next_gw, bootstrap, accept_provisional)
         history_gws = sorted({int(row["event"]) for row in completed})
         with ThreadPoolExecutor(max_workers=6) as executor:
             responses = list(executor.map(
@@ -444,7 +542,8 @@ def capture_evidence(
                 history_gws,
             ))
         live_events = dict(zip(history_gws, responses))
-        snapshot = build_evidence(bootstrap, fixtures, live_events, cutoff)
+        snapshot = build_evidence(bootstrap, fixtures, live_events, cutoff,
+                                  accept_provisional=accept_provisional, pending_fixture_ids=pending_ids)
         snapshot["_event_payloads"] = live_events
         snapshot["_bootstrap"] = bootstrap
         if snapshot["next_gw"] != requested_next_gw:
@@ -539,7 +638,7 @@ def assert_snapshot_current(snapshot: dict[str, Any], loader: Callable[[str], An
         raise RuntimeError("Day 3 evidence is stale or its planning deadline has passed; regenerate")
     bootstrap = loader("/bootstrap-static/")
     fixtures = loader("/fixtures/")
-    if digest(material_state(bootstrap, fixtures)) != snapshot["source_hash"]:
+    if digest(material_state(bootstrap, fixtures, snapshot.get("pending_fixture_ids", []))) != snapshot["source_hash"]:
         raise RuntimeError("Official availability, identity or fixture evidence changed; regenerate before upload")
 
 
