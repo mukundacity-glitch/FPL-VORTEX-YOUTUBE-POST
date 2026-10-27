@@ -318,6 +318,34 @@ def _patch_pitch_reveal_audit(source: str) -> str:
     )
 
 
+def _patch_full_word_abbreviation_normalization(source: str) -> str:
+    """Expand the known DEFCON abbreviation before narration validation and speech synthesis."""
+    pattern = re.compile(
+        r"(?m)^(?P<indent>[ \t]*)for\s+\w+\s*,\s*\w+\s+in\s+_full_word_scripts\.items\(\)\s*:"
+    )
+    matches = list(pattern.finditer(source))
+    if len(matches) != 1:
+        raise RuntimeError(
+            "Full-word narration normalization: expected exactly one _full_word_scripts validation loop"
+        )
+
+    match = matches[0]
+    indent = match.group("indent")
+    normalization = (
+        f"{indent}# Expand API before the full-word audit so speech uses the spoken form.\n"
+        f"{indent}import re as _vx_narration_re\n"
+        f"{indent}_full_word_scripts = {{\n"
+        f"{indent}    _vx_key: _vx_narration_re.sub(r\"\\bAPI\\b\", "
+        f"\"application programming interface\", _vx_script)\n"
+        f"{indent}    if _vx_key == \"03_defcon\" and isinstance(_vx_script, str) else _vx_script\n"
+        f"{indent}    for _vx_key, _vx_script in _full_word_scripts.items()\n"
+        f"{indent}}}\n"
+    )
+    updated = source[:match.start()] + normalization + source[match.start():]
+    print("✅ DEFCON narration: expanded API before full-word validation")
+    return updated
+
+
 def _patch_benching_narration(source: str) -> str:
     # Clubmates can share fixtures, rounded projections and team probabilities.
     # Keep each spoken fact tied to its player instead of repeating team-only prose.
@@ -1170,6 +1198,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_pitch_reveal_audit(source)
         if cell_index == SHARED_NARRATION_CELL_INDEX:
             source = _patch_benching_narration(source)
+            source = _patch_full_word_abbreviation_normalization(source)
             source = patch_transfer_desk_audio_source(source)
         if cell_index == SCENE_DESIGN_CELL_INDEX:
             source = _patch_defcon_gameweek_contract(source)
