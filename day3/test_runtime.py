@@ -17,6 +17,18 @@ from day3.publish_private import _one_final_video
 
 
 class FullWordNarrationAbbreviationPatchTests(unittest.TestCase):
+    def test_fast_template_preflight_passes_current_templates_and_rejects_new_abbreviations(self) -> None:
+        runner._preflight_narration_templates()
+
+        bad_source = (
+            'def player_analysis():\\n    return "The API still gives a playing chance."\\n'
+            'def team_analysis():\\n    return "Recorded evidence is available."\\n'
+            'def defcon_narration():\\n    return "No tactical conclusion is assumed."\\n'
+            'def unrelated_metadata():\\n    return "API documentation is not spoken."\\n'
+        )
+        with self.assertRaisesRegex(RuntimeError, "API"):
+            runner._preflight_narration_templates(bad_source)
+
     def test_defcon_api_is_expanded_at_validation_and_other_scenes_are_unchanged(self) -> None:
         source = (
             '_full_word_scripts = {"03_defcon": "The API confirms the forecast.", "intro": "API remains."}\n'
