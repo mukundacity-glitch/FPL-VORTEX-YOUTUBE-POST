@@ -16,6 +16,32 @@ from day3.chip_plan import DAY3_CHIP_PLAN_SCENE, DAY3_PLANNED_CHIP_OPTIONS, chip
 from day3.publish_private import _one_final_video
 
 
+class FullWordNarrationAbbreviationPatchTests(unittest.TestCase):
+    def test_defcon_api_is_expanded_before_validation_and_other_scenes_are_unchanged(self) -> None:
+        source = (
+            '_full_word_scripts = {"03_defcon": "The API confirms the forecast.", "intro": "API remains."}\n'
+            'for key, script in _full_word_scripts.items():\n'
+            '    pass\n'
+        )
+        patched = runner._patch_full_word_abbreviation_normalization(source)
+        namespace: dict[str, Any] = {}
+        exec(compile(patched, "<narration-abbreviation-patch-test>", "exec"), namespace)
+
+        self.assertLess(
+            patched.index("import re as _vx_narration_re"),
+            patched.index("for key, script in _full_word_scripts.items():"),
+        )
+        self.assertEqual(
+            namespace["_full_word_scripts"]["03_defcon"],
+            "The application programming interface confirms the forecast.",
+        )
+        self.assertEqual(namespace["_full_word_scripts"]["intro"], "API remains.")
+
+    def test_missing_validation_loop_fails_clearly(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "expected exactly one _full_word_scripts validation loop"):
+            runner._patch_full_word_abbreviation_normalization("_full_word_scripts = {}\n")
+
+
 class LiveEvidencePollingTests(unittest.TestCase):
     def setUp(self) -> None:
         now = datetime.now(timezone.utc)
