@@ -319,7 +319,49 @@ def _patch_pitch_reveal_audit(source: str) -> str:
 
 
 def _patch_full_word_abbreviation_normalization(source: str) -> str:
-    """Normalize DEFCON narration at the exact value used by the full-word audit."""
+    """Normalize DEFCON narration at the strict full-word audit boundary."""
+    audit_marker = "# Normalize DEFCON narration immediately before the full-word audit."
+    audit_pattern = re.compile(
+        r"(?m)^(?P<indent>[ \t]*)_full_word_errors\s*=\s*\[\s*\]\s*$"
+    )
+    audit_matches = list(audit_pattern.finditer(source))
+    if len(audit_matches) > 1:
+        raise RuntimeError(
+            "Full-word narration normalization: expected one audit error-list initializer, "
+            f"found {len(audit_matches)}"
+        )
+
+    # The live notebook may contain an old expansion marker or may rebuild/overwrite
+    # its narration map after that old patch ran. Normalize at the actual audit
+    # boundary so the strict validator sees the spoken form, not an earlier snapshot.
+    if audit_matches:
+        audit_match = audit_matches[0]
+        existing_marker = source.rfind(audit_marker, 0, audit_match.start())
+        if existing_marker >= 0:
+            existing_block = source[existing_marker:audit_match.start()]
+            assignment_count = len(
+                re.findall(r"(?m)^[ \t]*_full_word_scripts\s*=", existing_block)
+            )
+            if "import re as _vx_preflight_re" in existing_block and assignment_count == 1:
+                return source
+
+        indent = audit_match.group("indent")
+        normalization_block = (
+            f"{indent}{audit_marker}\n"
+            f"{indent}import re as _vx_preflight_re\n"
+            f"{indent}_full_word_scripts = {{\n"
+            f"{indent}    _vx_preflight_key: _vx_preflight_re.sub(r\"\\bAPI\\b\", "
+            f"\"application programming interface\", _vx_preflight_script)\n"
+            f"{indent}    if _vx_preflight_key == \"03_defcon\" and isinstance(_vx_preflight_script, str) "
+            f"else _vx_preflight_script\n"
+            f"{indent}    for _vx_preflight_key, _vx_preflight_script in _full_word_scripts.items()\n"
+            f"{indent}}}\n"
+        )
+        updated = source[:audit_match.start()] + normalization_block + source[audit_match.start():]
+        print("✅ DEFCON narration: normalized API immediately before the strict full-word audit")
+        return updated
+
+    # Fallback for notebook revisions whose validation loop is directly visible.
     loop_marker = "# Normalize the exact DEFCON script being checked and retained for speech."
     pattern = re.compile(
         r"(?m)^(?P<indent>[ \t]*)for\s+\(?\s*(?P<key>\w+)\s*,\s*(?P<script>\w+)\s*\)?\s+in\s+_full_word_scripts\.items\(\)\s*:\s*$"
@@ -340,8 +382,6 @@ def _patch_full_word_abbreviation_normalization(source: str) -> str:
         child_indent = indent + ("\t" if indent.endswith("\t") else "    ")
         key_name = match.group("key")
         script_name = match.group("script")
-        # Normalize the exact value used by validation, and update the dictionary
-        # in place so the retained scripts alias also gets the spoken form.
         block = (
             f"{child_indent}{loop_marker}\n"
             f"{child_indent}import re as _vx_full_word_re\n"

@@ -42,6 +42,33 @@ class FullWordNarrationAbbreviationPatchTests(unittest.TestCase):
         self.assertEqual(namespace["seen"]["intro"], "API remains.")
         self.assertEqual(namespace["_full_word_scripts"]["intro"], "API remains.")
 
+    def test_normalizes_after_late_dictionary_overwrite_before_audit_even_without_matching_loop(self) -> None:
+        source = (
+            '_full_word_scripts = {"03_defcon": "Earlier API", "intro": "API remains."}\n'
+            '# Expand API before the full-word audit so speech uses the spoken form.\n'
+            '_full_word_scripts = {"03_defcon": "Final API confirms the forecast.", "intro": "API remains."}\n'
+            '_full_word_errors = []\n'
+            'audit_text = _full_word_scripts["03_defcon"]\n'
+            'scripts = _full_word_scripts\n'
+        )
+        patched = runner._patch_full_word_abbreviation_normalization(source)
+        namespace: dict[str, Any] = {}
+        exec(compile(patched, "<narration-audit-boundary-test>", "exec"), namespace)
+
+        self.assertLess(
+            patched.index("# Normalize DEFCON narration immediately before the full-word audit."),
+            patched.index("_full_word_errors = []"),
+        )
+        self.assertEqual(
+            namespace["audit_text"],
+            "Final application programming interface confirms the forecast.",
+        )
+        self.assertEqual(
+            namespace["scripts"]["03_defcon"],
+            "Final application programming interface confirms the forecast.",
+        )
+        self.assertEqual(namespace["scripts"]["intro"], "API remains.")
+
     def test_stale_marker_cannot_skip_normalization_after_script_dictionary_is_overwritten(self) -> None:
         # This models the production failure: the prior patch marker already exists,
         # but a later dictionary assignment restores API after that earlier patch ran.
