@@ -319,43 +319,56 @@ def _patch_pitch_reveal_audit(source: str) -> str:
 
 
 def _patch_full_word_abbreviation_normalization(source: str) -> str:
-    """Expand API in DEFCON narration without assuming one notebook validation-loop shape."""
-    marker = "# Expand API before the full-word audit so speech uses the spoken form."
-    if marker in source:
-        return source
-
+    """Normalize DEFCON narration at the exact value used by the full-word audit."""
+    loop_marker = "# Normalize the exact DEFCON script being checked and retained for speech."
     pattern = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)for\s+\(?\s*\w+\s*,\s*\w+\s*\)?\s+in\s+_full_word_scripts\.items\(\)\s*:"
+        r"(?m)^(?P<indent>[ \t]*)for\s+\(?\s*(?P<key>\w+)\s*,\s*(?P<script>\w+)\s*\)?\s+in\s+_full_word_scripts\.items\(\)\s*:\s*$"
     )
     matches = list(pattern.finditer(source))
     if len(matches) > 1:
         raise RuntimeError(
-            f"Full-word narration normalization: expected at most one validation loop, found {len(matches)}"
-        )
-
-    def normalization_block(indent: str) -> str:
-        return (
-            f"{indent}{marker}\n"
-            f"{indent}import re as _vx_narration_re\n"
-            f"{indent}_full_word_scripts = {{\n"
-            f"{indent}    _vx_key: _vx_narration_re.sub(r\"\\bAPI\\b\", "
-            f"\"application programming interface\", _vx_script)\n"
-            f"{indent}    if _vx_key == \"03_defcon\" and isinstance(_vx_script, str) else _vx_script\n"
-            f"{indent}    for _vx_key, _vx_script in _full_word_scripts.items()\n"
-            f"{indent}}}\n"
+            "Full-word narration normalization: expected at most one validation loop, "
+            f"found {len(matches)}"
         )
 
     if matches:
         match = matches[0]
+        if loop_marker in source:
+            return source
+
         indent = match.group("indent")
-        updated = source[:match.start()] + normalization_block(indent) + source[match.start():]
-        print("✅ DEFCON narration: expanded API before full-word validation")
+        child_indent = indent + ("\t" if indent.endswith("\t") else "    ")
+        key_name = match.group("key")
+        script_name = match.group("script")
+        # Normalize the exact value used by validation, and update the dictionary
+        # in place so the retained scripts alias also gets the spoken form.
+        block = (
+            f"{child_indent}{loop_marker}\n"
+            f"{child_indent}import re as _vx_full_word_re\n"
+            f"{child_indent}if {key_name} == \"03_defcon\" and isinstance({script_name}, str):\n"
+            f"{child_indent}    {script_name} = _vx_full_word_re.sub(r\"\\bAPI\\b\", "
+            f"\"application programming interface\", {script_name})\n"
+            f"{child_indent}    _full_word_scripts[{key_name}] = {script_name}\n"
+        )
+        insert_at = match.end()
+        if source.startswith("\r\n", insert_at):
+            insert_at += 2
+        elif source.startswith("\n", insert_at):
+            insert_at += 1
+        else:
+            block = "\n" + block
+        updated = source[:insert_at] + block + source[insert_at:]
+        print("✅ DEFCON narration: normalized API at the full-word validation boundary")
         return updated
 
-    # Some Drive notebook revisions construct the dictionary but validate it via a
-    # helper instead of an inline for-loop. Normalize immediately after assignment.
+    # A small number of notebook revisions consume the dictionary without an inline
+    # validation loop. In that shape, normalize immediately after its construction.
     if "_full_word_scripts" not in source:
         print("ℹ️ Skipping legacy DEFCON API hook: this notebook revision uses a different narration structure")
+        return source
+
+    fallback_marker = "# Expand API after script dictionary construction before narration consumption."
+    if fallback_marker in source:
         return source
 
     try:
@@ -387,11 +400,19 @@ def _patch_full_word_abbreviation_normalization(source: str) -> str:
     assignment_line = lines[assignment.lineno - 1]
     indent_match = re.match(r"^[ \t]*", assignment_line)
     indent = indent_match.group(0) if indent_match else ""
-    lines.insert(assignment.end_lineno, normalization_block(indent))
+    normalization_block = (
+        f"{indent}{fallback_marker}\n"
+        f"{indent}import re as _vx_narration_re\n"
+        f"{indent}_full_word_scripts = {{\n"
+        f"{indent}    _vx_key: _vx_narration_re.sub(r\"\\bAPI\\b\", "
+        f"\"application programming interface\", _vx_script)\n"
+        f"{indent}    if _vx_key == \"03_defcon\" and isinstance(_vx_script, str) else _vx_script\n"
+        f"{indent}    for _vx_key, _vx_script in _full_word_scripts.items()\n"
+        f"{indent}}}\n"
+    )
+    lines.insert(assignment.end_lineno, normalization_block)
     print("✅ DEFCON narration: expanded API after script dictionary construction")
     return "".join(lines)
-
-
 def _patch_benching_narration(source: str) -> str:
     # Clubmates can share fixtures, rounded projections and team probabilities.
     # Keep each spoken fact tied to its player instead of repeating team-only prose.

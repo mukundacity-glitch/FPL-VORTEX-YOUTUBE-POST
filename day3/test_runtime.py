@@ -17,25 +17,59 @@ from day3.publish_private import _one_final_video
 
 
 class FullWordNarrationAbbreviationPatchTests(unittest.TestCase):
-    def test_defcon_api_is_expanded_before_validation_and_other_scenes_are_unchanged(self) -> None:
+    def test_defcon_api_is_expanded_at_validation_and_other_scenes_are_unchanged(self) -> None:
         source = (
             '_full_word_scripts = {"03_defcon": "The API confirms the forecast.", "intro": "API remains."}\n'
+            'seen = {}\n'
             'for key, script in _full_word_scripts.items():\n'
-            '    pass\n'
+            '    seen[key] = script\n'
         )
         patched = runner._patch_full_word_abbreviation_normalization(source)
         namespace: dict[str, Any] = {}
         exec(compile(patched, "<narration-abbreviation-patch-test>", "exec"), namespace)
 
-        self.assertLess(
-            patched.index("import re as _vx_narration_re"),
-            patched.index("for key, script in _full_word_scripts.items():"),
+        loop_marker = "# Normalize the exact DEFCON script being checked and retained for speech."
+        self.assertLess(patched.index("for key, script in _full_word_scripts.items():"), patched.index(loop_marker))
+        self.assertLess(patched.index(loop_marker), patched.index("seen[key] = script"))
+        self.assertEqual(
+            namespace["seen"]["03_defcon"],
+            "The application programming interface confirms the forecast.",
         )
         self.assertEqual(
             namespace["_full_word_scripts"]["03_defcon"],
             "The application programming interface confirms the forecast.",
         )
+        self.assertEqual(namespace["seen"]["intro"], "API remains.")
         self.assertEqual(namespace["_full_word_scripts"]["intro"], "API remains.")
+
+    def test_stale_marker_cannot_skip_normalization_after_script_dictionary_is_overwritten(self) -> None:
+        # This models the production failure: the prior patch marker already exists,
+        # but a later dictionary assignment restores API after that earlier patch ran.
+        source = (
+            '_full_word_scripts = {"03_defcon": "Earlier API"}\n'
+            '# Expand API before the full-word audit so speech uses the spoken form.\n'
+            'import re as _vx_narration_re\n'
+            '_full_word_scripts = {_key: _vx_narration_re.sub(r"\\bAPI\\b", "application programming interface", _value) '
+            'if _key == "03_defcon" else _value for _key, _value in _full_word_scripts.items()}\n'
+            '_full_word_scripts = {"03_defcon": "Final API confirms the forecast.", "intro": "API remains."}\n'
+            'seen = {}\n'
+            'for key, script in _full_word_scripts.items():\n'
+            '    seen[key] = script\n'
+            'scripts = _full_word_scripts\n'
+        )
+        patched = runner._patch_full_word_abbreviation_normalization(source)
+        namespace: dict[str, Any] = {}
+        exec(compile(patched, "<narration-abbreviation-stale-marker-test>", "exec"), namespace)
+
+        self.assertEqual(
+            namespace["seen"]["03_defcon"],
+            "Final application programming interface confirms the forecast.",
+        )
+        self.assertEqual(
+            namespace["scripts"]["03_defcon"],
+            "Final application programming interface confirms the forecast.",
+        )
+        self.assertEqual(namespace["scripts"]["intro"], "API remains.")
 
     def test_assignment_fallback_handles_validation_without_inline_loop(self) -> None:
         source = (
