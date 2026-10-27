@@ -87,7 +87,7 @@ def player_analysis(snapshot: dict[str, Any], player_id: int, rank: int,
             parts.append(f"{name}'s next-round availability is zero in that snapshot, so the estimate gives "
                          f"{name} no playing time. Avoid a new transfer in until an official update clears {name}.")
         else:
-            parts.append(f"The API still gives {name} a {100 * player['availability']:.0f} percent playing chance. "
+            parts.append(f"The latest availability estimate still gives {name} a {100 * player['availability']:.0f} percent playing chance. "
                          f"That is uncertainty for {name}, not a confirmed absence for every fixture; "
                          f"wait for a clearer update before buying.")
     elif projection["actions"] is None:
@@ -115,7 +115,7 @@ def player_analysis(snapshot: dict[str, Any], player_id: int, rank: int,
             elif player["recent_minutes"][-1] < 60:
                 parts.append(f"{name}'s latest appearance was {player['recent_minutes'][-1]:.0f} minutes, below the "
                              f"clean-sheet minutes threshold. Check {name}'s starting place before spending a "
-                             f"transfer; the API does not tell us why {name}'s minutes fell.")
+                             f"transfer; the recorded data does not tell us why {name}'s minutes fell.")
             elif hit_rate >= 0.5:
                 parts.append(f"At {player['price']:.1f} million, {name}'s contribution points have arrived in at least half his appearances, supporting a place on a value shortlist for this scoring route rather than a prediction of attacking returns.")
             else:
@@ -185,7 +185,7 @@ def defcon_narration(namespace: dict[str, Any]) -> str:
         individuals.append({"player_id": int(row["player_id"]), "anchor": cue})
         parts.append(text)
     team_intro = "Now let's examine every club on the defensive-workload board."
-    parts += [team_intro, "An action total does not measure chances prevented. The API does not provide a tactical explanation for every change, so I will distinguish the recorded outcomes from possible causes."]
+    parts += [team_intro, "An action total does not measure chances prevented. The recorded evidence does not provide a tactical explanation for every change, so I will distinguish measured outcomes from possible causes."]
     top_cues, bottom_cues = [], []
     bottom_intro = "Now to the clubs with the lowest recorded defensive workload."
     model = namespace.get("PROJECTED_GOALS_PAYLOAD", {}).get("teams", {})
