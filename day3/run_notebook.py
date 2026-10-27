@@ -53,7 +53,7 @@ _NARRATION_SOURCE_TOKEN_ALLOWLIST = {
     "DC", "DEF", "DEFCON", "FDR", "FPL", "GK",
     "INJURED", "SUSPENDED", "UNAVAILABLE",
 }
-_CAPITAL_NARRATION_TOKEN = re.compile(r"\\b[A-Z]{2,}\\b")
+_CAPITAL_NARRATION_TOKEN = re.compile(r"\b[A-Z]{2,}\b")
 
 
 def _preflight_narration_templates(source: str | None = None) -> None:
