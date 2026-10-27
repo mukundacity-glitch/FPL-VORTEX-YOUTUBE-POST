@@ -473,6 +473,16 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
 
     // Live club names can be wider than the fixture chip when paired with its FDR
     // score. Fit the label instead of truncating the name or letting it clip.
+    // Fixture names can change after the first seek, after this fitter has run.
+    // Keep a persistent compact type rule so later live labels cannot reintroduce clipping.
+    const fixtureStyleId='vx-defcon-fixture-label-fit';
+    let fixtureStyle=document.getElementById(fixtureStyleId);
+    if(!fixtureStyle){
+      fixtureStyle=document.createElement('style');
+      fixtureStyle.id=fixtureStyleId;
+      fixtureStyle.textContent='body.vxPremium .d3Def20FdrFixture{font-size:25px!important;}';
+      document.head.appendChild(fixtureStyle);
+    }
     const fixtureLabels=[...document.querySelectorAll('.d3Def20FdrFixture')];
     for(const label of fixtureLabels){
       const initialBox=label.getBoundingClientRect();
@@ -506,6 +516,10 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
       if(!fits())
         throw Error('DEFCON fixture label fit regression: '+String(label.textContent||'').trim());
     }
+    // Reset labels to the persistent 25px rule; the gameweek fixture list is live
+    // and may be repopulated after the initial fit, so per-node sizes are not stable.
+    for(const label of document.querySelectorAll('.d3Def20FdrFixture'))
+      label.style.setProperty('font-size','25px','important');
   };
 """
     source = source.replace(function_anchor, fitter + function_anchor, 1)
