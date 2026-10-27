@@ -1,5 +1,8 @@
 name: Day 3 preflight (temporary)
 on:
+  push:
+    branches:
+      - arena/88db8f2e-fpl-vortex-youtube-post
   workflow_dispatch:
 
 permissions:
