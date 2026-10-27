@@ -37,9 +37,28 @@ class FullWordNarrationAbbreviationPatchTests(unittest.TestCase):
         )
         self.assertEqual(namespace["_full_word_scripts"]["intro"], "API remains.")
 
-    def test_missing_validation_loop_fails_clearly(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "expected exactly one _full_word_scripts validation loop"):
-            runner._patch_full_word_abbreviation_normalization("_full_word_scripts = {}\n")
+    def test_assignment_fallback_handles_validation_without_inline_loop(self) -> None:
+        source = (
+            '_full_word_scripts = {"03_defcon": "The API confirms the forecast.", "intro": "API remains."}\n'
+            'consume(_full_word_scripts)\n'
+        )
+        patched = runner._patch_full_word_abbreviation_normalization(source)
+        namespace: dict[str, Any] = {"consume": lambda value: None}
+        exec(compile(patched, "<narration-abbreviation-fallback-test>", "exec"), namespace)
+
+        self.assertLess(
+            patched.index("import re as _vx_narration_re"),
+            patched.index("consume(_full_word_scripts)"),
+        )
+        self.assertEqual(
+            namespace["_full_word_scripts"]["03_defcon"],
+            "The application programming interface confirms the forecast.",
+        )
+        self.assertEqual(namespace["_full_word_scripts"]["intro"], "API remains.")
+
+    def test_newer_narration_structure_does_not_fail_on_legacy_hook(self) -> None:
+        source = 'def narrate():\n    return "Narration is assembled by a helper."\n'
+        self.assertEqual(runner._patch_full_word_abbreviation_normalization(source), source)
 
 
 class LiveEvidencePollingTests(unittest.TestCase):
