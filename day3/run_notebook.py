@@ -437,6 +437,14 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
         raise RuntimeError("DEFCON numeric fit: expected one team-board QA function")
 
     fitter = r"""
+  // Install this before the guarded fit pass; fixture labels may be populated later.
+  const fixtureStyleId='vx-defcon-fixture-label-fit';
+  if(!document.getElementById(fixtureStyleId)){
+    const fixtureStyle=document.createElement('style');
+    fixtureStyle.id=fixtureStyleId;
+    fixtureStyle.textContent='body.vxPremium .d3Def20FdrFixture{font-size:25px!important;}';
+    document.head.appendChild(fixtureStyle);
+  }
   const fitDefconTeamForecasts=()=>{
     const numbers=[...document.querySelectorAll('.d3DefTeamForecast')];
     if(numbers.length!==20) throw Error('DEFCON requires 20 team forecasts before capture');
@@ -473,16 +481,6 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
 
     // Live club names can be wider than the fixture chip when paired with its FDR
     // score. Fit the label instead of truncating the name or letting it clip.
-    // Fixture names can change after the first seek, after this fitter has run.
-    // Keep a persistent compact type rule so later live labels cannot reintroduce clipping.
-    const fixtureStyleId='vx-defcon-fixture-label-fit';
-    let fixtureStyle=document.getElementById(fixtureStyleId);
-    if(!fixtureStyle){
-      fixtureStyle=document.createElement('style');
-      fixtureStyle.id=fixtureStyleId;
-      fixtureStyle.textContent='body.vxPremium .d3Def20FdrFixture{font-size:25px!important;}';
-      document.head.appendChild(fixtureStyle);
-    }
     const fixtureLabels=[...document.querySelectorAll('.d3Def20FdrFixture')];
     for(const label of fixtureLabels){
       const initialBox=label.getBoundingClientRect();
