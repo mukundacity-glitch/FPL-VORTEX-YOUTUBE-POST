@@ -1,6 +1,7 @@
 """Short Day 1 production: results opening followed by the existing squad review."""
 from pathlib import Path
-import json, subprocess
+import json, math, subprocess
+from fractions import Fraction
 from html import escape
 from .day1_results import build_results
 
@@ -135,6 +136,73 @@ def results_html(ns,gw,rows,cards):
     return '<!doctype html><html><head><meta charset="utf-8">'+css+'<style>'+str(ns.get('PL_BUG_CSS',''))+'.plBug{top:35px;right:70px}</style>'+ns['PLAYER_CARD_CSS']+'</head><body><div id="stage"><header><div>'+str(ns['vortex_logo_html'])+'</div><span class="brand">FPL VORTEX</span><span class="pl">PREMIER LEAGUE<br>RESULTS REVIEW</span></header><h1>GAMEWEEK <em>'+f'{gw:02}'+'</em></h1><div class="sub">FULL-TIME RESULTS • '+str(ns.get('EPL_SEASON',''))+'/'+str(int(ns.get('EPL_SEASON',2026))+1)[-2:]+'</div><main id="board">'+''.join(tiles)+'</main><div id="hero"></div><div id="caption"></div><footer>▶ @FPLVORTEX　 |　𝕏 @FPLVORTEXM　 |　DATA • DECISION • POINT • RANK CLIMB</footer></div>'+ns['PLAYER_CARD_JS']+js+'</body></html>'
 
 
+def _concat_quote(path):
+    return str(Path(path).resolve()).replace("'", "'\\''")
+
+
+def _validate_results_video(path, fps, expected_duration):
+    probe = subprocess.run(
+        ['ffprobe', '-v', 'error', '-show_streams', '-of', 'json', str(path)],
+        capture_output=True, text=True, check=True,
+    )
+    streams = json.loads(probe.stdout)['streams']
+    video = next((s for s in streams if s.get('codec_type') == 'video'), None)
+    audio = next((s for s in streams if s.get('codec_type') == 'audio'), None)
+    if video is None or audio is None:
+        raise RuntimeError(f'Results video is missing video or narration: {path}')
+    rate = float(Fraction(video.get('avg_frame_rate') or '0/1'))
+    if abs(rate - fps) > .05:
+        raise RuntimeError(f'Results video: {rate:.3f}fps instead of {fps}fps: {path}')
+    if video.get('codec_name') != 'h264' or audio.get('codec_name') != 'aac':
+        raise RuntimeError(f'Results video requires H.264 video and AAC narration: {path}')
+    # A sparse clip can report 24fps while its video ends seconds before its
+    # audio. Check both stream lengths, including after the clips are joined.
+    for stream in (video, audio):
+        duration = float(stream.get('duration') or 0)
+        if not math.isfinite(duration) or abs(duration - expected_duration) > 2 / fps:
+            raise RuntimeError(
+                f'Results {stream["codec_type"]} duration {duration:.3f}s '
+                f'instead of {expected_duration:.3f}s: {path}'
+            )
+
+
+def _encode_results_segment(images, audio, clip, seconds, fps):
+    # Round up so the frame grid contains all narration plus its existing tail.
+    duration = math.ceil(seconds * fps) / fps
+    listing = Path(clip).with_suffix('.ffconcat')
+    listing.write_text(
+        ''.join(
+            f"file '{_concat_quote(image)}'\n"
+            f"duration {(.08 if index < 3 else max(.08, duration - .24)):.9f}\n"
+            for index, image in enumerate(images)
+        ) + f"file '{_concat_quote(images[-1])}'\n"
+    )
+    subprocess.run(
+        ['ffmpeg', '-y', '-loglevel', 'error',
+         '-f', 'concat', '-safe', '0', '-i', str(listing), '-i', str(audio),
+         '-vf', f'fps={fps}:round=near,format=yuv420p',
+         '-fps_mode', 'cfr', '-r', str(fps),
+         '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '20',
+         '-af', 'aresample=48000:async=1:first_pts=0,apad',
+         '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+         '-t', f'{duration:.9f}', str(clip)],
+        check=True,
+    )
+    _validate_results_video(clip, fps, duration)
+    return duration
+
+
+def _join_results_segments(clips, output, fps, duration):
+    listing = Path(clips[0]).parent / 'concat.txt'
+    listing.write_text(''.join(f"file '{_concat_quote(p)}'\n" for p in clips))
+    subprocess.run(
+        ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0',
+         '-i', str(listing), '-c', 'copy', '-movflags', '+faststart', str(output)],
+        check=True,
+    )
+    _validate_results_video(output, fps, duration)
+
+
 async def render_results(ns):
     from playwright.async_api import async_playwright
     gw,rows,segments=plan(ns['GW_REVIEW'])
@@ -146,6 +214,7 @@ async def render_results(ns):
     work=Path(ns['VIDEO_WORK_DIR'])/'premium_results';work.mkdir(parents=True,exist_ok=True)
     html=work/'results.html';html.write_text(results_html(ns,gw,rows,cards))
     output=Path(ns['MP4_DIR'])/'00_intro.mp4'; clips=[];total=0
+    fps=int(ns.get('VIDEO_FPS',24))
     async with async_playwright() as pw:
         browser=await pw.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
         page=await browser.new_page(viewport={'width':3840,'height':2160},device_scale_factor=1)
@@ -155,22 +224,20 @@ async def render_results(ns):
             mood='intro' if i==0 else 'warning' if 'flag' in s['text'] or 'cards' in s['text'] else 'analysis' if s['player'] else 'key_stat'
             profile=ns['vx_tts_profile'](mood)
             audio=work/f'{i:03}.mp3';payload,words=await ns['vx_edge_tts_stream'](s['text'],profile);audio.write_bytes(payload)
-            seconds=ns['vx_media_duration'](audio)+.08;total+=seconds
+            seconds=ns['vx_media_duration'](audio)+.08
             images=[];pid=int(s['player']['id']) if s['player'] else None
             for k,progress in enumerate((.15,.45,.8,1.0)):
                 await page.evaluate('(v)=>showFrame(v.row,v.pid,v.p,v.text)',{'row':s['row'],'pid':pid,'p':progress,'text':s['text']})
                 await page.evaluate('()=>{document.querySelectorAll("#hero img").forEach(i=>i.loading="eager")}')
                 await page.evaluate('()=>Promise.all(Array.from(document.images).map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r;setTimeout(r,4000)})))')
                 path=work/f'{i:03}-{k}.png';await page.screenshot(path=str(path));images.append(path)
-            listing=work/f'{i:03}.txt';listing.write_text(''.join(f"file '{p}'\nduration {(.08 if j<3 else max(.08,seconds-.24)):.6f}\n" for j,p in enumerate(images))+f"file '{images[-1]}'\n")
             clip=work/f'{i:03}.mp4'
-            subprocess.run(['ffmpeg','-y','-loglevel','error','-f','concat','-safe','0','-i',str(listing),'-i',str(audio),'-t',str(seconds),'-r','24','-vf','format=yuv420p','-c:v','libx264','-preset','ultrafast','-crf','20','-c:a','aac','-b:a','192k',str(clip)],check=True)
+            seconds=_encode_results_segment(images,audio,clip,seconds,fps);total+=seconds
             s['tts_mood']=mood;s['tts_profile']=profile;s['duration']=seconds;clips.append(clip)
         await page.evaluate('(v)=>showFrame(v,null,1,"")',len(rows)-1)
         await page.screenshot(path=str(Path(ns['SLIDE_DIR'])/'intro_scene_4k.png'))
         await browser.close()
-    listing=work/'concat.txt';listing.write_text(''.join(f"file '{p}'\n" for p in clips))
-    subprocess.run(['ffmpeg','-y','-loglevel','error','-f','concat','-safe','0','-i',str(listing),'-c','copy','-movflags','+faststart',str(output)],check=True)
+    _join_results_segments(clips,output,fps,total)
     (Path(ns['DATA_DIR'])/'day1_results_script.json').write_text(json.dumps({'gw':gw,'profiles':ns['MOODS'],'segments':segments},indent=2))
 
 
