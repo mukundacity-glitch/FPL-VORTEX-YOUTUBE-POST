@@ -7,6 +7,12 @@ from .day1_results import build_results
 
 
 def patch_cell(cell):
+    if '# CELL 7A —' in cell:
+        return cell[cell.index('# FPL VORTEX — SHARED PRODUCTION HELPERS'):]
+    if '# CELL 9 —' in cell:
+        return cell[cell.index('# Bootstrap + fixtures come ONLY'):]
+    if any(label in cell for label in ('# CELL 5 —', '# CELL 6 —', '# CELL 7 —', '# CELL 8 —', '# CELL 12 —', '# CELL 13 —', '# CELL 13A —', '# CELL 13B —', '# CELL 13C —', '# CELL 13D —', '# CELL 13E —', '# CELL 13F —')):
+        return "print('Day 1: forecast stage removed from retrospective review')"
     if 'SLIDE_01_INTRO = True' in cell:
         for name in ('SLIDE_03_FDR','SLIDE_04_PROJECTED_GOALS','SLIDE_05_CLEAN_SHEETS','SLIDE_06_OUTRO'):
             cell = cell.replace(name+' = True', name+' = False')
