@@ -43,8 +43,13 @@ by position and name. `squad_digest` is a short hash of the sorted 15 IDs.
    [`refresh-day3-choices.yml`](../.github/workflows/refresh-day3-choices.yml)
    runs it every three hours on the default branch and commits only when the 15
    players change, so the OUT choices the user sees are the live squad. It can
-   also be dispatched manually with an optional entry ID. It never touches the
-   IN lists, which are the full player pool rather than team-specific choices.
+   also be dispatched manually with an optional entry ID. It also has a
+   `push` trigger scoped to its own file and the two generator modules: that
+   registers the workflow with GitHub immediately (schedule-only workflows are
+   not registered until their first tick) and re-validates the generator on
+   every edit. `day-3.yml` is deliberately excluded from those paths so a
+   refresh commit cannot trigger another refresh. It never touches the IN
+   lists, which are the full player pool rather than team-specific choices.
 
 2. **Every run re-validates against the API.** The `Resolve live FPL squad and
    verify Player OUT picks` step in `day-3.yml` runs before system dependencies
