@@ -6,11 +6,15 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-SOURCE = Path(__file__).resolve().parents[1] / "1_final_day1.py"
+ROOT = Path(__file__).resolve().parents[1] / "day1"
+SOURCE = ROOT / "review_narration.py"
+
+def source_text():
+    return "\n".join((ROOT / name).read_text() for name in ("fpl_data.py", "review_snapshot.py", "review_narration.py", "review_animation.py"))
 
 
 def review_functions() -> dict[str, Any]:
-    tree = ast.parse(SOURCE.read_text(encoding="utf-8"), filename=str(SOURCE))
+    tree = ast.parse(source_text(), filename=str(SOURCE))
     names = {
         "_review_fixture_state",
         "fixture_for",
@@ -136,13 +140,13 @@ class Day1ReviewContractTests(unittest.TestCase):
         self.assertAlmostEqual(timeline["narration_end"], 9.0)
 
     def test_first_frame_motion_is_configured(self) -> None:
-        source = SOURCE.read_text(encoding="utf-8")
+        source = source_text()
         for field in ("premier_league_logo_at", "review_title_at", "pitch_at"):
             self.assertIn(f'"{field}": 0.0', source)
         self.assertIn('Number(timing.pitch_at ?? 0)', source)
 
     def test_official_score_lock_precedes_final_review(self) -> None:
-        source = SOURCE.read_text(encoding="utf-8")
+        source = source_text()
         self.assertIn(
             "event_scores_locked_gws = event_data_checked_gws",
             source,

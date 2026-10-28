@@ -1,116 +1,67 @@
 from __future__ import annotations
 
-import ast
-import re
-import unicodedata
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-SOURCE_PATH = Path(__file__).resolve().parents[1] / "1_final_day1.py"
-
-
-def normalize(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text)
-    ascii_text = "".join(
-        character for character in decomposed
-        if not unicodedata.combining(character)
-    )
-    return re.sub(r"[^a-z0-9]+", " ", ascii_text.lower()).strip()
+from day1.media import speak_roundup, frame_times, compact_roundup
+from day1.production_helpers import vx_phrase_time
 
 
-def narration_literals(source: str) -> dict[str, str]:
-    source_tree = ast.parse(source, filename=str(SOURCE_PATH))
-    scripts: dict[str, str] = {}
-    for node in ast.walk(source_tree):
-        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
-            continue
-        if not any(
-            isinstance(target, ast.Name) and target.id == "scripts"
-            for target in node.targets
-        ):
-            continue
-        for key, value in zip(node.value.keys, node.value.values):
-            if not isinstance(key, ast.Constant) or key.value not in (
-                "00_intro", "05_outro"
-            ):
-                continue
-            expression = value
-            if (
-                isinstance(expression, ast.Call)
-                and isinstance(expression.func, ast.Attribute)
-                and expression.func.attr == "strip"
-                and not expression.args
-                and not expression.keywords
-            ):
-                expression = expression.func.value
-            if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
-                scripts[key.value] = expression.value.strip()
-            elif isinstance(expression, ast.JoinedStr):
-                scripts[key.value] = "".join(
-                    part.value
-                    if isinstance(part, ast.Constant) and isinstance(part.value, str)
-                    else " _dynamic_ "
-                    for part in expression.values
-                ).strip()
-            else:
-                raise AssertionError(f"{key.value} narration is not a literal string")
-    return scripts
+class NarrationSyncTests(unittest.IsolatedAsyncioTestCase):
+    def namespace(self, words):
+        async def speech(text, profile):
+            return b'audio', words
+        return {'vx_full_word_narration': lambda text, **kwargs: text,
+                'vx_edge_tts_stream': speech, 'vx_phrase_time': vx_phrase_time}
+
+    async def test_each_grouped_name_keeps_its_measured_popup_time(self):
+        words = [dict(text=t, start=s, duration=.2) for t,s in
+                 [('Yellow',0),('cards',.2),('for',.4),('João',.8),('Pedro',1.1),('and',1.5),('Van',2.3),('de',2.6),('Ven',2.9)]]
+        package = {'beats':[{'id':'bookings', 'kind':'players', 'text':'Yellow cards for João Pedro and Van de Ven.',
+                            'mentions':[{'player_id':1,'spoken_name':'João Pedro'}, {'player_id':2,'spoken_name':'Van de Ven'}]}]}
+        with tempfile.TemporaryDirectory() as d, patch('day1.media.duration',return_value=3.5), patch('day1.media.join_audio'):
+            await speak_roundup(package,self.namespace(words),Path(d)/'segments')
+        self.assertEqual([m['name_time'] for m in package['beats'][0]['mentions']],[.8,2.3])
+        self.assertAlmostEqual(package['duration'],3.26)
+
+    async def test_missing_spoken_name_blocks_rendering(self):
+        p={'beats':[{'id':'player','kind':'player','text':'Wrong name.', 'player_id':1,'spoken_name':'João Pedro'}]}
+        with tempfile.TemporaryDirectory() as d, patch('day1.media.duration',return_value=2):
+            with self.assertRaisesRegex(RuntimeError,'exact-sync phrase'):
+                await speak_roundup(p,self.namespace([dict(text='Wrong',start=0,duration=1)]),Path(d)/'segments')
+
+    async def test_intro_cannot_exceed_three_minutes(self):
+        p={'beats':[{'id':'welcome','text':'Welcome.'}]}
+        with tempfile.TemporaryDirectory() as d, patch('day1.media.duration',return_value=182), patch('day1.media.join_audio') as join:
+            with self.assertRaisesRegex(RuntimeError,'180s'):
+                await speak_roundup(p,self.namespace([dict(text='Welcome',start=0,duration=181)]),Path(d)/'segments')
+            join.assert_not_called()
+
+    def test_card_motion_is_sampled_at_output_frame_rate(self):
+        times=frame_times(10,24,[(2,2.5)])
+        self.assertIn(2,times)
+        self.assertIn(2+1/24,times)
+        self.assertIn(2.5,times)
+        self.assertEqual(times[-1],239/24)
+
+    def test_compact_edition_keeps_every_required_incident(self):
+        package={'beats':[{'id':key,'facts':facts} for key,facts in [
+            ('goal',{'goals_scored':1,'assists':1}),('yellow',{'yellow_cards':1}),
+            ('red',{'red_cards':1}),('injury',{'availability':True}),('assist',{'assists':1})]]}
+        result=compact_roundup(package)
+        self.assertEqual([b['id'] for b in result['beats']],['goal','yellow','red','injury'])
+        self.assertEqual(len(package['beats']),5)
+
+    def test_new_is_not_the_newcastle_club_code(self):
+        source=Path(__file__).resolve().parents[1]/'day1'/'spoken_names.py'
+        ns={'teams':[{'id':1,'code':4,'name':'Newcastle','short_name':'NEW'}],
+            'players':[{'id':1,'web_name':'Jamie','first_name':'Jamie','second_name':'Test'}]}
+        exec(compile(source.read_text(),str(source),'exec'),ns)
+        self.assertEqual(ns['vx_full_word_narration']('New injury flags for Jamie.'),'New injury flags for Jamie.')
+        self.assertEqual(ns['vx_full_word_narration']('NEW next week.'),'Newcastle next week.')
 
 
-def required_animation_anchors(source: str) -> dict[str, list[str]]:
-    animation_cell = source.split(
-        "# CELL 19 — SHARED ANIMATION ENGINE", 1
-    )[1].split("# CELL 20 —", 1)[0]
-    intro_section = animation_cell.split('if key=="00_intro":', 1)[1].split(
-        'if key=="02_fdr":', 1
-    )[0]
-    outro_events = animation_cell.split(
-        "# Anchor section transitions to spoken Ryan words", 1
-    )[1].split("# COMMON 4K CSS", 1)[0]
-    outro_manifest = animation_cell.split('if key=="05_outro":', 1)[1].split(
-        "page=src.read_text", 1
-    )[0]
-
-    sync_pattern = r'_sync\(\s*"([^"]+)"'
-    required_pattern = (
-        r'vx_phrase_time\(\s*words\s*,\s*"([^"]+)"'
-        r'\s*,\s*required=True'
-    )
-    return {
-        "00_intro": re.findall(sync_pattern, intro_section),
-        "05_outro": (
-            re.findall(sync_pattern, outro_events)
-            + re.findall(required_pattern, outro_manifest)
-        ),
-    }
-
-
-class TestDay1NarrationSync(unittest.TestCase):
-    def test_narration_literals_accepts_stripped_strings(self) -> None:
-        scripts = narration_literals(
-            'scripts = {"00_intro": f"Welcome GW{gameweek}".strip(), '
-            '"05_outro": "Subscribe now".strip()}'
-        )
-        self.assertEqual(scripts["00_intro"], "Welcome GW _dynamic_")
-        self.assertEqual(scripts["05_outro"], "Subscribe now")
-
-    def test_nonliteral_narration_is_rejected(self) -> None:
-        with self.assertRaisesRegex(AssertionError, "00_intro"):
-            narration_literals('scripts = {"00_intro": build_intro()}')
-
-    def test_required_anchors_are_present_in_spoken_scripts(self) -> None:
-        source = SOURCE_PATH.read_text(encoding="utf-8")
-        scripts = narration_literals(source)
-        anchors = required_animation_anchors(source)
-        self.assertEqual(set(scripts), {"00_intro", "05_outro"})
-
-        for scene_key, scene_anchors in anchors.items():
-            self.assertGreater(len(scene_anchors), 0, scene_key)
-            normalized_script = normalize(scripts[scene_key])
-            for phrase in scene_anchors:
-                with self.subTest(scene=scene_key, phrase=phrase):
-                    self.assertIn(normalize(phrase), normalized_script)
-
-
-if __name__ == "__main__":
+if __name__=='__main__':
     unittest.main()

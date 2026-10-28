@@ -32,11 +32,42 @@ Validation: `python -m unittest discover -s tests -p 'test_*.py' -v`,
 
 ## Day 1 and Day 2 video workflows
 
-Day 1 remains the existing implementation on `main`:
+Day 1 produces exactly two video sections:
+
+1. Intro and match roundup (maximum 180 seconds). Every official fixture in the
+   reviewed Gameweek appears individually. Completed scores, scorers/positions,
+   own goals, yellow/red cards and recent availability flags come from the
+   same official FPL snapshot. Pending matches show the official kickoff in UK
+   time; live scores are explicitly provisional. Each spoken player name opens
+   a purple player card using measured Ryan WordBoundary times.
+2. The existing player-by-player squad review and its closing outro (maximum
+   240 seconds). The approved pitch, formation, bench and review-card geometry
+   remain. The closing message is inside this section, not a third MP4.
+
+Standalone FDR, projected-goal, clean-sheet, transfer/decision-engine and outro
+scenes were removed from Day 1. Only the shared WC/FH fixture model runs for
+card FDR and team CS forecasts; official player rates are descriptive statistics.
+Missing values show as unavailable, not invented zeros. Blank and double
+Gameweeks remain explicit. Review cards display continuous FDR to two decimals
+while retaining their existing color classes.
+
+Welcome copy varies using persisted wording history under
+`MODEL_INPUTS/canonical_fixtures/day1_narration_history.json`. It is kept outside
+the output-reset directory. Speech is conversational, and duration is checked
+from the generated audio. If a roundup exceeds its limit, optional assist-only
+mentions yield to scores, scorers, discipline and availability coverage; an
+over-length edition cannot publish. Red-card ban lengths are not guessed.
+Booking warnings use club match cutoffs, not Gameweek numbers: five cautions
+within 19 league matches, ten within 32, and fifteen within the season.
+
+Day 1's workflow trigger, the shared watcher schedule, Day 2, Day 3 and WC/FH
+are unchanged. No separate opening clip is prepended. The existing background
+and final six-second music treatment remain, and the final assembly has exactly
+two chapters. YouTube uploads remain private.
 
 - Workflow: `.github/workflows/day-1.yml`
 - Source: `1_final_day1.py`
-- Media integration: `vortex/day1_media.py`
+- Runtime, narration, rendering and music integration: `day1/`
 - YouTube package/upload: `vortex/youtube_studio_package.py` and `vortex/youtube_private_upload.py`
 - Output root: `My Drive/FPL_VORTEX/FIRST VIDEO`
 
