@@ -849,6 +849,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_narration_exports",
             "_patch_outro_social_icon",
             "_patch_tts_profile",
+            "patch_weekly_source",
             "patch_narration_pacing_source",
             "patch_popup_audio_source",
             "patch_evidence_pipeline",

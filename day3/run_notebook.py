@@ -26,6 +26,7 @@ from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_c
 from day3.narration_pacing import patch_narration_pacing_source
 from day3.popup_audio import patch_popup_audio_source
 from day3.evidence_pipeline import patch_evidence_pipeline
+from vortex.fixture_forecast import patch_weekly_source
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1505,6 +1506,8 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
     prepared_cells: list[tuple[int, str]] = []
     transformer = TransformerManager()
     for cell_index, source in cells:
+        if cell_index == 10:
+            source = patch_weekly_source(source)
         if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
             source = _patch_control_cell(source)
         if cell_index == NARRATION_EXPORT_CELL_INDEX:

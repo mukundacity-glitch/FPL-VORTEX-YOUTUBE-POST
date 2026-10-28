@@ -4166,6 +4166,8 @@ else:
         })
 
     fixture_goal_expectations_model = pd.DataFrame(_rows, columns=PHASE3_OUTPUT_FIELDS)
+    from vortex.fixture_forecast import align_weekly_frame
+    fixture_goal_expectations_model = align_weekly_frame(fixture_goal_expectations_model, globals())
     if fixture_goal_expectations_model.empty:
         raise RuntimeError("Phase 3 produced no future fixture expectations")
     if fixture_goal_expectations_model["fixture_id"].duplicated().any():

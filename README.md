@@ -1,5 +1,29 @@
 # FPL VORTEX AUTO
 
+## Shared fixture calculations
+
+Day 1, Day 2, Day 3 and WC/FH use `vortex/fixture_forecast.py` and the
+WC/FH model vendored from `FPL-VORTEX-AGENT` commit
+`31e088378736a0f622eb51e7da6b3e2ab18ba55b`. The evidence coverage gates,
+projected-goal equations, Poisson clean-sheet probabilities and continuous FDR
+formulas are shared. GK/DEF use defence FDR; MID/FWD use attack FDR. Day 2 no
+longer uses official FPL difficulty or a separate opponent-strength blend for
+its fixture values. Its numbers retain decimals while existing CSS buckets,
+card geometry and scene order remain intact.
+
+Existing Gameweek windows, graphics, narration structure and workflow schedules
+are preserved. These are forecasts: runs using newer match evidence or different
+Gameweek windows can show different totals. The common input/cache directory is
+`FPL_VORTEX/MODEL_INPUTS/canonical_fixtures`; optional `team_context_raw.csv` and
+`team_news_overrides.csv` must be placed there so every workflow reads the same
+overrides. `VORTEX_FIXTURE_INPUT_ROOT` can override that directory for local tests.
+Weekly Phase 3 retains its uncertainty method and schema while taking all goal
+components from the shared model before downstream Poisson/FDR calculations.
+
+Validation: `python -m unittest discover -s tests -p 'test_*.py' -v`,
+`python -m unittest discover -s day3 -p 'test_*.py' -q`, and
+`python -m unittest discover -s wc_fh -p 'test_*.py' -q`.
+
 ## Day 1 and Day 2 video workflows
 
 Day 1 remains the existing implementation on `main`:
