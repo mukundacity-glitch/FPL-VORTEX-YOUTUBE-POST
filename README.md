@@ -205,3 +205,7 @@ After applying a runner fix, start a new **Day 3** workflow on `main`. Re-runnin
 ### Automatic watcher
 
 `Gameweek State Watcher` checks official FPL state every two days (approximately 48 hours). Day 1 and Day 2 remain separate workflows. When the review state advances, the watcher can trigger each workflow independently; Day 2 remains Private-only on YouTube and keeps its own Drive output root.
+
+### Day 1 pitch-led broadcast review
+
+The Day 1 renderer now keeps the animated football pitch central throughout a 6:40 review: league top/bottom three, score story, full formation reveal, individual XI and bench reviews, and availability watch. The reusable pop-up player card follows the supplied navy/violet reference. Existing data validation, 4K/24 fps output, private upload and the `.github/workflows/day-1.yml` dispatch remain in place. See [the renderer guide](remotion-day1/README.md) for branding, reference assets, sample JSON, Studio preview and local rendering commands.
