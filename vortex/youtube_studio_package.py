@@ -150,7 +150,7 @@ def _vx23_chapters(qa, review_gw):
 
 def _vx23_metadata(preview_gw, review_gw, review_status, qa):
     title = (
-        f"FPL GW{preview_gw} Tips: Fixtures, Goals & Clean Sheets | "
+        f"FPL GW{preview_gw}: Results & My Squad | "
         f"GW{review_gw} Review (1/3) #FPL"
     )
     status_text = "live/partial" if review_status == "LIVE/PARTIAL" else "completed"
@@ -159,15 +159,14 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
     description = "\n".join(
         [
             (
-                f"FPL Gameweek {preview_gw} tips and preview, plus a {status_text} "
+                f"FPL VORTEX match results and my squad: a {status_text} "
                 f"GW{review_gw} review from FPL VORTEX."
             ),
             "",
             f"VIDEO {YT_VIDEO_PART}/{YT_VIDEO_TOTAL} for Gameweek {preview_gw} covers:",
             f"• GW{review_gw} squad review and key returns",
-            f"• GW{preview_gw}–GW{min(38, preview_gw + 5)} fixture difficulty",
-            "• Model-projected team goals and attacking outlook",
-            "• Clean-sheet probabilities and defensive outlook",
+            f"• GW{review_gw} match results, scorers and assists",
+            "• Current availability and disciplinary cautions",
             "",
             "CHAPTERS",
             *chapters,
@@ -184,10 +183,8 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
         f"Gameweek {preview_gw}",
         f"FPL GW{preview_gw} tips",
         f"FPL GW{preview_gw} preview",
-        "FPL fixtures",
-        "fixture difficulty",
-        "projected goals",
-        "clean sheet odds",
+        "FPL results",
+        "FPL squad review",
         "FPL review",
         "FPL VORTEX",
     ]
