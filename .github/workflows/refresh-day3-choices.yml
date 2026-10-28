@@ -5,6 +5,18 @@
 name: Refresh Day 3 OUT choices
 
 on:
+  # A push trigger also makes GitHub register this workflow as soon as it is
+  # pushed; schedule-only workflows can otherwise sit unregistered until the
+  # first scheduled tick. The paths deliberately exclude day-3.yml so a
+  # refresh commit cannot trigger itself again.
+  push:
+    branches:
+      - main
+      - arena/dfa6b200-fpl-vortex-youtube-post
+    paths:
+      - .github/workflows/refresh-day3-choices.yml
+      - day3/fpl_squad.py
+      - day3/refresh_day3_choices.py
   schedule:
     # Every three hours; no commit is made while the squad is unchanged.
     - cron: "17 */3 * * *"
