@@ -144,9 +144,10 @@ It uses no FPL login; `/api/my-team/<id>/` requires authentication and is never
 called. An API outage fails the run — there is no stale squad fallback.
 
 Because GitHub dispatch `choice` options are static YAML,
-[`Refresh Day 3 OUT choices`](.github/workflows/refresh-day3-choices.yml)
-regenerates all five OUT lists from the live 15 every three hours and commits
-only when the squad changes. You can also run it manually before a dispatch.
+the **Day 3** workflow regenerates all five OUT lists from the live 15 every
+three hours and commits only when the squad changes. To refresh manually, run
+**Day 3** on `main` with **Refresh Player OUT choices only (no video)** checked.
+Leave that box unchecked for the normal video run.
 Every Day 3 run re-resolves the squad in the `Resolve live FPL squad and verify
 Player OUT picks` step and rejects any OUT that is not in your real team (or any
 IN that already is) before the expensive render starts.
