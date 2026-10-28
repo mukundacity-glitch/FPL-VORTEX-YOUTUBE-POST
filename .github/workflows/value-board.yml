@@ -1,0 +1,45 @@
+name: FPL VORTEX — Task 1 Value Board kickoff watcher
+
+on:
+  schedule:
+    # UTC polling; official FPL fixture times determine the actual ET run.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: fpl-vortex-value-board-task-1
+  cancel-in-progress: false
+
+jobs:
+  check-fixture-relative-trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install official FPL API client
+        run: python -m pip install 'requests>=2.32,<3'
+      - name: Check 26-hour trigger from live FPL fixtures
+        id: trigger
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -m value_board.schedule --wait --output value_board/trigger.json
+      - name: Block unverified publication until model and renderer are connected
+        if: steps.trigger.outputs.run == 'true'
+        run: |
+          echo "::error::Task 1 is due, but the independent verified xPts model adapter and 4K board renderer have not yet been integrated. No fabricated board will be published."
+          exit 1
+      - name: Archive verified scheduling metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: value-board-trigger-${{ github.run_id }}
+          path: value_board/trigger.json
+          if-no-files-found: warn
+          retention-days: 14
