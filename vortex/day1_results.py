@@ -26,7 +26,7 @@ def build_results(bootstrap, fixtures, gameweek):
                                         'kind': kind, 'count': count})
         rows.append({'id': int(fixture['id']), 'home': home['name'], 'away': away['name'],
                      'home_code': home.get('code'), 'away_code': away.get('code'),
-                     'score': [fixture.get('team_h_score'), fixture.get('team_a_score')] if final else None,
+                     'score': [int(fixture['team_h_score']), int(fixture['team_a_score'])] if final else None,
                      'final': final, 'kickoff': fixture.get('kickoff_time'),
                      'returns': returns if final else []})
     return rows
