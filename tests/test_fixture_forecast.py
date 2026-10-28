@@ -82,37 +82,16 @@ class SharedFixtureTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 patch_weekly_source(source)
 
-    def test_day1_runs_shared_goals_cs_and_fdr_without_old_predictor(self):
-        source = (Path(__file__).resolve().parents[1] / '1_final_day1.py').read_text()
-        parts = re.split(r'(?m)(?=^# ={20,}\n# [^\n]*\bCELL\s+\d+[A-Za-z]?\b[^\n]*\n)', source)
-        selected = [p for p in parts if any(m in p[:250] for m in
-            ('# CELL 7A — PHASE 3', '# CELL 8 — PHASE 4A', '# CELL 9 — PHASE 4B'))]
-        self.assertEqual(len(selected), 3)
-        selected[0] = selected[0].split('# ============================================================\n# FPL VORTEX — SHARED PRODUCTION HELPERS')[0]
-        # The same source cell contains review helpers after the fixture model.
-        end = next(n.end_lineno for n in ast.parse(selected[2]).body if isinstance(n, ast.If)
-                   and ast.unparse(n.test) == 'not bool(PHASE4_POISSON_READY)')
-        selected[2] = '\n'.join(selected[2].splitlines()[:end]) + '\n'
-        self.assertNotIn('_lambda_home_np =', selected[0])
-        self.assertNotIn('def vx_phase4_attack_fdr(', selected[2])
-        self.assertNotIn('home_cs = p_a0', selected[1])
-        strength = [dict(team_id=t, current_season_weight=.5, prior_weight=.5,
-                         recency_effective_sample_size=8., completed_matches=8) for t in (1, 2)]
-        ns = dict(PHASE2_READY=True, data=dict(bootstrap={}), fixtures=self.fixtures,
-            fixture_context_phase2=pd.DataFrame([{k: self.rows[0][k] for k in
-                ('fixture_id','gameweek','home_team_id','away_team_id')}]),
-            team_strength_updated=pd.DataFrame(strength),
-            team_priors=pd.DataFrame([dict(team_id=t, prior_uncertainty=.2) for t in (1, 2)]),
-            _phase0_is_pre_deadline=lambda gw: True)
-        with tempfile.TemporaryDirectory() as directory, patch('vortex.fixture_forecast.forecast_rows', return_value=self.rows):
-            ns['DATA_DIR'] = directory
-            for cell in selected:
-                exec(compile(cell, 'day1-shared-fixtures', 'exec'), ns)
-        result = ns['fixture_fdr_model_only'].iloc[0]
-        self.assertEqual(result.model_lambda_home, 2.16)
-        self.assertEqual(result.home_clean_sheet_probability, math.exp(-.73))
-        self.assertEqual(result.attack_fdr_home, model.vx_phase4_attack_fdr(2.16))
-        self.assertEqual(result.defence_fdr_home, model.vx_phase4_defence_fdr(math.exp(-.73)))
+    def test_day1_cards_use_shared_fixture_numbers(self):
+        from day1.roundup import upcoming
+        snapshot = {"bootstrap": {"teams": [{"id": 1, "name": "Home", "short_name": "HOM"}, {"id": 2, "name": "Away", "short_name": "AWA"}]}, "fixtures": self.fixtures}
+        player = {"id": 99, "team": 1, "element_type": 2}
+        first = upcoming(player, snapshot, self.rows, self.rows[0]["gameweek"])[0]["fixtures"][0]
+        self.assertEqual(first["projected_goals"], 2.16)
+        self.assertEqual(first["clean_sheet_probability"], math.exp(-.73))
+        self.assertEqual(first["fdr"], model.vx_phase4_defence_fdr(math.exp(-.73)))
+        attack = upcoming(dict(player, element_type=3), snapshot, self.rows, self.rows[0]["gameweek"])[0]["fixtures"][0]
+        self.assertEqual(attack["fdr"], model.vx_phase4_attack_fdr(2.16))
 
     def test_vendored_math_is_ast_identical_to_wc_pin(self):
         # Only extra diagnostic fields may differ from the checksum-verified
