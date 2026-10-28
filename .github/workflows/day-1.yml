@@ -2,8 +2,6 @@ name: Day 1
 
 on:
   workflow_dispatch:
-  push:
-    branches: [codex/day1-short-final]
 
 permissions:
   contents: read
