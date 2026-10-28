@@ -13,6 +13,8 @@ concurrency:
 env:
   PYTHONUNBUFFERED: "1"
   SOURCE_FILE: 1_final_day1.py
+  VORTEX_DAY1_SOURCE: lukegiuseppin/fpl
+  VORTEX_FPL_CORE_REPOSITORY: lukegiuseppin/fpl
   DAY1_ASSET_FOLDER_ID: 1h3Loznr5RnsMyh-kUd-zMxEgOf98uFSt
   DAY1_ASSET_DIR: /content/drive/MyDrive/FPL_VORTEX/Assets
   GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
@@ -33,6 +35,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Clone Day 1 FPL Core data
+        uses: actions/checkout@v7
+        with:
+          repository: lukegiuseppin/fpl
+          path: .day1-fpl-source
+          sparse-checkout: data
+          sparse-checkout-cone-mode: true
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -258,11 +270,16 @@ jobs:
             fi
           }
 
-          required_path="FPL_VORTEX_DATA/00_SOURCE_ARCHIVE/FPL_CORE/data"
-          if ! rclone lsf "vortex-drive:${required_path}" --max-depth 1 >/dev/null; then
-            echo "Required Drive path is missing: My Drive/${required_path}" >&2
-            exit 1
-          fi
+          # The notebook expects this legacy local path. Point it to our
+          # fresh repository snapshot, never to the old Drive archive.
+          archive_path="/content/drive/MyDrive/FPL_VORTEX_DATA/00_SOURCE_ARCHIVE/FPL_CORE/data"
+          source_data="${GITHUB_WORKSPACE}/.day1-fpl-source/data"
+          test -d "${source_data}" || { echo "FPL repository data is missing" >&2; exit 1; }
+          mkdir -p "$(dirname "${archive_path}")"
+          ln -s "${source_data}" "${archive_path}"
+          source_commit="$(git -C "${GITHUB_WORKSPACE}/.day1-fpl-source" rev-parse HEAD)"
+          echo "VORTEX_FPL_CORE_REF=${source_commit}" >> "${GITHUB_ENV}"
+          echo "Day 1 FPL source commit: ${source_commit}"
 
           restore_optional "FPL_VORTEX/FIRST VIDEO"
           restore_optional "FPL_VORTEX/MODEL_INPUTS"
@@ -271,7 +288,6 @@ jobs:
           restore_optional "FPL_VORTEX/MODEL_HISTORY"
           restore_optional "FPL_VORTEX/elements"
           restore_optional "elements"
-          restore_optional "${required_path}"
           restore_optional "FPL_VORTEX_DATA/03_ELITE_MANAGERS"
           restore_optional "FPL_VORTEX_DATA/04_MASTER"
           restore_optional "FPL_VORTEX_DATA/05_MODEL_HISTORY"
@@ -482,6 +498,11 @@ jobs:
               )
               print(f"::group::Day 1 block {index:02d}/33 — {label}", flush=True)
               try:
+                  if label == "CELL 5 — PHASE 1A":
+                      anchor = "_loaded_match_frame, PHASE1_MATCH_SOURCE_PATH = _vx_read_phase1_match_source()"
+                      if cell.count(anchor) != 1:
+                          raise RuntimeError("Day 1 Phase 1 insertion point changed")
+                      cell = cell.replace(anchor, "_MATCH_CANDIDATES = []\n" + anchor, 1)
                   result = shell.run_cell(cell, store_history=False, silent=False)
                   if not result.success:
                       raise RuntimeError(f"Day 1 block {index} failed: {label}")

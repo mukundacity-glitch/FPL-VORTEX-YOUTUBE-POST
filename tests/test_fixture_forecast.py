@@ -128,7 +128,7 @@ class SharedFixtureTests(unittest.TestCase):
                     pairs = [(k, v) for k, v in zip(node.keys, node.values) if k.value in reference_keys]
                     node.keys, node.values = [k for k, _ in pairs], [v for _, v in pairs]
         self.assertEqual(hashlib.sha256(ast.dump(tree).encode()).hexdigest(),
-                         '03b9a5236aab44c6846d37710703f98dbaaaf686f14fff66e8c419bf40922ed1')
+                         '51ea93e892fc9171da3ed5bfd6d951ac3f0622caaff0e4336755bd54ed77d3d9')
 
 
 if __name__ == "__main__":
