@@ -293,35 +293,8 @@ def encode_frames(frames, audio, output, duration, fps=24, audio_start=0, captio
 
 
 async def capture_show(show, work, audio, output, width=3840, height=2160, start=0, end=None, vertical=False):
-    from playwright.async_api import async_playwright
-    work = Path(work)
-    work.mkdir(parents=True, exist_ok=True)
-    html = work / 'show.html'
-    html.write_text(show_html(show), encoding='utf-8')
-    end = show['duration'] if end is None else end
-    frames = []
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
-        page = await browser.new_page(viewport={'width': width, 'height': height}, device_scale_factor=1)
-        await page.goto(html.as_uri(), wait_until='load')
-        await page.evaluate('document.fonts.ready')
-        await page.evaluate('(v)=>setFormat(v.w,v.h,v.vertical)', {'w': width, 'h': height, 'vertical': vertical})
-        await page.evaluate('document.getElementById("caption").style.display="none"')
-        times = sample_times(show, start, end)
-        for i, t in enumerate(times):
-            await page.evaluate('(t)=>seek(t)', t)
-            await page.evaluate('()=>Promise.all(Array.from(document.images).filter(i=>i.src).map(i=>i.complete?Promise.resolve():i.decode().catch(()=>{})))')
-            image = work / f'{i:05d}.png'
-            await page.screenshot(path=str(image))
-            frames.append((t - start, image))
-            if i % 50 == 0:
-                print(f'Decision show capture: {i+1}/{len(times)} keyframes', flush=True)
-        await browser.close()
-    duration = math.ceil((end - start) * 24) / 24
-    captions = work / 'captions.ass'
-    captions.write_text(caption_ass(show, start, end, vertical), encoding='utf-8')
-    encode_frames(frames, audio, output, duration, audio_start=start, captions=captions, audio_duration=end-start)
-    return frames
+    from .day1_remotion import capture_show as capture_remotion
+    return await capture_remotion(show, work, audio, output, width, height, start, end, vertical)
 
 
 def _vtt(words):
@@ -346,6 +319,7 @@ async def render_show(ns):
                                 int(ns.get('VIDEO_WIDTH', 3840)), int(ns.get('VIDEO_HEIGHT', 2160)))
     shutil.copy2(audio, Path(ns['MP3_DIR']) / 'day1_show.mp3')
     shutil.copy2(frames[0][1], Path(ns['SLIDE_DIR']) / 'intro_scene_4k.png')
+    shutil.copy2(work / 'landscape/remotion-qa.json', Path(ns['DATA_DIR']) / 'day1_remotion_qa.json')
     _json(Path(ns['DATA_DIR']) / 'day1_show.json', show)
     (Path(ns['DATA_DIR']) / 'day1_show.vtt').write_text(_vtt(show['words']), encoding='utf-8')
     # The brief is a separate workflow artifact, never a text file inside DATA.

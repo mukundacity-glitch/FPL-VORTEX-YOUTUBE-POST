@@ -51,6 +51,20 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node for the Day 1 Remotion renderer
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: remotion-day1/package-lock.json
+
+      - name: Install and check the Day 1 Remotion renderer
+        working-directory: remotion-day1
+        run: |
+          npm ci
+          npm run lint
+          npx remotion browser ensure
+
       - name: Verify untouched Day 1 source
         shell: bash
         run: |
@@ -87,6 +101,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_narration_sync.py' -v
           python -m unittest discover -s tests -p 'test_day1_review_contract.py' -v
           python -m unittest discover -s tests -p 'test_day1_premium_contract.py' -v
+          python -m unittest discover -s tests -p 'test_day1_remotion.py' -v
 
       - name: Verify private YouTube upload configuration
         shell: bash
@@ -298,17 +313,18 @@ jobs:
           mkdir -p "${DAY1_ASSET_DIR}"
           rclone copy "day1-assets:" "${DAY1_ASSET_DIR}" \
             --filter "+ /opening.mp4" \
+            --filter "+ /popup.mp4" \
             --filter "+ /Background_music.mp3" \
             --filter "+ /outro.mp3" \
             --filter "- **" \
             --transfers 3 --checkers 6
-          for asset_name in opening.mp4 Background_music.mp3 outro.mp3; do
+          for asset_name in opening.mp4 popup.mp4 Background_music.mp3 outro.mp3; do
             if [[ ! -s "${DAY1_ASSET_DIR}/${asset_name}" ]]; then
               echo "Required Day 1 asset is missing: ${asset_name}" >&2
               exit 1
             fi
           done
-          echo "Restored opening and audio assets by confirmed Drive folder ID"
+          echo "Restored opening, footer popup, and audio assets by confirmed Drive folder ID"
 
           mkdir -p /content/drive/MyDrive/elements
           rclone backend copyid vortex-drive: \
@@ -559,6 +575,31 @@ jobs:
               or qa.get("output_contract", {}).get("passed") is not True
           ):
               raise SystemExit("Final video QA did not pass")
+
+          import math
+          from vortex.day1_remotion import show_digest
+          show = json.loads((root / "DATA/day1_show.json").read_text(encoding="utf-8"))
+          presentation = json.loads((root / "DATA/day1_remotion_qa.json").read_text(encoding="utf-8"))
+          show_hash = show_digest(show)
+          if (
+              presentation.get("renderer") != "Remotion"
+              or presentation.get("data_and_slide_structure_preserved") is not True
+              or presentation.get("show_sha256") != show_hash
+              or presentation.get("resolution") != [3840, 2160]
+              or presentation.get("fps") != 24
+              or presentation.get("section_ids") != [s["id"] for s in show["sections"]]
+              or presentation.get("beat_count") != len(show["beats"])
+          ):
+              raise SystemExit("Day 1 Remotion data, slide, or 4K render contract failed")
+          popup = presentation.get("footer_popup", {})
+          starts = [event["start"] for event in popup.get("occurrences", [])]
+          if (
+              starts != list(range(120, math.ceil(show["duration"]), 120))
+              or popup.get("name") != "popup.mp4"
+              or popup.get("placement") != "bottom footer"
+              or not popup.get("sha256")
+          ):
+              raise SystemExit("Day 1 footer popup is missing or off its two-minute clock")
 
           final_mp4s = [
               path for path in (root / "MP4").glob("*COMBINED*.mp4")

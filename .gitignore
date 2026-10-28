@@ -1,2 +1,5 @@
 __pycache__/
 *.py[cod]
+remotion-day1/node_modules/
+remotion-day1/out/
+remotion-day1/public/runtime/

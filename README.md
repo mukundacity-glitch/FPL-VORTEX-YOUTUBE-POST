@@ -60,6 +60,16 @@ visual directions, five title choices, thumbnail text, poll, pinned comment
 and a manual YouTube Studio analytics/testing plan. No poll/comment is posted
 automatically. The long-form YouTube upload remains Private only.
 
+All seven existing Day 1 sections now use the premium Remotion renderer in
+`remotion-day1/`: navy and gold framing, cleaner player cards, bundled fonts,
+frame-driven transitions and word-timed captions. The data snapshot, decision
+builders, narration, section order and beat times are unchanged. The workflow
+requires the exact `popup.mp4` in the established Day 1 asset folder and plays
+it in the bottom footer at 2:00, 4:00 and each further two-minute boundary.
+The clip keeps its aspect ratio, plays muted below the captions, restarts for
+each occurrence and is trimmed at the program end. It adds no slide or time.
+See [`remotion-day1/README.md`](remotion-day1/README.md) for rendering details.
+
 After an upgrade, start a new **Day 1** run on `main`; retrying an old job
 retains its old source commit.
 
