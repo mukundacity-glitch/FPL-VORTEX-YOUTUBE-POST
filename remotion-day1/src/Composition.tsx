@@ -1,377 +1,255 @@
 import React, { useEffect, useState } from "react";
 import {
   AbsoluteFill,
-  Easing,
-  Img,
-  interpolate,
+  continueRender,
+  delayRender,
+  cancelRender,
   Sequence,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
-  delayRender,
-  continueRender,
-  cancelRender,
 } from "remotion";
 import { Video } from "@remotion/media";
-import { evidenceFor, sectionLabels } from "./model";
-import type { Beat, Player, RenderProps, Show } from "./types";
+import type { RenderProps, ReviewShow } from "./types";
+import { LegacyDay1Premium } from "./LegacyComposition";
+import { AnimatedSquadPitch } from "./components/AnimatedSquadPitch";
+import { PremiumFooter } from "./components/PremiumFooter";
+import { SceneContent } from "./scenes/ReviewScenes";
+import { normalizeForRender } from "./normalize";
 import "./premium.css";
-
-const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
-const mediaSrc = (src: string) =>
-  src.startsWith("runtime/") ? staticFile(src) : src;
-
+const labels: Record<string, string> = {
+  opening: "THE TURNING POINT",
+  highlights: "GAMEWEEK IN FOCUS",
+  top: "TOP THREE PERFORMERS",
+  worst: "THREE DECISION CHECKS",
+  summary: "MY GAMEWEEK STORY",
+  pitch: "THE FULL SQUAD",
+  reviews: "STARTING XI REVIEW",
+  bench: "BENCH & AVAILABILITY",
+  closing: "THE NEXT STEP",
+};
 const Fonts: React.FC<{ css: string }> = ({ css }) => {
-  const [handle] = useState(() => delayRender("Day 1 bundled fonts"));
+  const [handle] = useState(() => delayRender("Bundled broadcast fonts"));
   useEffect(() => {
     Promise.all([
-      document.fonts.load("600 80px Barlow"),
-      document.fonts.load("600 30px Inter"),
+      document.fonts.load("600 60px Barlow"),
+      document.fonts.load("600 28px Inter"),
     ])
       .then(() => continueRender(handle))
       .catch(cancelRender);
   }, [handle]);
-  return <style>{css}</style>;
-};
-
-const PlayerCard: React.FC<{ show: Show; beat: Beat; player: Player }> = ({
-  show,
-  beat,
-  player,
-}) => {
-  const evidence = evidenceFor(show, beat, player);
-  const fixtures = player.fixtures ?? [];
-  const fixture = fixtures[beat.variant % Math.max(1, fixtures.length)];
   return (
-    <div className="hero-card" data-player-id={player.id}>
-      <div className="card-light" />
-      <div className="card-index">
-        FPL VORTEX <span>PLAYER FILE</span>
-      </div>
-      {player.photo ? (
-        <Img className="portrait" src={mediaSrc(player.photo)} />
-      ) : (
-        <div className="portrait-fallback">
-          {player.name
-            .split(/\s+/)
-            .map((x) => x[0])
-            .slice(0, 2)
-            .join("")}
-        </div>
-      )}
-      <div className="player-identity">
-        <div
-          className="player-name"
-          style={{
-            fontSize:
-              player.name.length > 19 ? 42 : player.name.length > 13 ? 49 : 59,
-          }}
-        >
-          {player.name}
-        </div>
-        <div className="identity-rule" />
-        <div className="club">
-          {player.badge ? <Img src={mediaSrc(player.badge)} /> : null}
-          <span>{player.team_name || player.team}</span>
-        </div>
-        <div className="position">{player.pos}</div>
-        <div
-          className="verdict"
-          style={{ fontSize: beat.verdict.length > 12 ? 19 : 24 }}
-        >
-          {beat.verdict}
-        </div>
-      </div>
-      <div className="fixture-row">
-        <span className="fixture-label">NEXT FIXTURE</span>
-        <strong>{fixture ? `${fixture.opp} · ${fixture.ha}` : "—"}</strong>
-        <span className="fixture-week">
-          {fixture ? `GW${fixture.gw}` : "—"}
-        </span>
-      </div>
-      <div className="evidence-panel">
-        <span className="evidence-icon">{evidence[0]}</span>
-        <div>
-          <small>{evidence[1]}</small>
-          <strong style={{ fontSize: evidence[2].length > 14 ? 34 : 60 }}>
-            {evidence[2]}
-          </strong>
-        </div>
-      </div>
-    </div>
+    <style>
+      {css ||
+        `@font-face{font-family:Inter;src:url('${staticFile("fonts/Inter.ttf")}')}@font-face{font-family:Barlow;src:url('${staticFile("fonts/BarlowCondensed.ttf")}')}`}
+    </style>
   );
 };
-
-const BeatSlide: React.FC<{
-  show: Show;
-  beat: Beat;
-  index: number;
-  colors: Record<string, string>;
-}> = ({ show, beat, index, colors }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const player = show.package.players.find((p) => p.id === beat.player_id);
-  if (!player)
-    throw new Error(`Missing original Day 1 player ${beat.player_id}`);
-  const transition = Math.max(1, Math.round(beat.transition * fps));
-  const hold = Math.round(beat.end * fps) - Math.round(beat.start * fps);
-  const accent =
-    beat.section === "hook" && show.accuracy.captain_points <= 4
-      ? "#ff7180"
-      : colors[beat.verdict] || "#e7c68a";
-  return (
-    <AbsoluteFill
-      className="slide"
-      data-section={beat.section}
-      style={
-        {
-          "--accent": accent,
-          opacity: interpolate(
-            frame,
-            [0, transition, hold, hold + transition],
-            [index === 0 ? 1 : 0, 1, 1, 0],
-            clamp,
-          ),
-        } as React.CSSProperties
-      }
-    >
-      <div
-        className="editorial"
-        style={{
-          translate: `${interpolate(frame, [0, transition], [index === 0 ? 0 : 18, 0], { ...clamp, easing: Easing.bezier(0.16, 1, 0.3, 1) })}px 0px`,
-        }}
-      >
-        <div className="kicker">
-          <span />
-          {sectionLabels[beat.section]}
-        </div>
-        <div className="title-rule" />
-        <div
-          className="headline"
-          style={{
-            fontSize:
-              beat.phrase.length > 24
-                ? 114
-                : beat.phrase.length > 17
-                  ? 134
-                  : 160,
-          }}
-        >
-          {beat.phrase}
-        </div>
-        <div className="decision-dots">
-          {[1, 2, 3].map((n) => (
-            <span
-              key={n}
-              className={beat.section === `decision_${n}` ? "on" : ""}
-            />
-          ))}
-        </div>
-      </div>
-      <div
-        className="card-motion"
-        style={{
-          translate: `0px ${interpolate(frame, [0, transition], [index === 0 ? 0 : 12, 0], clamp)}px`,
-        }}
-      >
-        <PlayerCard show={show} beat={beat} player={player} />
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-const Background: React.FC = () => {
+const Stadium: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   return (
-    <AbsoluteFill className="backdrop">
+    <AbsoluteFill className="vx-stadium">
       <div
-        className="halo"
-        style={{ translate: `${Math.sin(frame / fps / 15) * 35}px 0px` }}
+        className="vx-stadium-lights"
+        style={{ translate: `${Math.sin(frame / fps / 9) * 45}px 0px` }}
       />
-      <div className="grid" />
-      <div className="sweep" />
-      <div className="edge-mark" />
+      <div className="vx-grain" />
+      <div
+        className="vx-light-beam"
+        style={{ rotate: `${-15 + Math.sin(frame / fps / 12) * 5}deg` }}
+      />
+      <svg className="vx-bg-tactics" viewBox="0 0 1920 1080">
+        <path
+          d="M0 830Q450 300 1100 600T1920 180"
+          stroke="#27fbb421"
+          fill="none"
+          strokeWidth="2"
+          strokeDasharray="10 24"
+          strokeDashoffset={-frame * 0.5}
+        />
+        <circle
+          cx="600"
+          cy="480"
+          r={260 + Math.sin(frame / fps) * 5}
+          stroke="#44bce410"
+          fill="none"
+        />
+      </svg>
     </AbsoluteFill>
   );
 };
-
-const CaptionTrack: React.FC<{ show: Show; start: number }> = ({
+const PitchTrack: React.FC<{ show: ReviewShow; start: number }> = ({
   show,
   start,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const time = start + frame / fps;
-  let activeIndex = -1;
-  for (let i = 0; i < show.words.length && show.words[i].start <= time; i++)
-    activeIndex = i;
-  const active = show.words[activeIndex];
-  const sectionWords = active
-    ? show.words.filter((w) => w.section_id === active.section_id)
-    : [];
-  const localIndex = active ? sectionWords.indexOf(active) : -1;
-  const words = sectionWords.slice(
-    Math.floor(localIndex / 5) * 5,
-    Math.floor(localIndex / 5) * 5 + 5,
+  const index = Math.max(
+    0,
+    show.sections.findIndex((s) => time >= s.start && time < s.end),
   );
-  const next = show.words[activeIndex + 1];
-  const visible =
-    active && time < (next?.start ?? active.start + active.duration);
-  const flash = show.highlights.find(
-    (h) => time >= h.at && time < h.at + h.duration,
-  );
+  const section = show.sections[index];
+  const own = new Set(show.package.players.map((p) => p.id));
+  const players = show.players.filter((p) => own.has(p.id));
+  const selected =
+    ["reviews", "bench", "top", "worst"].includes(section.scene) &&
+    own.has(section.player_id)
+      ? section.player_id
+      : undefined;
   return (
-    <>
-      {flash ? <div className="word-flash">{flash.word}</div> : null}
-      <div className="captions">
-        {visible
-          ? words.map((word, i) => (
-              <span key={i} className={word === active ? "active" : ""}>
-                {word.text}
-              </span>
-            ))
-          : null}
-      </div>
-    </>
+    <AnimatedSquadPitch
+      formation={show.formation}
+      startingXI={players.filter((p) => !p.isBench)}
+      bench={players.filter((p) => p.isBench)}
+      captain={show.accuracy.captain_id}
+      viceCaptain={players.find((p) => p.isViceCaptain)?.id}
+      points={show.accuracy.gw_points}
+      selectedPlayer={selected}
+      previousPlayer={show.sections[index - 1]?.player_id}
+      selectionFrame={(time - section.start) * fps}
+      entranceStart={time < 175 ? -100 : 175 - start}
+    />
   );
 };
-
-const FooterPopup: React.FC<{ src: string }> = ({ src }) => {
+const BroadcastHeader: React.FC<{ show: ReviewShow; start: number }> = ({
+  show,
+  start,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const time = start + frame / fps;
+  const section =
+    show.sections.find((s) => time >= s.start && time < s.end) ||
+    show.sections[0];
   return (
-    <div
-      className="footer-popup"
-      style={{
-        opacity: interpolate(frame, [0, Math.max(1, 0.2 * fps)], [0, 1], clamp),
-        translate: `0px ${interpolate(frame, [0, Math.max(1, 0.3 * fps)], [10, 0], clamp)}px`,
-      }}
-    >
-      <Video
-        src={mediaSrc(src)}
-        muted
-        objectFit="contain"
-        style={{ width: "100%", height: "100%" }}
-      />
+    <header className="vx-header">
+      <div className="vx-header-brand">
+        FPL <em>VORTEX</em>
+        <span>THE GAMEWEEK REVIEW</span>
+      </div>
+      <div className="vx-header-section">{labels[section.scene]}</div>
+      <div className="vx-gw-pill">
+        <i /> GW {String(show.review_gw).padStart(2, "0")} <span>FINAL</span>
+      </div>
+      {show.performer_scope.includes("Synthetic") ||
+      show.performer_scope.includes("synthetic") ? (
+        <div className="vx-sample">SYNTHETIC PREVIEW · NOT LIVE FPL DATA</div>
+      ) : null}
+    </header>
+  );
+};
+const CaptionTrack: React.FC<{ show: ReviewShow; start: number }> = ({
+  show,
+  start,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const time = start + frame / fps;
+  const active = show.words.findIndex(
+    (w) => time >= w.start && time < w.start + w.duration,
+  );
+  if (active < 0) return null;
+  const current = show.words[active];
+  const words = show.words.filter((w) => w.section_id === current.section_id);
+  const index = words.indexOf(current);
+  const chunk = words.slice(
+    Math.floor(index / 5) * 5,
+    Math.floor(index / 5) * 5 + 5,
+  );
+  return (
+    <div className="vx-captions">
+      {chunk.map((w, i) => (
+        <span key={i} className={w === current ? "active" : ""}>
+          {w.text}
+        </span>
+      ))}
     </div>
   );
 };
-
-const Progress: React.FC<{ show: Show; start: number }> = ({ show, start }) => {
+const Playhead: React.FC<{ show: ReviewShow; start: number }> = ({
+  show,
+  start,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   return (
     <div
-      className="progress"
+      className="vx-progress"
       style={{
         width: `${Math.min(1, (start + frame / fps) / show.duration) * 100}%`,
       }}
     />
   );
 };
-
 export const Day1Premium: React.FC<RenderProps> = (props) => {
-  const { show, start, end, vertical, fontCss, verdictColors, popup } = props;
+  const { show, start, end, vertical, fontCss, popup } = props;
   const { width, height, fps } = useVideoConfig();
-  const logicalWidth = vertical ? 1080 : 1920;
-  const logicalHeight = vertical ? 1920 : 1080;
-  if (!show)
-    return (
-      <AbsoluteFill
-        style={{
-          background: "#080f1a",
-          color: "#e7c68a",
-          justifyContent: "center",
-          alignItems: "center",
-          fontFamily: "sans-serif",
-          fontSize: 90,
-        }}
-      >
-        FPL VORTEX
-      </AbsoluteFill>
-    );
+  if (!show || show.version !== "VORTEX-PITCH-REVIEW-2")
+    return <LegacyDay1Premium {...props} />;
+  const review = normalizeForRender(show as ReviewShow);
   return (
-    <AbsoluteFill>
+    <AbsoluteFill style={{ background: "#060b1e" }}>
       <Fonts css={fontCss} />
       <div
-        className={`stage ${vertical ? "vertical" : ""}`}
+        className={`vx-broadcast ${vertical ? "vx-vertical" : ""}`}
         style={{
-          width: logicalWidth,
-          height: logicalHeight,
-          scale: `${width / logicalWidth} ${height / logicalHeight}`,
+          width: 1920,
+          height: 1080,
+          scale: `${width / (vertical ? 1080 : 1920)} ${height / (vertical ? 1920 : 1080)}`,
         }}
       >
-        <Background />
-        <header className="brand-header">
-          <div className="brand">
-            {show.brand_logo ? (
-              <Img src={mediaSrc(show.brand_logo)} />
-            ) : (
-              <span className="brand-monogram">V</span>
-            )}
-            <span>FPL VORTEX</span>
-          </div>
-          <div className="gw-badge">
-            GAMEWEEK <b>{String(show.preview_gw).padStart(2, "0")}</b>
-          </div>
-        </header>
-        {show.beats.map((beat, index) => {
-          if (beat.end + beat.transition <= start || beat.start >= end)
-            return null;
-          const from = Math.round(beat.start * fps) - Math.round(start * fps);
-          const frames =
-            Math.round(beat.end * fps) -
-            Math.round(beat.start * fps) +
-            Math.round(beat.transition * fps);
-          return (
+        <Stadium />
+        <PitchTrack show={review} start={start} />
+        {review.sections
+          .filter((s) => s.end > start && s.start < end)
+          .map((s) => (
             <Sequence
-              key={index}
-              name={`${sectionLabels[beat.section]} · ${beat.phrase}`}
-              from={from}
-              durationInFrames={frames}
+              key={s.id}
+              name={`${labels[s.scene]} · ${s.title}`}
+              from={Math.round((s.start - start) * fps)}
+              durationInFrames={
+                Math.round(s.end * fps) - Math.round(s.start * fps)
+              }
               layout="none"
             >
-              <BeatSlide
-                show={show}
-                beat={beat}
-                index={index}
-                colors={verdictColors}
-              />
+              <SceneContent show={review} section={s} />
             </Sequence>
-          );
-        })}
-        <CaptionTrack show={show} start={start} />
-        <footer className="footer">
-          <span>
-            <b>FPL VORTEX</b>
-            <i />
-            @FPLVORTEX
-          </span>
-          <span>𝕏 @FPLVORTEXM</span>
-        </footer>
+          ))}
+        <BroadcastHeader show={review} start={start} />
+        <CaptionTrack show={review} start={start} />
+        <PremiumFooter
+          logo={show.brand_logo}
+          start={start}
+          episode={`GW${show.review_gw} · REVIEW`}
+        />
         {!vertical && popup
           ? popup.starts
               .filter((at) => at < end && at + popup.duration > start)
               .map((at) => (
                 <Sequence
                   key={at}
-                  name={`Footer popup · ${at}s`}
+                  name={`Original footer popup · ${at}s`}
                   from={Math.round((at - start) * fps)}
-                  durationInFrames={Math.max(
-                    1,
-                    Math.min(
-                      Math.ceil(popup.duration * fps),
-                      Math.round((end - at) * fps),
-                    ),
+                  durationInFrames={Math.min(
+                    Math.ceil(popup.duration * fps),
+                    Math.round((end - at) * fps),
                   )}
                   layout="none"
                 >
-                  <FooterPopup src={popup.src} />
+                  <div className="vx-footer-popup">
+                    <Video
+                      src={staticFile(popup.src)}
+                      muted
+                      objectFit="contain"
+                      style={{ width: "100%", height: "100%" }}
+                    />
+                  </div>
                 </Sequence>
               ))
           : null}
-        <Progress show={show} start={start} />
+        <Playhead show={review} start={start} />
       </div>
     </AbsoluteFill>
   );
