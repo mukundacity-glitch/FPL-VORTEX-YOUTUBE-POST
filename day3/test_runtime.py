@@ -843,6 +843,9 @@ class NotebookPreflightTests(unittest.TestCase):
         self.addCleanup(self.patch_stack.close)
         for function_name in (
             "_patch_control_cell",
+            "patch_live_squad_contract",
+            "patch_phase11_live_squad_guard",
+            "patch_my_plan_transfer_live_squad_guard",
             "_patch_narration_exports",
             "_patch_outro_social_icon",
             "_patch_tts_profile",

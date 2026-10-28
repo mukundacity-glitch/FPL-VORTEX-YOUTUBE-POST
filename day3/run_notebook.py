@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+import textwrap
 import types
 from pathlib import Path
 from typing import Iterable
@@ -32,6 +33,8 @@ TRANSFER_MODE_VALUES = {"AUTO", "MANUAL"}
 NOTEBOOK_CONTROL_CELL_INDEX = 1
 NARRATION_EXPORT_CELL_INDEX = 2
 VISUAL_ENRICHMENT_CELL_INDEX = 5
+PHASE11_DECISION_CELL_INDEX = 19
+MY_PLAN_TRANSFER_CELL_INDEX = 30
 PREVIEW_CELL_MARKER = "CELL 14C — ALL SELECTED SLIDES • LIVE HTML PREVIEW IN COLAB"
 PITCH_ANIMATION_CELL_INDEX = 30
 PITCH_RENDER_CELL_INDEX = 31
@@ -151,6 +154,169 @@ def _manual_pairs_from_env() -> tuple[list[int], list[int]]:
     return outs, ins
 
 
+def _inject_before_line(source: str, pattern: str, block: str, label: str) -> str:
+    """Insert ``block`` immediately above a unique source line, keeping its indent."""
+    matches = list(re.finditer(pattern, source, flags=re.MULTILINE))
+    if len(matches) != 1:
+        raise RuntimeError(f"{label}: expected exactly one anchor, found {len(matches)}")
+    match = matches[0]
+    indent = match.group("indent") or ""
+    injected = textwrap.indent(textwrap.dedent(block).strip("\n"), indent) + "\n"
+    return source[: match.start()] + injected + source[match.start() :]
+
+
+# Executed inside Cell 1. The workflow writes a live-squad snapshot before the
+# notebook runs; the resolver is the fallback for local/standalone runs. Either
+# way there is no silent "remembered squad": a failed API read fails the render.
+_LIVE_SQUAD_CONTRACT_BLOCK = '''
+# --- GitHub Actions live FPL squad contract (official public entry picks) ---
+import json as _d3_live_json
+import os as _d3_live_os
+from pathlib import Path as _D3LivePath
+from day3.fpl_squad import (
+    LiveSquad as _D3LiveSquad,
+    describe as _d3_describe_live_squad,
+    resolve_live_squad as _d3_resolve_live_squad,
+    validate_transfer_selections as _d3_validate_transfer_selections,
+)
+
+_d3_live_snapshot_path = _d3_live_os.environ.get("DAY3_LIVE_SQUAD_JSON", "")
+if _d3_live_snapshot_path and _D3LivePath(_d3_live_snapshot_path).is_file():
+    _d3_live_squad = _D3LiveSquad.from_dict(
+        _d3_live_json.loads(
+            _D3LivePath(_d3_live_snapshot_path).read_text(encoding="utf-8")
+        )
+    )
+else:
+    _d3_live_squad = _d3_resolve_live_squad(int(FPL_TEAM_ID))
+
+if int(_d3_live_squad.entry_id) != int(FPL_TEAM_ID):
+    raise RuntimeError(
+        f"Live FPL squad entry {_d3_live_squad.entry_id} "
+        f"does not match notebook entry {FPL_TEAM_ID}"
+    )
+
+DAY3_LIVE_SQUAD = _d3_live_squad
+DAY3_LIVE_SQUAD_IDS = tuple(int(x) for x in _d3_live_squad.squad_ids)
+DAY3_LIVE_SQUAD_GW = int(_d3_live_squad.base_gw)
+globals()["DAY3_LIVE_SQUAD"] = DAY3_LIVE_SQUAD
+globals()["DAY3_LIVE_SQUAD_IDS"] = DAY3_LIVE_SQUAD_IDS
+globals()["DAY3_LIVE_SQUAD_GW"] = DAY3_LIVE_SQUAD_GW
+
+_d3_manual_transfer = (
+    str(globals().get("MY_PLAN_SELECTION_MODE", "AUTO MODEL")) == "MANUAL PICKER"
+    and str(globals().get("MY_PLAN_TRANSFER_SELECTION", "AUTO MODEL"))
+    .upper().startswith("MANUAL")
+)
+if _d3_manual_transfer:
+    _d3_verified_outs, _d3_verified_ins = _d3_validate_transfer_selections(
+        _d3_live_squad,
+        globals().get("MY_PLAN_MANUAL_OUT_PLAYER_IDS", ""),
+        globals().get("MY_PLAN_MANUAL_IN_PLAYER_IDS", ""),
+    )
+    MY_PLAN_MANUAL_OUT_PLAYER_IDS = ",".join(map(str, _d3_verified_outs))
+    MY_PLAN_MANUAL_IN_PLAYER_IDS = ",".join(map(str, _d3_verified_ins))
+    globals()["MY_PLAN_MANUAL_OUT_PLAYER_IDS"] = MY_PLAN_MANUAL_OUT_PLAYER_IDS
+    globals()["MY_PLAN_MANUAL_IN_PLAYER_IDS"] = MY_PLAN_MANUAL_IN_PLAYER_IDS
+    print(
+        "✅ MY PLAN OUT/IN verified against the live FPL 15 for team "
+        + str(FPL_TEAM_ID)
+    )
+print(_d3_describe_live_squad(_d3_live_squad))
+'''
+
+# Injected into Cell 19 (Phase 11). SLIDE_CURRENT_SQUAD feeds both the Transfer
+# Desk HOLD/SELL cards and the video's 5A/5B base squad; it must be the real 15.
+_PHASE11_LIVE_SQUAD_GUARD = '''
+# Day 3 runner: reject any current squad that is not the live official FPL 15.
+_d3_live_ids = set(int(x) for x in globals().get("DAY3_LIVE_SQUAD_IDS", ()))
+if _d3_live_ids:
+    _d3_phase11_ids = set(
+        int(x)
+        for x in phase11_current_squad_state["player_id"].astype(int).tolist()
+    )
+    if len(_d3_phase11_ids) != 15 or _d3_phase11_ids != _d3_live_ids:
+        raise RuntimeError(
+            "Day 3 current squad does not match the live official FPL entry "
+            f"(GW{int(globals().get('DAY3_LIVE_SQUAD_GW', 0))}): "
+            f"missing={sorted(_d3_live_ids - _d3_phase11_ids)} "
+            f"extra={sorted(_d3_phase11_ids - _d3_live_ids)}"
+        )
+    print("✅ Phase 11 current squad equals the live FPL 15")
+'''
+
+# Injected into Cell 30 (5B transfer engine). Even if some upstream state were
+# replaced, the OUT cards drawn in the video must be owned players.
+_MY_PLAN_TRANSFER_LIVE_SQUAD_GUARD = '''
+# Day 3 runner: the transfer-plan OUT cards must come from the live FPL 15.
+_d3_live_ids = set(int(x) for x in globals().get("DAY3_LIVE_SQUAD_IDS", ()))
+if _d3_live_ids:
+    _d3_scene_ids = set(
+        int(x) for x in SLIDE_CURRENT_SQUAD["player_id"].astype(int).tolist()
+    )
+    if _d3_scene_ids != _d3_live_ids:
+        raise RuntimeError(
+            "MY PLAN 5B base squad is stale; refusing to render another FPL team"
+        )
+    if not set(int(x) for x in _outs).issubset(_d3_live_ids):
+        raise RuntimeError(
+            "MY PLAN 5B OUT players are not in the live FPL squad: "
+            + str(sorted(set(int(x) for x in _outs) - _d3_live_ids))
+        )
+    if set(int(x) for x in _ins) & _d3_live_ids:
+        raise RuntimeError("MY PLAN 5B IN players are already in the live FPL squad")
+'''
+
+
+def _patch_fpl_entry_id(source: str) -> str:
+    """Make the notebook's entry ID follow ``FPL_ENTRY_ID`` from the workflow."""
+    raw_entry_id = str(os.environ.get("FPL_ENTRY_ID", "")).strip()
+    if not raw_entry_id:
+        return source
+    try:
+        entry_id = int(raw_entry_id)
+    except ValueError as exc:
+        raise ValueError(f"FPL_ENTRY_ID must be an integer, got {raw_entry_id!r}") from exc
+    if entry_id <= 0:
+        raise ValueError("FPL_ENTRY_ID must be positive")
+    return _replace_once(
+        source,
+        r'^(?P<indent>[ \t]*)FPL_ID[ \t]*=[ \t]*\d+[ \t]*# @param \{type:"integer"\}[ \t]*$',
+        r"\g<indent>FPL_ID = " + str(entry_id) + r'  # @param {type:"integer"}',
+        "FPL entry id",
+    )
+
+
+def patch_live_squad_contract(source: str) -> str:
+    """Inject the shared live-squad resolver into the Day 3 control cell."""
+    return _inject_before_line(
+        source,
+        r"^(?P<indent>[ \t]*)MY_PLAN_SCENARIOS = tuple\(MY_PLAN_SCENARIO_MAP\.values\(\)\)[ \t]*$",
+        _LIVE_SQUAD_CONTRACT_BLOCK,
+        "Day 3 live squad contract",
+    )
+
+
+def patch_phase11_live_squad_guard(source: str) -> str:
+    """Assert Phase 11's current squad is the live official FPL 15."""
+    return _inject_before_line(
+        source,
+        r"^(?P<indent>[ \t]*)# Merge xPts and decision features onto the squad\.[ \t]*$",
+        _PHASE11_LIVE_SQUAD_GUARD,
+        "Phase 11 live squad guard",
+    )
+
+
+def patch_my_plan_transfer_live_squad_guard(source: str) -> str:
+    """Assert the 5B transfer scene's OUT cards are owned players."""
+    return _inject_before_line(
+        source,
+        r"^(?P<indent>[ \t]*)if len\(_outs\) != len\(_ins\) or not 1 <= len\(_outs\) <= 5:[ \t]*$",
+        _MY_PLAN_TRANSFER_LIVE_SQUAD_GUARD,
+        "MY PLAN 5B live squad guard",
+    )
+
+
 def _patch_control_cell(source: str) -> str:
     plan = str(os.environ.get("DAY3_PLAN", "NEITHER")).strip().upper()
     transfer_mode = str(os.environ.get("DAY3_TRANSFER_MODE", "AUTO")).strip().upper()
@@ -162,6 +328,10 @@ def _patch_control_cell(source: str) -> str:
             f"DAY3_TRANSFER_MODE must be one of {sorted(TRANSFER_MODE_VALUES)}, "
             f"got {transfer_mode!r}"
         )
+
+    # The notebook's own FPL_ID must agree with the entry used by the workflow's
+    # live-squad resolver; otherwise the video would show a different manager.
+    source = _patch_fpl_entry_id(source)
 
     if plan == "NEITHER":
         chip = os.environ.get("DAY3_PLANNED_CHIP", "Wildcard").strip()
@@ -287,7 +457,8 @@ print("✅ GitHub Manual Transfer selection loaded: "
         # scenes; Roll keeps only 5A.
         transfer_mode = "AUTO"
 
-    return source
+    # One live-squad source of truth for every downstream scene and validation.
+    return patch_live_squad_contract(source)
 
 
 def _patch_narration_exports(source: str) -> str:
@@ -1338,6 +1509,10 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_control_cell(source)
         if cell_index == NARRATION_EXPORT_CELL_INDEX:
             source = _patch_narration_exports(source)
+        if cell_index == PHASE11_DECISION_CELL_INDEX:
+            source = patch_phase11_live_squad_guard(source)
+        if cell_index == MY_PLAN_TRANSFER_CELL_INDEX:
+            source = patch_my_plan_transfer_live_squad_guard(source)
         if cell_index == TTS_PROFILE_CELL_INDEX:
             source = _patch_tts_profile(source)
         if cell_index == PLAYER_CARD_DESIGN_CELL_INDEX:

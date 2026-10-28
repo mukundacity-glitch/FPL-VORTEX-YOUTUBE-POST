@@ -31,21 +31,22 @@ on:
         default: "NONE"
         type: choice
         options:
+          # Generated from the official FPL API by day3/refresh_day3_choices.py
           - "NONE"
+          - "623 | Bentley | GK"
           - "1 | Raya | GK"
-          - "109 | Verbruggen | GK"
-          - "4 | Gabriel | DEF"
-          - "418 | Maguire | DEF"
-          - "469 | N.Williams | DEF"
-          - "304 | O'Shea | DEF"
-          - "229 | Tarkowski | DEF"
-          - "426 | B.Fernandes | MID"
+          - "115 | De Cuyper | DEF"
+          - "332 | Justin | DEF"
+          - "31 | Konsa | DEF"
+          - "173 | Thomas | DEF"
+          - "112 | Van Hecke | DEF"
+          - "289 | Crooks | MID"
           - "124 | Groß | MID"
+          - "427 | Mbeumo | MID"
+          - "154 | Palmer | MID"
           - "40 | Rogers | MID"
-          - "12 | Saka | MID"
-          - "368 | Szoboszlai | MID"
-          - "249 | Barry | FWD"
           - "346 | Calvert-Lewin | FWD"
+          - "411 | Haaland | FWD"
           - "165 | João Pedro | FWD"
       player_in_1:
         description: "Manual Transfer only — Player IN 1"
@@ -607,21 +608,22 @@ on:
         default: "NONE"
         type: choice
         options:
+          # Generated from the official FPL API by day3/refresh_day3_choices.py
           - "NONE"
+          - "623 | Bentley | GK"
           - "1 | Raya | GK"
-          - "109 | Verbruggen | GK"
-          - "4 | Gabriel | DEF"
-          - "418 | Maguire | DEF"
-          - "469 | N.Williams | DEF"
-          - "304 | O'Shea | DEF"
-          - "229 | Tarkowski | DEF"
-          - "426 | B.Fernandes | MID"
+          - "115 | De Cuyper | DEF"
+          - "332 | Justin | DEF"
+          - "31 | Konsa | DEF"
+          - "173 | Thomas | DEF"
+          - "112 | Van Hecke | DEF"
+          - "289 | Crooks | MID"
           - "124 | Groß | MID"
+          - "427 | Mbeumo | MID"
+          - "154 | Palmer | MID"
           - "40 | Rogers | MID"
-          - "12 | Saka | MID"
-          - "368 | Szoboszlai | MID"
-          - "249 | Barry | FWD"
           - "346 | Calvert-Lewin | FWD"
+          - "411 | Haaland | FWD"
           - "165 | João Pedro | FWD"
       player_in_2:
         description: "Manual Transfer only — Player IN 2"
@@ -1183,21 +1185,22 @@ on:
         default: "NONE"
         type: choice
         options:
+          # Generated from the official FPL API by day3/refresh_day3_choices.py
           - "NONE"
+          - "623 | Bentley | GK"
           - "1 | Raya | GK"
-          - "109 | Verbruggen | GK"
-          - "4 | Gabriel | DEF"
-          - "418 | Maguire | DEF"
-          - "469 | N.Williams | DEF"
-          - "304 | O'Shea | DEF"
-          - "229 | Tarkowski | DEF"
-          - "426 | B.Fernandes | MID"
+          - "115 | De Cuyper | DEF"
+          - "332 | Justin | DEF"
+          - "31 | Konsa | DEF"
+          - "173 | Thomas | DEF"
+          - "112 | Van Hecke | DEF"
+          - "289 | Crooks | MID"
           - "124 | Groß | MID"
+          - "427 | Mbeumo | MID"
+          - "154 | Palmer | MID"
           - "40 | Rogers | MID"
-          - "12 | Saka | MID"
-          - "368 | Szoboszlai | MID"
-          - "249 | Barry | FWD"
           - "346 | Calvert-Lewin | FWD"
+          - "411 | Haaland | FWD"
           - "165 | João Pedro | FWD"
       player_in_3:
         description: "Manual Transfer only — Player IN 3"
@@ -1759,21 +1762,22 @@ on:
         default: "NONE"
         type: choice
         options:
+          # Generated from the official FPL API by day3/refresh_day3_choices.py
           - "NONE"
+          - "623 | Bentley | GK"
           - "1 | Raya | GK"
-          - "109 | Verbruggen | GK"
-          - "4 | Gabriel | DEF"
-          - "418 | Maguire | DEF"
-          - "469 | N.Williams | DEF"
-          - "304 | O'Shea | DEF"
-          - "229 | Tarkowski | DEF"
-          - "426 | B.Fernandes | MID"
+          - "115 | De Cuyper | DEF"
+          - "332 | Justin | DEF"
+          - "31 | Konsa | DEF"
+          - "173 | Thomas | DEF"
+          - "112 | Van Hecke | DEF"
+          - "289 | Crooks | MID"
           - "124 | Groß | MID"
+          - "427 | Mbeumo | MID"
+          - "154 | Palmer | MID"
           - "40 | Rogers | MID"
-          - "12 | Saka | MID"
-          - "368 | Szoboszlai | MID"
-          - "249 | Barry | FWD"
           - "346 | Calvert-Lewin | FWD"
+          - "411 | Haaland | FWD"
           - "165 | João Pedro | FWD"
       player_in_4:
         description: "Manual Transfer only — Player IN 4"
@@ -2335,21 +2339,22 @@ on:
         default: "NONE"
         type: choice
         options:
+          # Generated from the official FPL API by day3/refresh_day3_choices.py
           - "NONE"
+          - "623 | Bentley | GK"
           - "1 | Raya | GK"
-          - "109 | Verbruggen | GK"
-          - "4 | Gabriel | DEF"
-          - "418 | Maguire | DEF"
-          - "469 | N.Williams | DEF"
-          - "304 | O'Shea | DEF"
-          - "229 | Tarkowski | DEF"
-          - "426 | B.Fernandes | MID"
+          - "115 | De Cuyper | DEF"
+          - "332 | Justin | DEF"
+          - "31 | Konsa | DEF"
+          - "173 | Thomas | DEF"
+          - "112 | Van Hecke | DEF"
+          - "289 | Crooks | MID"
           - "124 | Groß | MID"
+          - "427 | Mbeumo | MID"
+          - "154 | Palmer | MID"
           - "40 | Rogers | MID"
-          - "12 | Saka | MID"
-          - "368 | Szoboszlai | MID"
-          - "249 | Barry | FWD"
           - "346 | Calvert-Lewin | FWD"
+          - "411 | Haaland | FWD"
           - "165 | João Pedro | FWD"
       player_in_5:
         description: "Manual Transfer only — Player IN 5"
@@ -3021,6 +3026,68 @@ jobs:
           else:
               print("Player OUT/IN dropdowns are ignored for this plan.")
           print("FINAL render + FULL VIDEO + Private YouTube upload are automatic.")
+          PY
+
+      # Static dispatch dropdowns cannot call an API when the form opens, so the
+      # authoritative squad is resolved here from the official public FPL entry
+      # picks. A stale OUT choice fails before any expensive render/upload work.
+      - name: Resolve live FPL squad and verify Player OUT picks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from day3.fpl_squad import (
+              describe,
+              resolve_live_squad,
+              validate_transfer_selections,
+          )
+
+          entry_id = int(os.environ["FPL_ENTRY_ID"])
+          squad = resolve_live_squad(entry_id)
+          print(describe(squad), flush=True)
+
+          plan = os.environ.get("DAY3_PLAN", "").strip().upper()
+          mode = os.environ.get("DAY3_TRANSFER_MODE", "AUTO").strip().upper()
+          selected = []
+          for index in range(1, 6):
+              out_value = os.environ.get(f"DAY3_OUT_{index}", "NONE").strip()
+              in_value = os.environ.get(f"DAY3_IN_{index}", "NONE").strip()
+              if out_value == "NONE" and in_value == "NONE":
+                  continue
+              selected.append((out_value, in_value))
+
+          if plan == "TRANSFER" and mode == "MANUAL":
+              outs, ins = validate_transfer_selections(
+                  squad,
+                  [out for out, _ in selected],
+                  [in_value for _, in_value in selected],
+              )
+              print(f"✅ Verified {len(outs)} OUT/IN pairs against the live FPL 15")
+              for out_id, in_id in zip(outs, ins):
+                  print(f"   OUT {out_id} → IN {in_id}")
+          else:
+              print(
+                  "OUT/IN dropdowns are ignored for this plan; the automatic "
+                  "transfer engine uses the live FPL 15."
+              )
+
+          snapshot = Path(os.environ["RUNNER_TEMP"]) / "day3-live-squad.json"
+          snapshot.write_text(
+              json.dumps(squad.to_dict(), ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write(f"DAY3_LIVE_SQUAD_JSON={snapshot}\n")
+              env_file.write(f"DAY3_LIVE_SQUAD_GW={squad.base_gw}\n")
+              env_file.write(
+                  "DAY3_LIVE_SQUAD_IDS="
+                  + ",".join(map(str, squad.squad_ids))
+                  + "\n"
+              )
           PY
 
       - name: Install system dependencies
