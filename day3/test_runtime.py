@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ from unittest.mock import patch
 
 from day3 import live_evidence
 from day3 import run_notebook as runner
+from day3.evidence_pipeline import patch_defcon_sync_cue_normalization
 from day3.chip_plan import DAY3_CHIP_PLAN_SCENE, DAY3_PLANNED_CHIP_OPTIONS, chip_plan_copy
 from day3.publish_private import _one_final_video
 
@@ -271,6 +273,119 @@ class LiveEvidencePollingTests(unittest.TestCase):
                 poll_interval_seconds=0,
                 max_wait_seconds=0,
             )
+
+    def test_provisional_fixture_can_be_accepted_when_explicitly_enabled(self) -> None:
+        def loader(path: str) -> Any:
+            if path == "/bootstrap-static/":
+                return self.bootstrap
+            if path == "/fixtures/":
+                return [self.fixture(False, True)]
+            if path == "/event/1/live/":
+                return self.live_payload
+            raise AssertionError(f"Unexpected FPL path: {path}")
+
+        with patch.object(live_evidence.time, "sleep") as sleep:
+            snapshot = live_evidence.capture_evidence(
+                {"next_gw": 2, "api_fallback_used": False},
+                loader=loader,
+                poll_interval_seconds=0,
+                max_wait_seconds=0,
+                accept_provisional=True,
+                allow_partial=False,
+            )
+
+        self.assertEqual(snapshot["history_gameweeks"], [1])
+        self.assertEqual(snapshot["next_gw"], 2)
+        sleep.assert_not_called()
+
+    def test_partial_gameweek_can_be_allowed_when_explicitly_enabled(self) -> None:
+        def loader(path: str) -> Any:
+            if path == "/bootstrap-static/":
+                return self.bootstrap
+            if path == "/fixtures/":
+                return [self.fixture(False, False)]
+            raise AssertionError(f"Unexpected FPL path: {path}")
+
+        with patch.object(live_evidence.time, "sleep") as sleep:
+            snapshot = live_evidence.capture_evidence(
+                {"next_gw": 2, "api_fallback_used": False},
+                loader=loader,
+                poll_interval_seconds=0,
+                max_wait_seconds=0,
+                accept_provisional=False,
+                allow_partial=True,
+            )
+
+        self.assertTrue(snapshot["partial_gameweek"])
+        self.assertEqual(snapshot["pending_fixture_ids"], [701])
+        self.assertEqual(snapshot["history_gameweeks"], [])
+        sleep.assert_not_called()
+
+    def test_environment_flags_can_enable_both_overrides(self) -> None:
+        def loader(path: str) -> Any:
+            if path == "/bootstrap-static/":
+                return self.bootstrap
+            if path == "/fixtures/":
+                return [self.fixture(False, True)]
+            if path == "/event/1/live/":
+                return self.live_payload
+            raise AssertionError(f"Unexpected FPL path: {path}")
+
+        environment = {
+            "DAY3_ACCEPT_PROVISIONAL": "1",
+            "DAY3_ALLOW_PARTIAL_GAMEWEEK": "1",
+            "DAY3_EVIDENCE_MAX_WAIT_MINUTES": "0",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            with patch.object(live_evidence.time, "sleep") as sleep:
+                snapshot = live_evidence.capture_evidence(
+                    {"next_gw": 2, "api_fallback_used": False},
+                    loader=loader,
+                    poll_interval_seconds=0,
+                )
+
+        self.assertEqual(snapshot["history_gameweeks"], [1])
+        sleep.assert_not_called()
+
+
+class DefconSyncCueTests(unittest.TestCase):
+    def test_cues_are_normalized_with_the_final_spoken_script(self) -> None:
+        source = (
+            "DEFCON_NARRATION_CUES = {\n"
+            '    "opening": "For the upcoming Gameweek",\n'
+            '    "individual": [{"anchor": "The historical player leader is James Hill"}],\n'
+            '    "team_intro": "Now lets examine every club",\n'
+            '    "target_teams": [{"anchor": "Man City defensive-action record"}],\n'
+            '    "avoid_intro": "Now to the clubs",\n'
+            '    "avoid_teams": [{"anchor": "Moving to Spurs"}],\n'
+            "}\n"
+            'scripts = {"03_defcon": "raw"}\n'
+            '_full_word_scripts = {"03_defcon": "spoken The historical player leader is James Hill"}\n'
+            "scripts = _full_word_scripts\n"
+            '_d3_sync_anchors = {"03_defcon": [DEFCON_NARRATION_CUES["individual"][0]["anchor"]]}\n'
+        )
+        patched = patch_defcon_sync_cue_normalization(source)
+        namespace: dict[str, Any] = {
+            "_d3_full_word_script": lambda text: text.replace("Man City", "Manchester City"),
+            "vx_full_word_narration": lambda text, **kwargs: "spoken " + text,
+        }
+        exec(compile(patched, "<defcon-sync-cue-test>", "exec"), namespace)
+
+        cues = namespace["DEFCON_NARRATION_CUES"]
+        self.assertEqual(cues["opening"], "spoken For the upcoming Gameweek")
+        self.assertEqual(
+            cues["individual"][0]["anchor"],
+            "spoken The historical player leader is James Hill",
+        )
+        self.assertEqual(
+            cues["target_teams"][0]["anchor"],
+            "spoken Manchester City defensive-action record",
+        )
+        self.assertIn(cues["individual"][0]["anchor"], namespace["scripts"]["03_defcon"])
+
+    def test_unknown_notebook_shape_fails_clearly(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "expected exactly one full-word script assignment"):
+            patch_defcon_sync_cue_normalization("pass\n")
 
 
 class FinalVideoSelectionTests(unittest.TestCase):

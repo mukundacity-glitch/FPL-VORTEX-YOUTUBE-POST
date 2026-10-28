@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import textwrap
 
 
@@ -20,6 +21,62 @@ def replace_function(source: str, name: str, replacement: str) -> str:
     prefix = " " * node.col_offset
     lines[node.lineno - 1:node.end_lineno] = [textwrap.indent(textwrap.dedent(replacement).strip(), prefix) + "\n"]
     return "".join(lines)
+
+
+def patch_defcon_sync_cue_normalization(source: str) -> str:
+    """Align DEFCON animation anchors with the final full-word narration.
+
+    The live-evidence pipeline replaces the notebook's original DEFCON narration
+    generator. Its cue strings are raw text, while Cell 18 validates those cues
+    against ``_full_word_scripts`` after the strict full-word narration pass.
+    Re-normalize every cue with the same helpers at the point where the final
+    scripts become authoritative, so expanded player/club names still match.
+    """
+    pattern = re.compile(
+        r"(?m)^(?P<indent>[ \t]*)scripts\s*=\s*_full_word_scripts\s*$"
+    )
+    matches = list(pattern.finditer(source))
+    if len(matches) != 1:
+        raise RuntimeError(
+            "DEFCON sync cue normalization: expected exactly one full-word "
+            f"script assignment, found {len(matches)}"
+        )
+    match = matches[0]
+    indent = match.group("indent")
+    block = textwrap.indent(
+        textwrap.dedent(
+            '''
+            # The live-evidence narration replaces the notebook's original cue
+            # generator. Normalize its anchors with the same full-word pass used
+            # for speech, otherwise Cell 18's exact-sync audit compares raw cue
+            # text against expanded player/club names and fails before TTS.
+            if "03_defcon" in scripts and "DEFCON_NARRATION_CUES" in globals():
+                _d3_cue_script = globals().get("_d3_full_word_script")
+                _d3_cue_narration = globals().get("vx_full_word_narration")
+
+                def _d3_spoken_cue(value):
+                    text = str(value)
+                    if callable(_d3_cue_script):
+                        text = _d3_cue_script(text)
+                    if callable(_d3_cue_narration):
+                        text = _d3_cue_narration(
+                            text,
+                            context="DEFCON exact-sync cue",
+                            expand_player_context=False,
+                        )
+                    return text
+
+                _d3_cues = globals()["DEFCON_NARRATION_CUES"]
+                for _d3_cue_key in ("opening", "team_intro", "avoid_intro"):
+                    _d3_cues[_d3_cue_key] = _d3_spoken_cue(_d3_cues[_d3_cue_key])
+                for _d3_cue_key in ("individual", "target_teams", "avoid_teams"):
+                    for _d3_cue_row in _d3_cues.get(_d3_cue_key, []):
+                        _d3_cue_row["anchor"] = _d3_spoken_cue(_d3_cue_row["anchor"])
+            '''
+        ).strip() + "\n",
+        indent,
+    )
+    return source[:match.end()] + "\n" + block + source[match.end():]
 
 
 def patch_evidence_pipeline(cell_index: int, source: str) -> str:
@@ -169,6 +226,7 @@ def patch_evidence_pipeline(cell_index: int, source: str) -> str:
                                         args=[argument, ast.Constant("narration source statistic")],
                                         keywords=[ast.keyword(arg="minimum", value=ast.Constant(-1000000))])
                 return node
+        source = patch_defcon_sync_cue_normalization(source)
         tree = VerifiedNarrationNumbers().visit(ast.parse(source))
         ast.fix_missing_locations(tree)
         source = 'from day3.live_evidence import number as verified_narration_number\n' + ast.unparse(tree) + '\n'
