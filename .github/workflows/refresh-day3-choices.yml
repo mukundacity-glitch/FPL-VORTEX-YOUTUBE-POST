@@ -1,0 +1,66 @@
+# GitHub workflow_dispatch choice options are static YAML: the dispatch form
+# cannot call the FPL API when it opens. This workflow rewrites the five
+# player_out_* option lists from the official public FPL entry picks so the
+# OUT dropdowns always show the manager's actual 15 players.
+name: Refresh Day 3 OUT choices
+
+on:
+  schedule:
+    # Every three hours; no commit is made while the squad is unchanged.
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      entry_id:
+        description: "FPL entry ID (leave blank to use the repository default)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-day3-out-choices
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh OUT dropdowns from FPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Regenerate Player OUT options from the official FPL API
+        shell: bash
+        env:
+          REQUESTED_ENTRY_ID: ${{ inputs.entry_id || '' }}
+        run: |
+          set -euo pipefail
+          ENTRY_ID="${REQUESTED_ENTRY_ID:-145784}"
+          python -m day3.refresh_day3_choices \
+            --entry-id "$ENTRY_ID" \
+            --workflow .github/workflows/day-3.yml \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit refreshed choices to the default branch
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows/day-3.yml; then
+            echo "Day 3 OUT choices already match the live FPL squad." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "fpl-vortex-bot"
+          git config user.email "fpl-vortex-bot@users.noreply.github.com"
+          git add .github/workflows/day-3.yml
+          git commit -m "Refresh Day 3 Player OUT choices from the official FPL API"
+          git push
+          echo "Day 3 OUT choices were refreshed and pushed to main." >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,4 @@
-name: Day 3 notebook fetch (temporary)
+name: Day 3 live-squad preflight (temporary)
 
 on:
   push:
@@ -11,10 +11,35 @@ permissions:
   contents: read
 
 jobs:
-  fetch:
-    name: Fetch production notebook
+  preflight:
+    name: Validate live-squad patches against the production notebook
     runs-on: ubuntu-24.04
+    timeout-minutes: 40
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "requests>=2.32,<3" "pandas>=2.2,<3" "numpy>=2.0,<3" \
+            "pyarrow>=17,<21" "Pillow>=10.4,<12" "scipy>=1.14,<2" \
+            "matplotlib>=3.9,<4" "ipython>=8.27,<10" "ipywidgets>=8.1,<9" \
+            "beautifulsoup4>=4.12,<5" "opencv-python-headless>=4.10,<5" \
+            "google-api-python-client>=2.147,<3" "google-auth>=2.35,<3" \
+            "google-auth-httplib2>=0.2,<1"
+
+      - name: Test Day 3 runtime guards
+        shell: bash
+        run: python -m unittest discover -s day3 -p 'test_*.py' -v
+
       - name: Download public production notebook
         shell: bash
         run: |
@@ -33,7 +58,7 @@ jobs:
           print(f"Downloaded production notebook: {len(cells)} cells, {path.stat().st_size} bytes")
           PY
 
-      - name: Print squad / MY PLAN code context
+      - name: Print exact live-squad patch anchors
         shell: bash
         run: |
           set -euo pipefail
@@ -43,45 +68,66 @@ jobs:
           path = Path(os.environ["RUNNER_TEMP"]) / "notebook" / "day3-final.ipynb"
           data = json.loads(path.read_text(encoding="utf-8"))
           cells = [c for c in data["cells"] if c.get("cell_type") == "code"]
-          keywords = [
-              "MY_PLAN_MANUAL_OUT_PLAYER_IDS", "MY_PLAN_MANUAL_IN_PLAYER_IDS",
-              "MY_PLAN_TEAM_SOURCE", "VX_MY_PLAN_PICKER_STATE", "squad_ids",
-              "final_ids", "FPL_TEAM_ID", "ENTRY_ID", "/picks/",
-              "current_squad", "CURRENT_SQUAD", "MY_PLAN_TRANSFER_SELECTION",
-              "VX_MY_PLAN_SELECTION_READY", "_vx_resolve_permanent_public_squad",
-              "MY_PLAN_SELECTION_MODE", "PLAYERS =", "ACCOUNT =",
-          ]
-          pat = re.compile("|".join(re.escape(k) for k in keywords))
-          print("=== CELL INDEX ===")
-          for i, cell in enumerate(cells):
-              src = "".join(cell.get("source", []))
-              lines = src.splitlines()
-              hits = [n for n, line in enumerate(lines) if pat.search(line)]
-              title = next((l.strip() for l in lines[:12] if l.strip().startswith("#@title")), lines[0][:100] if lines else "")
-              print(f"CELL {i:>2} | {len(lines):>5} lines | {len(hits):>4} hits | {title[:110]}")
-          print("=== MATCH CONTEXT ===")
-          for i, cell in enumerate(cells):
-              lines = "".join(cell.get("source", [])).splitlines()
-              wanted = set()
-              for n, line in enumerate(lines):
-                  if pat.search(line):
-                      wanted.update(range(max(0, n - 6), min(len(lines), n + 7)))
-              if not wanted:
-                  continue
-              print(f"--- CELL {i} ({len(lines)} lines, {len(wanted)} context lines) ---")
-              last = -2
-              for n in sorted(wanted):
-                  if n > last + 1:
-                      print("    ...")
-                  print(f"C{i}:{n+1}: {lines[n]}")
-                  last = n
-          print("=== END MATCH CONTEXT ===")
+          anchors = {
+              1: [r"^FPL_ID\s*=", r"^MY_PLAN_SCENARIOS\s*=", r"_vx_build_my_plan_player_picker\(\)"],
+              19: [r"Merge xPts and decision features onto the squad", r"phase11_current_squad_state\s*="],
+              30: [r"if len\(_outs\) != len\(_ins\) or not 1 <= len\(_outs\) <= 5:", r"SLIDE_CURRENT_SQUAD"],
+          }
+          for index, patterns in anchors.items():
+              lines = "".join(cells[index].get("source", [])).splitlines()
+              print(f"=== CELL {index} ({len(lines)} lines) ===")
+              for pattern in patterns:
+                  rx = re.compile(pattern)
+                  hits = [(n, line) for n, line in enumerate(lines) if rx.search(line)]
+                  print(f"  PATTERN {pattern!r} -> {len(hits)} hits")
+                  for n, line in hits[:12]:
+                      print(f"    C{index}:{n+1}: {line!r}")
           PY
 
-      - name: Upload notebook artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: day3-production-notebook
-          path: ${{ runner.temp }}/notebook/day3-final.ipynb
-          if-no-files-found: error
-          retention-days: 3
+      - name: Validate all patched notebook cells (MANUAL transfer)
+        shell: bash
+        env:
+          FPL_ENTRY_ID: "145784"
+          DAY3_PLAN: "TRANSFER"
+          DAY3_TRANSFER_MODE: "MANUAL"
+          DAY3_OUT_1: "1 | Raya | GK"
+          DAY3_IN_1: "109 | Verbruggen | GK"
+          DAY3_OUT_2: "NONE"
+          DAY3_IN_2: "NONE"
+          DAY3_OUT_3: "NONE"
+          DAY3_IN_3: "NONE"
+          DAY3_OUT_4: "NONE"
+          DAY3_IN_4: "NONE"
+          DAY3_OUT_5: "NONE"
+          DAY3_IN_5: "NONE"
+        run: python day3/run_notebook.py "$RUNNER_TEMP/notebook/day3-final.ipynb" --validate-only
+
+      - name: Validate all patched notebook cells (AUTO transfer)
+        shell: bash
+        env:
+          FPL_ENTRY_ID: "145784"
+          DAY3_PLAN: "TRANSFER"
+          DAY3_TRANSFER_MODE: "AUTO"
+        run: python day3/run_notebook.py "$RUNNER_TEMP/notebook/day3-final.ipynb" --validate-only
+
+      - name: Resolve live FPL squad from the official API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m day3.fpl_squad --entry-id 145784 --out-json "$RUNNER_TEMP/day3-live-squad.json"
+
+      - name: Verify committed OUT choices equal the live FPL squad
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/workflows/day-3.yml "$RUNNER_TEMP/day-3-before.yml"
+          python -m day3.refresh_day3_choices \
+            --entry-id 145784 \
+            --workflow .github/workflows/day-3.yml \
+            --summary "$GITHUB_STEP_SUMMARY"
+          if git diff --quiet -- .github/workflows/day-3.yml; then
+            echo "✅ Committed OUT choices already equal the live FPL 15"
+          else
+            echo "::warning::Committed OUT choices differ from the live FPL 15; showing the diff"
+            git --no-pager diff -- .github/workflows/day-3.yml | head -120
+          fi
