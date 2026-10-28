@@ -7,6 +7,14 @@ from .day1_results import build_results
 
 
 def patch_cell(cell):
+    # The legacy notebook remains byte-for-byte intact. Day 1's production
+    # adapter now replaces the roll call with the evidence-led decision show.
+    if '# CELL 14 — SELF-CONTAINED' in cell:
+        return "print('Day 1: decision show owns the presentation')"
+    if '# CELL 15 — AUTO' in cell:
+        return 'from vortex.day1_show import prepare_show\nprepare_show(globals())'
+    if '# CELL 16 —' in cell or '# CELL 17 —' in cell:
+        return "print('Day 1: legacy fifteen-player narration and render retired')"
     if '# CELL 14 — SELF-CONTAINED' in cell:
         before = cell[:cell.index('# PRESENTATION COMPATIBILITY BRIDGE')]
         branding = cell[cell.index('def vx_apply_pl_lockup'):cell.index('print("✅ Presentation bridge:')]
@@ -20,7 +28,7 @@ def patch_cell(cell):
     if any(label in cell for label in ('# CELL 5 —', '# CELL 6 —', '# CELL 7 —', '# CELL 8 —', '# CELL 12 —', '# CELL 13 —', '# CELL 13A —', '# CELL 13B —', '# CELL 13C —', '# CELL 13D —', '# CELL 13E —', '# CELL 13F —')):
         return "print('Day 1: forecast stage removed from retrospective review')"
     if 'SLIDE_01_INTRO = True' in cell:
-        for name in ('SLIDE_03_FDR','SLIDE_04_PROJECTED_GOALS','SLIDE_05_CLEAN_SHEETS','SLIDE_06_OUTRO'):
+        for name in ('SLIDE_02_GW_REVIEW','SLIDE_03_FDR','SLIDE_04_PROJECTED_GOALS','SLIDE_05_CLEAN_SHEETS','SLIDE_06_OUTRO'):
             cell = cell.replace(name+' = True', name+' = False')
     for label in ('# CELL 14A —', '# CELL 14B —', '# CELL 14C —', '# CELL 19 —', '# CELL 20 —'):
         if label in cell:
@@ -39,7 +47,7 @@ def patch_cell(cell):
             raise RuntimeError('Original hero-card data insertion point changed')
         cell = cell.replace(anchor, replacement, 1)
     if '# CELL 18 —' in cell:
-        return 'from vortex.day1_short import render_results\nawait render_results(globals())'
+        return 'from vortex.day1_show_render import render_show\nawait render_show(globals())'
     return cell
 
 

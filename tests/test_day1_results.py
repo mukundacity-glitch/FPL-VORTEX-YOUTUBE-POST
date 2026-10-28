@@ -27,7 +27,7 @@ class ShortProductionTests(unittest.TestCase):
             self.assertIn(name+' = False',controls)
         self.assertFalse(any('build_weekly_frame(globals())' in c for c in patched))
         self.assertFalse(any('agenda_1_at=18.0' in c for c in patched))
-        self.assertTrue(any('await render_results(globals())' in c for c in patched))
+        self.assertTrue(any('await render_show(globals())' in c for c in patched))
 
     def test_card_count_does_not_invent_a_suspension(self):
         from vortex.day1_short import warning

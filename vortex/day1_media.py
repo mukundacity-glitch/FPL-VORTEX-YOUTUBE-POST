@@ -313,6 +313,10 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
             "Day 1 QA says media was integrated, but the final MP4 hash changed"
         )
 
+    if (data_dir / 'day1_show.json').is_file():
+        from .day1_show_media import integrate_show_media
+        return integrate_show_media(output_root, asset_dir, existing_qa, final_mp4, combined_mp3)
+
     opening = _required_file(asset_dir / OPENING_NAME)
     background = _required_file(asset_dir / BACKGROUND_NAME)
     outro = _required_file(asset_dir / OUTRO_NAME)
