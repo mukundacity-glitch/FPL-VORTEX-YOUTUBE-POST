@@ -83,6 +83,8 @@ class SharedFixtureTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 patch_weekly_source(source)
         self.assertIn('align_weekly_frame(', patch_weekly_source(anchor))
+        fdr = '    _rows = []\n    for _, _fx in fixture_probabilities_model_only.iterrows():\n        pass'
+        self.assertIn('from vortex.fixture_forecast_model import vx_phase4_attack_fdr, vx_phase4_defence_fdr', patch_weekly_source(fdr))
 
     def test_vendored_math_is_ast_identical_to_wc_pin(self):
         # Only extra diagnostic fields may differ from the checksum-verified

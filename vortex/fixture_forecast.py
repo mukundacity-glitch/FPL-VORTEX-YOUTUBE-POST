@@ -145,6 +145,10 @@ def align_weekly_frame(frame, namespace):
 
 def patch_weekly_source(source):
     anchor = "    fixture_goal_expectations_model = pd.DataFrame(_rows, columns=PHASE3_OUTPUT_FIELDS)"
+    fdr_anchor = "    _rows = []\n    for _, _fx in fixture_probabilities_model_only.iterrows():"
+    if source.count(fdr_anchor) == 1 and anchor not in source:
+        return source.replace(fdr_anchor,
+            "    from vortex.fixture_forecast_model import vx_phase4_attack_fdr, vx_phase4_defence_fdr\n" + fdr_anchor, 1)
     if source.count(anchor) != 1:
         raise ValueError("Weekly Phase 3 fixture contract changed")
     return source.replace(anchor, anchor + "\n    from vortex.fixture_forecast import align_weekly_frame\n    fixture_goal_expectations_model = align_weekly_frame(fixture_goal_expectations_model, globals())", 1)

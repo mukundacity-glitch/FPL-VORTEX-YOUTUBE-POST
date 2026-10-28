@@ -1506,7 +1506,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
     prepared_cells: list[tuple[int, str]] = []
     transformer = TransformerManager()
     for cell_index, source in cells:
-        if cell_index == 10:
+        if cell_index in (10, 12):
             source = patch_weekly_source(source)
         if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
             source = _patch_control_cell(source)

@@ -5237,6 +5237,7 @@ else:
     if fixture_probabilities_model_only.empty:
         raise RuntimeError("Phase 4B received no fixture probabilities")
 
+    from vortex.fixture_forecast_model import vx_phase4_attack_fdr, vx_phase4_defence_fdr
     _rows = []
     for _, _fx in fixture_probabilities_model_only.iterrows():
         _lh = float(_fx["model_lambda_home"])
