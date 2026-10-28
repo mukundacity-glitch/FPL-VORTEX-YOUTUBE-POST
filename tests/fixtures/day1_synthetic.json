@@ -1,0 +1,585 @@
+{
+  "gw": 8,
+  "preview_gw": 9,
+  "status": "FINAL",
+  "verified_at": "synthetic-test-fixture",
+  "players": [
+    {
+      "id": 1,
+      "name": "Keeper One",
+      "team": "T01",
+      "team_name": "Club 01",
+      "team_code": 1,
+      "pos": "GK",
+      "bench": false,
+      "squad_position": 1,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 7,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "A",
+        "is_home": false
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "A",
+          "is_home": false
+        }
+      ],
+      "season_total_points": 31,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 2,
+      "name": "Starting Defender",
+      "team": "T02",
+      "team_name": "Club 02",
+      "team_code": 2,
+      "pos": "DEF",
+      "bench": false,
+      "squad_position": 2,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 1,
+      "minutes": 59,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "d",
+      "news": "Availability uncertain",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 32,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 3,
+      "name": "Starting Hero",
+      "team": "T01",
+      "team_name": "Club 01",
+      "team_code": 1,
+      "pos": "DEF",
+      "bench": false,
+      "squad_position": 3,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 14,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "A",
+        "is_home": false
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "A",
+          "is_home": false
+        }
+      ],
+      "season_total_points": 33,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 4,
+      "name": "Defender Two",
+      "team": "T03",
+      "team_name": "Club 03",
+      "team_code": 3,
+      "pos": "DEF",
+      "bench": false,
+      "squad_position": 4,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 6,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "A",
+        "is_home": false
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "A",
+          "is_home": false
+        }
+      ],
+      "season_total_points": 34,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 5,
+      "name": "Defender Three",
+      "team": "T04",
+      "team_name": "Club 04",
+      "team_code": 4,
+      "pos": "DEF",
+      "bench": false,
+      "squad_position": 5,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 1,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "A",
+        "is_home": false
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "A",
+          "is_home": false
+        }
+      ],
+      "season_total_points": 35,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 6,
+      "name": "Midfielder One",
+      "team": "T05",
+      "team_name": "Club 05",
+      "team_code": 5,
+      "pos": "MID",
+      "bench": false,
+      "squad_position": 6,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 1,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 36,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 7,
+      "name": "Midfielder Two",
+      "team": "T06",
+      "team_name": "Club 06",
+      "team_code": 6,
+      "pos": "MID",
+      "bench": false,
+      "squad_position": 7,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 2,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "A",
+        "is_home": false
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "A",
+          "is_home": false
+        }
+      ],
+      "season_total_points": 37,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 8,
+      "name": "Midfielder Three",
+      "team": "T04",
+      "team_name": "Club 04",
+      "team_code": 4,
+      "pos": "MID",
+      "bench": false,
+      "squad_position": 8,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 0,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "A",
+        "is_home": false
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "A",
+          "is_home": false
+        }
+      ],
+      "season_total_points": 38,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 9,
+      "name": "Captain Mid",
+      "team": "T05",
+      "team_name": "Club 05",
+      "team_code": 5,
+      "pos": "MID",
+      "bench": false,
+      "squad_position": 9,
+      "captain": true,
+      "vice": false,
+      "multiplier": 2,
+      "points": -1,
+      "minutes": 79,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 39,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 10,
+      "name": "Forward Alternative",
+      "team": "T07",
+      "team_name": "Club 07",
+      "team_code": 7,
+      "pos": "FWD",
+      "bench": false,
+      "squad_position": 10,
+      "captain": false,
+      "vice": true,
+      "multiplier": 1,
+      "points": 8,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 200,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 11,
+      "name": "Forward Two",
+      "team": "T03",
+      "team_name": "Club 03",
+      "team_code": 3,
+      "pos": "FWD",
+      "bench": false,
+      "squad_position": 11,
+      "captain": false,
+      "vice": false,
+      "multiplier": 1,
+      "points": 2,
+      "minutes": 84,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "A",
+        "is_home": false
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "A",
+          "is_home": false
+        }
+      ],
+      "season_total_points": 41,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 12,
+      "name": "Keeper Two",
+      "team": "T02",
+      "team_name": "Club 02",
+      "team_code": 2,
+      "pos": "GK",
+      "bench": true,
+      "squad_position": 12,
+      "captain": false,
+      "vice": false,
+      "multiplier": 0,
+      "points": 0,
+      "minutes": 0,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 42,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 13,
+      "name": "Injured Forward",
+      "team": "T05",
+      "team_name": "Club 05",
+      "team_code": 5,
+      "pos": "FWD",
+      "bench": true,
+      "squad_position": 13,
+      "captain": false,
+      "vice": false,
+      "multiplier": 0,
+      "points": 0,
+      "minutes": 0,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "i",
+      "news": "Muscle injury - Unknown return date",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 43,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 14,
+      "name": "Bench Defender",
+      "team": "T08",
+      "team_name": "Club 08",
+      "team_code": 8,
+      "pos": "DEF",
+      "bench": true,
+      "squad_position": 14,
+      "captain": false,
+      "vice": false,
+      "multiplier": 0,
+      "points": 7,
+      "minutes": 90,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 44,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    },
+    {
+      "id": 15,
+      "name": "Bench Midfielder",
+      "team": "T09",
+      "team_name": "Club 09",
+      "team_code": 9,
+      "pos": "MID",
+      "bench": true,
+      "squad_position": 15,
+      "captain": false,
+      "vice": false,
+      "multiplier": 0,
+      "points": 0,
+      "minutes": 0,
+      "photo": "",
+      "next_fixture": {
+        "gw": 9,
+        "opp": "OPP",
+        "opp_name": "Opponent Club",
+        "ha": "H",
+        "is_home": true
+      },
+      "status": "a",
+      "news": "",
+      "fixtures": [
+        {
+          "gw": 9,
+          "opp": "OPP",
+          "opp_name": "Opponent Club",
+          "ha": "H",
+          "is_home": true
+        }
+      ],
+      "season_total_points": 45,
+      "season_minutes": 600,
+      "season_starts": 7,
+      "price": 7.0
+    }
+  ],
+  "metrics": {
+    "gw_points": 40,
+    "gross_points": 40,
+    "transfer_cost": 0,
+    "average_points": 40
+  },
+  "source": "Synthetic regression fixture; no user squad identities or account data."
+}

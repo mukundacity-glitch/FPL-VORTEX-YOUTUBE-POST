@@ -142,6 +142,12 @@ jobs:
         shell: bash
         run: python -m unittest discover -s tests -p 'test_day1_results_render.py' -v
 
+      - name: Verify decision show evidence and pacing
+        shell: bash
+        run: |
+          python -m unittest discover -s tests -p 'test_day1_show.py' -v
+          python -m unittest discover -s tests -p 'test_day1_show_media.py' -v
+
       - name: Install Python dependencies
         shell: bash
         run: |
@@ -509,9 +515,13 @@ jobs:
           print("Day 1 execution: PASS")
           PY
 
-      - name: Add opening and confirmed music mix
+      - name: Mix speech-first music and captain reveal
         shell: bash
         run: python -m vortex.day1_media
+
+      - name: Export three portrait decision Shorts
+        shell: bash
+        run: python -m vortex.day1_show_render --shorts
 
       - name: Build private YouTube metadata package
         shell: bash
@@ -666,5 +676,13 @@ jobs:
           name: day-1-log-${{ github.run_number }}
           path: ${{ runner.temp }}/day-1.log
           if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload decision-show production brief
+        uses: actions/upload-artifact@v7
+        with:
+          name: day-1-production-brief-${{ github.run_number }}
+          path: /content/FPL_VORTEX_FIRST_DAY_WORK/video/decision_show/FPL_VORTEX_Production_Brief.md
+          if-no-files-found: error
           retention-days: 14
 

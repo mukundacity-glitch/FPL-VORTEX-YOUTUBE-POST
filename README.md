@@ -40,6 +40,29 @@ Day 1 remains the existing implementation on `main`:
 - YouTube package/upload: `vortex/youtube_studio_package.py` and `vortex/youtube_private_upload.py`
 - Output root: `My Drive/FPL_VORTEX/FIRST VIDEO`
 
+Day 1 now produces a 4:50 personal decision show through `vortex/day1_show.py`
+and `vortex/day1_show_render.py`. The immutable notebook still supplies one
+final official FPL snapshot. The production adapter replaces the results roll
+call and fifteen-player narration with a cold open, a short personal review,
+three verdicts, an early Gameweek plan and one audience question. Actual picks
+and multipliers determine which points counted; bench-boost and autosub points
+are never presented as an unused bench haul. These are provisional opinions,
+not claims that transfers have already been made.
+
+The blue portrait-card design uses one evidence panel at a time. Editorial
+headlines contain at most five words, visuals change every three to six seconds,
+and word captions are drawn on the 24fps clock from measured Ryan boundaries.
+The original channel logo is reused. The speech-first mix omits the old opening
+video, starts quiet music under the hook, and adds one captain-reveal impact.
+Three sentence-safe 1080x1920 Shorts are exported alongside the 4K master.
+The `day-1-production-brief-*` Actions artifact contains the A–J narration,
+visual directions, five title choices, thumbnail text, poll, pinned comment
+and a manual YouTube Studio analytics/testing plan. No poll/comment is posted
+automatically. The long-form YouTube upload remains Private only.
+
+After an upgrade, start a new **Day 1** run on `main`; retrying an old job
+retains its old source commit.
+
 Day 2 is isolated from Day 1:
 
 - Workflow: `.github/workflows/day-2.yml`

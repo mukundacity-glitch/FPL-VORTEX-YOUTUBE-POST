@@ -23,15 +23,17 @@ def fixture_namespace():
     return ns,player,rows
 
 class PremiumContractTests(unittest.TestCase):
-    def test_review_script_is_not_truncated_and_original_moods_are_used(self):
+    def test_legacy_roll_call_is_replaced_by_the_decision_show(self):
         cells=[c for c in re.split(r'(?m)(?=^# ={20,}\n# [^\n]*\bCELL\s+\d+[A-Za-z]?\b[^\n]*\n)',SOURCE) if c.strip()]
         review=next(c for c in cells if '# CELL 15 — AUTO' in c)
         restored=patch_cell(review)
-        self.assertNotIn('shorten_review',restored)
-        self.assertIn('profile = vx_tts_profile(mood)',restored)
-        before=next(n for n in ast.parse(review).body if isinstance(n,ast.FunctionDef) and n.name=='vx_review_creator_player_text')
-        after=next(n for n in ast.parse(restored).body if isinstance(n,ast.FunctionDef) and n.name=='vx_review_creator_player_text')
-        self.assertEqual(ast.dump(before),ast.dump(after))
+        self.assertIn('prepare_show(globals())',restored)
+        self.assertNotIn('vx_review_creator_player_text',restored)
+        controls=patch_cell(next(c for c in cells if 'SLIDE_01_INTRO = True' in c))
+        self.assertIn('SLIDE_02_GW_REVIEW = False',controls)
+        render=patch_cell(next(c for c in cells if '# CELL 18 —' in c))
+        self.assertIn('await render_show(globals())',render)
+        self.assertNotIn('render_results',render)
         for cell in cells:compile(patch_cell(cell),'patched','exec',flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
 
     def test_original_hero_data_and_design_are_reused(self):
