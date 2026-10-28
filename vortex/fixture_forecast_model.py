@@ -11,7 +11,7 @@ Publication of this module does not modify the user's DAY-3 notebook.
 """
 from pathlib import Path
 from datetime import datetime, timezone
-import re, math, json
+import re, math, json, os
 import numpy as np
 import pandas as pd
 import concurrent.futures as futures
@@ -29,9 +29,21 @@ def refresh_fpl_core(boot, official_fixtures, input_root, now, client):
     """
     year=min(int(e['deadline_time'][:4]) for e in boot['events'])
     complete=[f for f in official_fixtures if f.get('finished')]
-    tree=client.get('https://api.github.com/repos/olbauday/FPL-Core-Insights/git/trees/main?recursive=1',required=True,timeout=8)
-    sha=str(tree.get('sha',''))
-    if not re.fullmatch('[0-9a-f]{40}',sha) or tree.get('truncated'):
+    repository = os.environ.get('VORTEX_FPL_CORE_REPOSITORY', 'olbauday/FPL-Core-Insights')
+    if repository not in {'olbauday/FPL-Core-Insights', 'lukegiuseppin/fpl'}:
+        raise ValueError('Unsupported FPL Core repository')
+    ref = os.environ.get('VORTEX_FPL_CORE_REF', 'main')
+    if ref != 'main' and not re.fullmatch('[0-9a-f]{40}', ref):
+        raise ValueError('Invalid FPL Core commit reference')
+    if ref == 'main':
+        commit = client.get(f'https://api.github.com/repos/{repository}/commits/main', required=True, timeout=8)
+        sha = str(commit.get('sha', ''))
+    else:
+        sha = ref
+    if not re.fullmatch('[0-9a-f]{40}', sha):
+        raise RuntimeError('Original FPL Core repository commit could not be verified')
+    tree=client.get(f'https://api.github.com/repos/{repository}/git/trees/{sha}?recursive=1',required=True,timeout=8)
+    if not re.fullmatch('[0-9a-f]{40}', str(tree.get('sha', ''))) or tree.get('truncated'):
         raise RuntimeError('Original FPL Core repository commit/tree could not be verified')
     files={r['path']:r for r in tree.get('tree',[]) if r.get('type')=='blob'}
     paths=[f'{year-1}-{year}/teams.csv',f'{year}-{year+1}/teams.csv']
@@ -41,7 +53,7 @@ def refresh_fpl_core(boot, official_fixtures, input_root, now, client):
     def csv_file(path):
         record=files.get('data/'+path)
         if not record:raise RuntimeError('Original archive lacks '+path)
-        target=root/path;url='https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/'+sha+'/data/'+quote(path,safe='/')
+        target=root/path;url='https://raw.githubusercontent.com/'+repository+'/'+sha+'/data/'+quote(path,safe='/')
         payload=target.read_bytes() if target.exists() else None
         def matches_blob(data):
             return hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()==record.get('sha')
@@ -109,7 +121,7 @@ def refresh_fpl_core(boot, official_fixtures, input_root, now, client):
         for rows in executor.map(red_timing,red.iterrows()):incidents.extend(rows)
     pl=root/f'{year}-{year+1}/By Tournament/Premier League'
     if incidents:pd.DataFrame(incidents).to_csv(pl/'incidents.csv',index=False)
-    report={'repository':'https://github.com/olbauday/FPL-Core-Insights','commit':sha,'checked_at':now.isoformat(),
+    report={'repository':'https://github.com/'+repository,'commit':sha,'checked_at':now.isoformat(),
             'official_completed_fixtures':len(complete),'verified_fixture_ids':verified,'verified_red_card_incidents':incidents,
             'files':[{'path':p,'source_url':u,'sha256':h} for p,u,h in downloads]}
     (Path(input_root)/'fpl_core_refresh_report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
