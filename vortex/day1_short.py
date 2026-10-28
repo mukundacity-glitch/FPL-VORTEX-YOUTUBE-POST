@@ -130,10 +130,22 @@ async def render_results(ns):
         if not p or int(p['id']) in photos:continue
         path=work/f"player_{p['id']}.png"
         try:
-            from wc_fh.player_images import official_photo_urls
-            urls=official_photo_urls(p)
-        except ImportError:
-            urls=[f"https://resources.premierleague.com/premierleague25/photos/players/250x250/{p['code']}.png"]
+            import base64
+            uri = ns["resolve_player_photo"](p)
+            if uri.startswith("data:image/"):
+                path.write_bytes(base64.b64decode(uri.split(",", 1)[1]))
+                Image.open(path).verify()
+                photos[int(p['id'])] = path
+                continue
+        except Exception:
+            pass
+        code = int(p['code'])
+        urls = [
+            f"https://resources.premierleague.com/premierleague25/photos/players/500x500/{code}.png",
+            f"https://resources.premierleague.com/premierleague25/photos/players/250x250/{code}.png",
+            f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png",
+            f"https://resources.premierleague.com/premierleague/photos/players/110x140/p{code}.png",
+        ]
         for url in urls:
             try:
                 response=requests.get(url,timeout=10);response.raise_for_status();path.write_bytes(response.content)
