@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: fpl-vortex-day-1
-  cancel-in-progress: false
+  group: fpl-vortex-day-1-${{ github.ref_name }}
+  cancel-in-progress: true
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -283,18 +283,8 @@ jobs:
           echo "VORTEX_FPL_CORE_REF=${source_commit}" >> "${GITHUB_ENV}"
           echo "Day 1 FPL source commit: ${source_commit}"
 
-          restore_optional "FPL_VORTEX/FIRST VIDEO"
-          restore_optional "FPL_VORTEX/MODEL_INPUTS"
-          restore_optional "FPL_VORTEX/DECISION_ENGINE"
-          restore_optional "FPL_VORTEX/RAW_DATA"
-          restore_optional "FPL_VORTEX/MODEL_HISTORY"
           restore_optional "FPL_VORTEX/elements"
           restore_optional "elements"
-          restore_optional "FPL_VORTEX_DATA/03_ELITE_MANAGERS"
-          restore_optional "FPL_VORTEX_DATA/04_MASTER"
-          restore_optional "FPL_VORTEX_DATA/05_MODEL_HISTORY"
-          restore_optional "FPL_VORTEX_DATA/06_SNAPSHOTS"
-          restore_optional "FPL_VORTEX_DATA/07_LOGS"
 
           mkdir -p "${DAY1_ASSET_DIR}"
           rclone copy "day1-assets:" "${DAY1_ASSET_DIR}" \
