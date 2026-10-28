@@ -7,6 +7,12 @@ from .day1_results import build_results
 
 
 def patch_cell(cell):
+    if '# CELL 14 — SELF-CONTAINED' in cell:
+        before = cell[:cell.index('# PRESENTATION COMPATIBILITY BRIDGE')]
+        branding = cell[cell.index('def vx_apply_pl_lockup'):cell.index('print("✅ Presentation bridge:')]
+        review = cell[cell.index('if not globals().get("GW_REVIEW_AVAILABLE", False):'):]
+        empty = 'import re as _vx_re\nimport pandas as pd\nfdr_table = pd.DataFrame(columns=["team_short"])\ndef format_fdr_value(value): return "—"\ndef fdr_class(value): return "fdr-grey"\n'
+        return before + empty + branding + review
     if '# CELL 7A —' in cell:
         return cell[cell.index('# FPL VORTEX — SHARED PRODUCTION HELPERS'):]
     if '# CELL 9 —' in cell:
