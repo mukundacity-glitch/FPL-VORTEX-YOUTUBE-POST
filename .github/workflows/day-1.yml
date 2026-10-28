@@ -63,6 +63,7 @@ jobs:
         run: |
           npm ci
           npm run lint
+          npx remotion versions
           npx remotion browser ensure
 
       - name: Verify untouched Day 1 source
@@ -102,6 +103,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_review_contract.py' -v
           python -m unittest discover -s tests -p 'test_day1_premium_contract.py' -v
           python -m unittest discover -s tests -p 'test_day1_remotion.py' -v
+          python -m unittest discover -s tests -p 'test_day1_pitch_review.py' -v
 
       - name: Verify private YouTube upload configuration
         shell: bash

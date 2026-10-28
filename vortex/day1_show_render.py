@@ -55,6 +55,9 @@ def fit_word_timing(section, words):
 
 
 def build_visual_timeline(show, words):
+    if show.get('version') == 'VORTEX-PITCH-REVIEW-2':
+        from .day1_review import build_review_timeline
+        return build_review_timeline(show, words)
     beats, highlights = [], []
     by_id = {p['id']: p for p in show['package']['players']}
     for section in show['sections']:
