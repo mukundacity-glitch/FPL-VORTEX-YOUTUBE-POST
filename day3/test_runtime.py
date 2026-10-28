@@ -849,6 +849,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_narration_exports",
             "_patch_outro_social_icon",
             "_patch_tts_profile",
+            "patch_weekly_source",
             "patch_narration_pacing_source",
             "patch_popup_audio_source",
             "patch_evidence_pipeline",
@@ -898,6 +899,13 @@ class NotebookPreflightTests(unittest.TestCase):
             2: "!echo notebook-command\n",
         })
         self.assertEqual(len(runner._prepare_code_cells(self.notebook_path)), 37)
+
+    def test_shared_fixture_replacement_covers_goals_cs_and_fdr_cells(self) -> None:
+        sources = {10: "metric = 'goals'\n", 11: "metric = 'clean_sheets'\n", 12: "metric = 'fdr'\n"}
+        self.write_notebook(sources)
+        with patch.object(runner, 'patch_weekly_source', side_effect=lambda source: source) as replace_math:
+            runner._prepare_code_cells(self.notebook_path)
+        self.assertEqual([call.args[0] for call in replace_math.call_args_list], list(sources.values()))
 
 
 class DefconNumericRegressionTests(unittest.TestCase):
