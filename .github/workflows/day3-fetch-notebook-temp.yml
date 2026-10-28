@@ -1,0 +1,45 @@
+name: Day 3 notebook fetch (temporary)
+
+on:
+  push:
+    branches:
+      - arena/dfa6b200-fpl-vortex-youtube-post
+    paths:
+      - .github/workflows/day3-fetch-notebook-temp.yml
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    name: Fetch production notebook
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download public production notebook
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/notebook"
+          url="https://drive.usercontent.google.com/download?id=1zKWruOYPPstyyr42y6q-MKwE3-6qTh0s&export=download"
+          curl -fsSL --retry 4 --retry-delay 3 --max-time 180 "$url" -o "$RUNNER_TEMP/notebook/day3-final.ipynb"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("/home/runner/work/_temp/notebook/day3-final.ipynb")
+          if not path.is_file():
+              import os
+              path = Path(os.environ["RUNNER_TEMP"]) / "notebook" / "day3-final.ipynb"
+          data = json.loads(path.read_text(encoding="utf-8"))
+          cells = data.get("cells")
+          if not isinstance(cells, list) or len(cells) < 30:
+              raise SystemExit(f"Unexpected notebook: {len(cells) if isinstance(cells, list) else 'no'} cells")
+          print(f"Downloaded production notebook: {len(cells)} cells, {path.stat().st_size} bytes")
+          PY
+
+      - name: Upload notebook artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: day3-production-notebook
+          path: ${{ runner.temp }}/notebook/day3-final.ipynb
+          if-no-files-found: error
+          retention-days: 3
