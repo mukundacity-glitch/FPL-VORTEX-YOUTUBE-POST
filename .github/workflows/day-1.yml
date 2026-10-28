@@ -2,6 +2,8 @@ name: Day 1
 
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/day1-short-final]
 
 permissions:
   contents: read
@@ -503,6 +505,8 @@ jobs:
                       if cell.count(anchor) != 1:
                           raise RuntimeError("Day 1 Phase 1 insertion point changed")
                       cell = cell.replace(anchor, "_MATCH_CANDIDATES = []\n" + anchor, 1)
+                  from vortex.day1_short import patch_cell
+                  cell = patch_cell(cell)
                   result = shell.run_cell(cell, store_history=False, silent=False)
                   if not result.success:
                       raise RuntimeError(f"Day 1 block {index} failed: {label}")
