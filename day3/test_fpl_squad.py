@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from day3 import fpl_squad as live_module
 
 from day3.fpl_squad import (
     FPL_API_BASE,
@@ -291,6 +297,81 @@ class WorkflowChoiceTests(unittest.TestCase):
         self.assertEqual(replace_out_options(text, expected), text)
         for player_id in LIVE_IDS:
             self.assertTrue(any(option.startswith(f"{player_id} | ") for option in expected))
+
+
+class WorkflowLiveSquadStepTests(unittest.TestCase):
+    """The Day 3 workflow's early validation step must stay runnable."""
+
+    STEP_NAME = "Resolve live FPL squad and verify Player OUT picks"
+
+    def _step_code(self) -> str:
+        workflow = Path(__file__).resolve().parents[1] / ".github/workflows/day-3.yml"
+        text = workflow.read_text(encoding="utf-8")
+        self.assertIn(f"- name: {self.STEP_NAME}", text)
+        section = text[text.index(f"- name: {self.STEP_NAME}") :].split(
+            "\n      - name:"
+        )[0]
+        match = re.search(r"python - <<'PY'\n(.*?)\n\s*PY", section, re.S)
+        self.assertIsNotNone(match, "workflow step must contain a Python heredoc")
+        return textwrap.dedent(match.group(1))
+
+    def test_embedded_python_compiles(self):
+        compile(self._step_code(), "<day-3-live-squad-step>", "exec")
+
+    def test_step_validates_manual_pairs_and_writes_the_snapshot(self):
+        squad = resolve_live_squad(ENTRY_ID, fetcher=FakeFetcher())
+        code = self._step_code()
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            env_path = root_path / "github_env"
+            env_path.write_text("", encoding="utf-8")
+            environment = {
+                "FPL_ENTRY_ID": str(ENTRY_ID),
+                "DAY3_PLAN": "TRANSFER",
+                "DAY3_TRANSFER_MODE": "MANUAL",
+                "DAY3_OUT_1": "1 | Player1 | GK",
+                "DAY3_IN_1": "109 | Verbruggen | GK",
+                "DAY3_OUT_2": "NONE",
+                "DAY3_IN_2": "NONE",
+                "DAY3_OUT_3": "NONE",
+                "DAY3_IN_3": "NONE",
+                "DAY3_OUT_4": "NONE",
+                "DAY3_IN_4": "NONE",
+                "DAY3_OUT_5": "NONE",
+                "DAY3_IN_5": "NONE",
+                "GITHUB_ENV": str(env_path),
+                "RUNNER_TEMP": root,
+            }
+            with patch.dict(os.environ, environment, clear=True):
+                with patch.object(live_module, "resolve_live_squad", return_value=squad):
+                    exec(compile(code, "<day-3-live-squad-step>", "exec"), {"__name__": "__main__"})
+            exported = env_path.read_text(encoding="utf-8")
+            self.assertIn("DAY3_LIVE_SQUAD_JSON=", exported)
+            self.assertIn("DAY3_LIVE_SQUAD_GW=8", exported)
+            snapshot = root_path / "day3-live-squad.json"
+            self.assertTrue(snapshot.is_file())
+            self.assertEqual(
+                LiveSquad.from_dict(json.loads(snapshot.read_text(encoding="utf-8"))),
+                squad,
+            )
+
+    def test_step_rejects_a_stale_out_choice_before_the_render(self):
+        squad = resolve_live_squad(ENTRY_ID, fetcher=FakeFetcher())
+        code = self._step_code()
+        with tempfile.TemporaryDirectory() as root:
+            environment = {
+                "FPL_ENTRY_ID": str(ENTRY_ID),
+                "DAY3_PLAN": "TRANSFER",
+                "DAY3_TRANSFER_MODE": "MANUAL",
+                "DAY3_OUT_1": "109 | Verbruggen | GK",
+                "DAY3_IN_1": "700 | NewPlayer | GK",
+                "GITHUB_ENV": str(Path(root) / "github_env"),
+                "RUNNER_TEMP": root,
+            }
+            with patch.dict(os.environ, environment, clear=True):
+                with patch.object(live_module, "resolve_live_squad", return_value=squad):
+                    with self.assertRaisesRegex(LiveSquadError, "not in your live FPL squad"):
+                        exec(compile(code, "<day-3-live-squad-step>", "exec"), {"__name__": "__main__"})
 
 
 if __name__ == "__main__":

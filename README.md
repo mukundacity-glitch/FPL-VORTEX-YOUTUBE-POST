@@ -103,6 +103,30 @@ The YouTube credentials request `youtube.upload` and `youtube.readonly`. `_verif
 
 References: [GitHub workflow token authentication](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token), [Google refresh tokens and offline access](https://developers.google.com/identity/protocols/oauth2/web-server#offline), and [rclone Drive configuration](https://rclone.org/drive/).
 
+### Live FPL squad and Player OUT choices
+
+The five **Player OUT** dropdowns and the OUT players on the transfer-plan slide
+both come from the official public FPL API, not from a stored player list.
+[`day3/fpl_squad.py`](day3/fpl_squad.py) resolves entry `FPL_ENTRY_ID` (currently
+`145784`) from `bootstrap-static`, entry history and the latest published
+`event/<gw>/picks`, walking back past a Free Hit squad to the last permanent 15.
+It uses no FPL login; `/api/my-team/<id>/` requires authentication and is never
+called. An API outage fails the run — there is no stale squad fallback.
+
+Because GitHub dispatch `choice` options are static YAML,
+[`Refresh Day 3 OUT choices`](.github/workflows/refresh-day3-choices.yml)
+regenerates all five OUT lists from the live 15 every three hours and commits
+only when the squad changes. You can also run it manually before a dispatch.
+Every Day 3 run re-resolves the squad in the `Resolve live FPL squad and verify
+Player OUT picks` step and rejects any OUT that is not in your real team (or any
+IN that already is) before the expensive render starts.
+
+The same resolved squad is passed into the notebook. `FPL_ID` follows
+`FPL_ENTRY_ID`, Phase 11's `current_squad_state` must equal the live 15, and the
+MY PLAN 5B transfer scene may only draw OUT cards from those 15. See
+[`day3/LIVE_SQUAD.md`](day3/LIVE_SQUAD.md) for the full contract, the endpoints
+and the local commands.
+
 ### Completed DEFCON history versus live review
 
 The notebook's canonical FPL snapshot distinguishes `review_gw` (which may be `LIVE/PARTIAL`) from `review_ready_gws` (fully completed events). When the forecast is GW7 and GW6 is still partial, the review can show GW6 while DEFCON's completed history ends at GW5.

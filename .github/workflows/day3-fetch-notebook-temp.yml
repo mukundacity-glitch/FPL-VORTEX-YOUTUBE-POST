@@ -69,7 +69,7 @@ jobs:
           data = json.loads(path.read_text(encoding="utf-8"))
           cells = [c for c in data["cells"] if c.get("cell_type") == "code"]
           anchors = {
-              1: [r"^FPL_ID\s*=", r"^MY_PLAN_SCENARIOS\s*=", r"_vx_build_my_plan_player_picker\(\)"],
+              1: [r"^FPL_ID\s*=", r"^MY_PLAN_SCENARIOS\s*=", r"^MY_PLAN_TEAM_SOURCE_KEY\s*=", r"_vx_build_my_plan_player_picker\(\)"],
               19: [r"Merge xPts and decision features onto the squad", r"phase11_current_squad_state\s*="],
               30: [r"if len\(_outs\) != len\(_ins\) or not 1 <= len\(_outs\) <= 5:", r"SLIDE_CURRENT_SQUAD"],
           }
