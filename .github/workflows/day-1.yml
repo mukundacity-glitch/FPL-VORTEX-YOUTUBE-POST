@@ -86,6 +86,7 @@ jobs:
 
           python -m unittest discover -s tests -p 'test_day1_narration_sync.py' -v
           python -m unittest discover -s tests -p 'test_day1_review_contract.py' -v
+          python -m unittest discover -s tests -p 'test_day1_premium_contract.py' -v
 
       - name: Verify private YouTube upload configuration
         shell: bash
@@ -136,6 +137,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes ffmpeg rclone
+
+      - name: Verify results video encoding
+        shell: bash
+        run: python -m unittest discover -s tests -p 'test_day1_results_render.py' -v
 
       - name: Install Python dependencies
         shell: bash
