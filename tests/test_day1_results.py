@@ -13,3 +13,25 @@ class Day1ResultsTests(unittest.TestCase):
         self.assertEqual(result[0]['score'], [1,0])
         self.assertIsNone(result[1]['score'])
         self.assertFalse(result[1]['final'])
+
+class ShortProductionTests(unittest.TestCase):
+    def test_selection_and_forecast_removal(self):
+        from vortex.day1_short import patch_cell
+        from pathlib import Path
+        import re, ast
+        cells=[p for p in re.split(r'(?m)(?=^# ={20,}\n# [^\n]*\bCELL\s+\d+[A-Za-z]?\b[^\n]*\n)',Path('1_final_day1.py').read_text()) if p.strip()]
+        patched=[patch_cell(c) for c in cells]
+        for c in patched: compile(c,'cell','exec',flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+        controls=next(c for c in patched if 'SLIDE_SELECTION = {' in c)
+        for name in ('SLIDE_03_FDR','SLIDE_04_PROJECTED_GOALS','SLIDE_05_CLEAN_SHEETS','SLIDE_06_OUTRO'):
+            self.assertIn(name+' = False',controls)
+        self.assertFalse(any('build_weekly_frame(globals())' in c for c in patched))
+        self.assertFalse(any('agenda_1_at=18.0' in c for c in patched))
+        self.assertTrue(any('await render_results(globals())' in c for c in patched))
+
+    def test_card_count_does_not_invent_a_suspension(self):
+        from vortex.day1_short import warning
+        self.assertEqual(warning({'web_name':'A','status':'a','yellow_cards':4}), '')
+        text=warning({'web_name':'A','status':'a','yellow_cards':5})
+        self.assertIn('does not confirm a ban',text)
+        self.assertIn('flagged as suspended',warning({'web_name':'A','status':'s'}))
