@@ -331,6 +331,11 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
 
     opening_duration = _duration(opening_probe)
     program_duration = _duration(program_probe)
+    if opening_duration + program_duration > 420.0:
+        raise RuntimeError(
+            "Day 1 exceeds seven minutes including the opening; shorten the narration "
+            "and regenerate it at the normal Ryan speaking rate."
+        )
     background_source_duration = _duration(background_probe)
     outro_source_duration = _duration(outro_probe)
 
