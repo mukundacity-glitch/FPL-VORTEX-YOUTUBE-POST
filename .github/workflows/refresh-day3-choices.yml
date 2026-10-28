@@ -43,11 +43,22 @@ jobs:
           REQUESTED_ENTRY_ID: ${{ inputs.entry_id || '' }}
         run: |
           set -euo pipefail
+          python -m pip install --quiet "PyYAML>=6,<7"
           ENTRY_ID="${REQUESTED_ENTRY_ID:-145784}"
           python -m day3.refresh_day3_choices \
             --entry-id "$ENTRY_ID" \
             --workflow .github/workflows/day-3.yml \
             --summary "$GITHUB_STEP_SUMMARY"
+          python - <<'PY'
+          import yaml
+          with open(".github/workflows/day-3.yml", encoding="utf-8") as handle:
+              document = yaml.safe_load(handle)
+          inputs = document[True]["workflow_dispatch"]["inputs"] if True in document else document["on"]["workflow_dispatch"]["inputs"]
+          for index in range(1, 6):
+              options = inputs[f"player_out_{index}"]["options"]
+              assert options[0] == "NONE" and len(options) == 16, (index, options)
+          print("✅ Refreshed Day 3 workflow YAML parses and has 15 live OUT choices per input")
+          PY
 
       - name: Commit refreshed choices to the default branch
         if: github.ref == 'refs/heads/main'
@@ -62,5 +73,5 @@ jobs:
           git config user.email "fpl-vortex-bot@users.noreply.github.com"
           git add .github/workflows/day-3.yml
           git commit -m "Refresh Day 3 Player OUT choices from the official FPL API"
-          git push
+          git push origin HEAD:main
           echo "Day 3 OUT choices were refreshed and pushed to main." >> "$GITHUB_STEP_SUMMARY"
