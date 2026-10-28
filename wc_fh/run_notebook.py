@@ -197,6 +197,15 @@ def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tu
             source = patch_setup(source, controls)
         if label == "1":
             source = patch_forecast_loader(source)
+            source += '''\nfrom vortex import fixture_forecast_model as vortex_upstream_fdr
+sys.modules['vortex_upstream_fdr'] = vortex_upstream_fdr
+'''
+        if label == "2":
+            source += '''\nfrom vortex.fixture_forecast import forecast_rows as _shared_fixture_forecast
+def _shared_wc_fh_forecast(boot, fixtures, cfg, now):
+    return _shared_fixture_forecast(boot, fixtures, now), None
+VXWC.canonical_fdr = _shared_wc_fh_forecast
+'''
         if label == "11":
             lines = source.splitlines(keepends=True)
             function = next(node for node in ast.parse(source).body

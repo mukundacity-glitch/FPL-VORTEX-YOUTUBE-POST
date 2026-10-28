@@ -4034,138 +4034,8 @@ if not bool(PHASE2_READY):
     print("⛔ PHASE 3 BLOCKED — Phase 2 is not ready.")
     print("   No fixture lambdas were emitted.")
 else:
-    _required_strength = {
-        "team_id", "completed_matches", "prior_weight", "current_season_weight",
-        "updated_attack_home", "updated_defence_home",
-        "updated_attack_away", "updated_defence_away",
-        "updated_penalty_attack_signal", "updated_penalty_defence_signal",
-        "recency_effective_sample_size",
-    }
-    _missing_strength = sorted(_required_strength - set(team_strength_updated.columns))
-    if _missing_strength:
-        raise RuntimeError(f"Phase 3 missing Phase-2 strength fields: {_missing_strength}")
-
-    _required_context = {
-        "fixture_id", "gameweek", "home_team_id", "away_team_id",
-        "context_home_multiplier", "context_away_multiplier",
-        "context_home_penalty_multiplier", "context_away_penalty_multiplier",
-    }
-    _missing_context = sorted(_required_context - set(fixture_context_phase2.columns))
-    if _missing_context:
-        raise RuntimeError(f"Phase 3 missing Phase-2 context fields: {_missing_context}")
-
-    if not isinstance(PHASE1_VENUE_BASELINES, dict):
-        raise RuntimeError("Phase 3 requires Phase-1 league venue baselines")
-    _L_H = float(PHASE1_VENUE_BASELINES.get("league_home_npxg", np.nan))
-    _L_A = float(PHASE1_VENUE_BASELINES.get("league_away_npxg", np.nan))
-    _P_H = float(PHASE1_VENUE_BASELINES.get("league_home_penalty_xg", np.nan))
-    _P_A = float(PHASE1_VENUE_BASELINES.get("league_away_penalty_xg", np.nan))
-    if not all(np.isfinite(x) for x in (_L_H, _L_A, _P_H, _P_A)) or min(_L_H, _L_A) <= 0 or min(_P_H, _P_A) < 0:
-        raise RuntimeError("Phase 3 league non-penalty/penalty scoring baselines are invalid")
-
-    _state = team_strength_updated.set_index("team_id")
-    _priors = team_priors.set_index("team_id")
-    if _state.index.duplicated().any() or _priors.index.duplicated().any():
-        raise RuntimeError("Phase 3 requires unique team rows")
-
-    _rows = []
-    for _, _fx in fixture_context_phase2.iterrows():
-        _fid = int(_fx["fixture_id"])
-        _gw = int(_fx["gameweek"])
-        _h = int(_fx["home_team_id"])
-        _a = int(_fx["away_team_id"])
-        if _h not in _state.index or _a not in _state.index:
-            raise RuntimeError(f"Phase 3 missing updated strength for fixture {_fid}")
-
-        _A_home = float(_state.loc[_h, "updated_attack_home"])
-        _D_away = float(_state.loc[_a, "updated_defence_away"])
-        _A_away = float(_state.loc[_a, "updated_attack_away"])
-        _D_home = float(_state.loc[_h, "updated_defence_home"])
-        _PAtt_home = float(_state.loc[_h, "updated_penalty_attack_signal"])
-        _PDef_away = float(_state.loc[_a, "updated_penalty_defence_signal"])
-        _PAtt_away = float(_state.loc[_a, "updated_penalty_attack_signal"])
-        _PDef_home = float(_state.loc[_h, "updated_penalty_defence_signal"])
-        _C_home = float(_fx["context_home_multiplier"])
-        _C_away = float(_fx["context_away_multiplier"])
-        _CP_home = float(_fx["context_home_penalty_multiplier"])
-        _CP_away = float(_fx["context_away_penalty_multiplier"])
-
-        _components = [_A_home, _D_away, _A_away, _D_home, _PAtt_home, _PDef_away, _PAtt_away, _PDef_home, _C_home, _C_away, _CP_home, _CP_away]
-        if any((not np.isfinite(x) or x <= 0) for x in _components):
-            raise RuntimeError(f"Phase 3 invalid positive multiplier for fixture {_fid}: {_components}")
-
-        # Total expected goals are built from disjoint components. This fixes the
-        # NPxG-to-scoreline mismatch: NPxG drives only non-penalty scoring, while
-        # penalty xG is added explicitly. No external benchmark blend is applied.
-        _lambda_home_np = float(_L_H * _A_home * _D_away * _C_home)
-        _lambda_away_np = float(_L_A * _A_away * _D_home * _C_away)
-        _lambda_home_pen = float(_P_H * _PAtt_home * _PDef_away * _CP_home)
-        _lambda_away_pen = float(_P_A * _PAtt_away * _PDef_home * _CP_away)
-        _lambda_home = float(_lambda_home_np + _lambda_home_pen)
-        _lambda_away = float(_lambda_away_np + _lambda_away_pen)
-        if not np.isfinite(_lambda_home) or not np.isfinite(_lambda_away):
-            raise RuntimeError(f"Phase 3 non-finite lambda for fixture {_fid}")
-        if _lambda_home <= 0 or _lambda_away <= 0:
-            raise RuntimeError(f"Phase 3 non-positive lambda for fixture {_fid}")
-
-        _u_home_team = _vx_phase3_team_uncertainty(_h, _state, _priors)
-        _u_away_team = _vx_phase3_team_uncertainty(_a, _state, _priors)
-        # Multiplicative attack/defence uncertainties combine on the log scale.
-        _u_home_lambda = float(math.sqrt(_u_home_team ** 2 + _u_away_team ** 2))
-        _u_away_lambda = float(math.sqrt(_u_away_team ** 2 + _u_home_team ** 2))
-        _home_low, _home_high = _vx_phase3_lambda_range(_lambda_home, _u_home_lambda)
-        _away_low, _away_high = _vx_phase3_lambda_range(_lambda_away, _u_away_lambda)
-
-        # 0–1 information-confidence index only; NOT a calibrated probability.
-        # Phase 5 validation is responsible for empirical calibration.
-        _confidence = float(math.exp(-max(_u_home_lambda, _u_away_lambda)))
-
-        _rows.append({
-            "fixture_id": _fid,
-            "gameweek": _gw,
-            "home_team_id": _h,
-            "away_team_id": _a,
-            "league_home_scoring_baseline": float(_L_H + _P_H),
-            "league_away_scoring_baseline": float(_L_A + _P_A),
-            "league_home_nonpenalty_baseline": _L_H,
-            "league_away_nonpenalty_baseline": _L_A,
-            "league_home_penalty_baseline": _P_H,
-            "league_away_penalty_baseline": _P_A,
-            "home_attack_strength": _A_home,
-            "away_defensive_weakness": _D_away,
-            "away_attack_strength": _A_away,
-            "home_defensive_weakness": _D_home,
-            "home_penalty_attack_signal": _PAtt_home,
-            "away_penalty_defence_signal": _PDef_away,
-            "away_penalty_attack_signal": _PAtt_away,
-            "home_penalty_defence_signal": _PDef_home,
-            "context_home_multiplier": _C_home,
-            "context_away_multiplier": _C_away,
-            "context_home_penalty_multiplier": _CP_home,
-            "context_away_penalty_multiplier": _CP_away,
-            "model_lambda_home_nonpenalty": _lambda_home_np,
-            "model_lambda_home_penalty": _lambda_home_pen,
-            "model_lambda_away_nonpenalty": _lambda_away_np,
-            "model_lambda_away_penalty": _lambda_away_pen,
-            "model_lambda_home": _lambda_home,
-            "model_lambda_away": _lambda_away,
-            "model_lambda_home_low": _home_low,
-            "model_lambda_home_high": _home_high,
-            "model_lambda_away_low": _away_low,
-            "model_lambda_away_high": _away_high,
-            "home_lambda_uncertainty": _u_home_lambda,
-            "away_lambda_uncertainty": _u_away_lambda,
-            "model_confidence": _confidence,
-            "uncertainty_status": "PREVALIDATION_STRUCTURAL_RANGE_NOT_COVERAGE",
-            "model_version": model_version,
-            "data_snapshot_timestamp": data_snapshot_timestamp,
-            "forecast_timestamp": forecast_timestamp,
-            "source_name": "VORTEX_PHASE3_MODEL_ONLY",
-            "source_timestamp": forecast_timestamp,
-            "is_pre_deadline_data": _phase0_is_pre_deadline(_gw) if "_phase0_is_pre_deadline" in globals() else pd.NA,
-        })
-
-    fixture_goal_expectations_model = pd.DataFrame(_rows, columns=PHASE3_OUTPUT_FIELDS)
+    from vortex.fixture_forecast import build_weekly_frame
+    fixture_goal_expectations_model = build_weekly_frame(globals())
     if fixture_goal_expectations_model.empty:
         raise RuntimeError("Phase 3 produced no future fixture expectations")
     if fixture_goal_expectations_model["fixture_id"].duplicated().any():
@@ -4204,7 +4074,7 @@ else:
     print("✅ PHASE 3 FIXTURE PROJECTED-GOALS ENGINE BUILT")
     print("   lambda_home = L_H × A_home × D_away × C_context_home")
     print("   lambda_away = L_A × A_away × D_home × C_context_away")
-    print(f"   L_H={_L_H:.4f} | L_A={_L_A:.4f}")
+    print("   Fixture goals and components use the shared WC/FH model.")
     print(f"   Forecast fixtures: {len(fixture_goal_expectations_model)}")
     print("   Low/high fields are pre-validation structural ranges, not calibrated coverage.")
     print("   model_confidence is a 0–1 information index, not a probability.")
@@ -4901,7 +4771,7 @@ def _vx_phase4_wdl_probabilities(lambda_home, lambda_away):
     return p_home, p_draw, p_away
 
 
-def _vx_phase4_closed_form_probabilities(lambda_home, lambda_away):
+def _vx_phase4_closed_form_probabilities(lambda_home, lambda_away, fixture_id):
     """
     Exact independent-Poisson marginals for scoring, CS, BTTS and O2.5.
     """
@@ -4916,8 +4786,8 @@ def _vx_phase4_closed_form_probabilities(lambda_home, lambda_away):
     home_2plus = 1.0 - p_h0 * (1.0 + lh)
     away_2plus = 1.0 - p_a0 * (1.0 + la)
 
-    home_cs = p_a0
-    away_cs = p_h0
+    from vortex.fixture_forecast import weekly_clean_sheets
+    home_cs, away_cs = weekly_clean_sheets(globals(), fixture_id, lh, la)
     btts = home_scores * away_scores
 
     total_lambda = lh + la
@@ -4998,7 +4868,7 @@ else:
                 })
 
         _p_home, _p_draw, _p_away = _vx_phase4_wdl_probabilities(_lh, _la)
-        _closed = _vx_phase4_closed_form_probabilities(_lh, _la)
+        _closed = _vx_phase4_closed_form_probabilities(_lh, _la, _fid)
 
         _probability_rows.append({
             "fixture_id": _fid,
@@ -5170,36 +5040,11 @@ clean_sheet_probabilities_model_only = pd.DataFrame()
 PHASE4_READY = False
 
 
-def _vx_phase4_clip_fdr(value):
-    value = float(value)
-    if not np.isfinite(value):
-        raise RuntimeError(f"Non-finite FDR value: {value}")
-    return float(min(5.0, max(1.0, value)))
+from vortex.fixture_forecast_model import _vx_phase4_clip_fdr, vx_phase4_attack_fdr, vx_phase4_defence_fdr
 
 
-def vx_phase4_attack_fdr(lambda_for):
-    """
-    Continuous attack difficulty. Lower = easier attacking fixture.
-    Formula requested for V1; output boundary-clipped to the defined 1..5 scale.
-    """
-    lam = float(lambda_for)
-    if not np.isfinite(lam) or lam <= 0:
-        raise RuntimeError(f"Attack FDR requires finite positive lambda, got {lam}")
-    raw = 1.0 + 4.0 * (3.2 - lam) / 2.8
-    return _vx_phase4_clip_fdr(raw)
 
 
-def vx_phase4_defence_fdr(clean_sheet_probability):
-    """
-    Continuous defensive difficulty. Lower = easier clean-sheet environment.
-    """
-    p_cs = float(clean_sheet_probability)
-    if not np.isfinite(p_cs) or not 0.0 <= p_cs <= 1.0:
-        raise RuntimeError(f"Defence FDR requires CS probability in [0,1], got {p_cs}")
-    easy_cs = math.exp(-0.4)
-    hard_cs = math.exp(-3.2)
-    raw = 1.0 + 4.0 * (easy_cs - p_cs) / (easy_cs - hard_cs)
-    return _vx_phase4_clip_fdr(raw)
 
 
 def vx_phase4_fdr_colour_band(fdr_value):
