@@ -1,10 +1,29 @@
 name: Day 3
 
-run-name: Day 3 • ${{ inputs.plan || 'ROLL' }}
+run-name: Day 3 • ${{ (github.event_name != 'workflow_dispatch' || inputs.refresh_out_choices) && 'Refresh OUT choices' || inputs.plan || 'ROLL' }}
 
 on:
+  schedule:
+    # Keep the Player OUT dropdowns current without a separate workflow.
+    - cron: "17 */3 * * *"
+  push:
+    branches: [main]
+    # Exclude day-3.yml so a generated dropdown update cannot retrigger itself.
+    paths:
+      - day3/fpl_squad.py
+      - day3/refresh_day3_choices.py
   workflow_dispatch:
     inputs:
+      refresh_out_choices:
+        description: "Refresh Player OUT choices only (no video)"
+        type: boolean
+        required: false
+        default: false
+      entry_id:
+        description: "Refresh only: optional FPL entry ID override"
+        type: string
+        required: false
+        default: ""
       plan:
         description: "My Plan"
         required: true
@@ -2914,10 +2933,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: fpl-vortex-day-3
-  cancel-in-progress: false
-
 env:
   PYTHONUNBUFFERED: "1"
   FPL_ENTRY_ID: "145784"
@@ -2939,18 +2954,81 @@ env:
   DAY3_DRIVE_PATH: "FPL_VORTEX/Day_3_3"
   DAY1_ASSET_FOLDER_ID: "1h3Loznr5RnsMyh-kUd-zMxEgOf98uFSt"
   DAY1_ASSET_DIR: "/content/drive/MyDrive/FPL_VORTEX/Assets"
-  GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-  GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-  GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-  YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
-  YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
-  YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
-  YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
-  ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
 
 jobs:
+  refresh-out-choices:
+    name: Refresh OUT dropdowns from FPL
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.refresh_out_choices)
+    permissions:
+      contents: write
+    concurrency:
+      group: refresh-day3-out-choices
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Regenerate Player OUT options from the official FPL API
+        shell: bash
+        env:
+          REQUESTED_ENTRY_ID: ${{ inputs.entry_id || '' }}
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet "PyYAML>=6,<7"
+          ENTRY_ID="${REQUESTED_ENTRY_ID:-$FPL_ENTRY_ID}"
+          python -m day3.refresh_day3_choices \
+            --entry-id "$ENTRY_ID" \
+            --workflow .github/workflows/day-3.yml \
+            --summary "$GITHUB_STEP_SUMMARY"
+          python - <<'PY'
+          import yaml
+          with open(".github/workflows/day-3.yml", encoding="utf-8") as handle:
+              document = yaml.safe_load(handle)
+          inputs = document[True]["workflow_dispatch"]["inputs"] if True in document else document["on"]["workflow_dispatch"]["inputs"]
+          for index in range(1, 6):
+              options = inputs[f"player_out_{index}"]["options"]
+              assert options[0] == "NONE" and len(options) == 16, (index, options)
+          print("✅ Refreshed Day 3 workflow YAML parses and has 15 live OUT choices per input")
+          PY
+
+      - name: Commit refreshed choices to the default branch
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows/day-3.yml; then
+            echo "Day 3 OUT choices already match the live FPL squad." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "fpl-vortex-bot"
+          git config user.email "fpl-vortex-bot@users.noreply.github.com"
+          git add .github/workflows/day-3.yml
+          git commit -m "Refresh Day 3 Player OUT choices from the official FPL API"
+          git push origin HEAD:main
+          echo "Day 3 OUT choices were refreshed and pushed to main." >> "$GITHUB_STEP_SUMMARY"
+
   run-day-3:
     name: Run final Day 3
+    if: github.event_name == 'workflow_dispatch' && !inputs.refresh_out_choices
+    concurrency:
+      group: fpl-vortex-day-3
+      cancel-in-progress: false
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+      YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
+      YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
+      YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
+      YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 

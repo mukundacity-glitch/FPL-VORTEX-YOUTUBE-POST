@@ -40,12 +40,13 @@ by position and name. `squad_digest` is a short hash of the sorted 15 IDs.
    options are static YAML — the form cannot call an API when it opens.
    [`refresh_day3_choices.py`](refresh_day3_choices.py) rewrites all five OUT
    option lists from `LiveSquad.choices`.
-   [`refresh-day3-choices.yml`](../.github/workflows/refresh-day3-choices.yml)
-   runs it every three hours on the default branch and commits only when the 15
-   players change, so the OUT choices the user sees are the live squad. It can
-   also be dispatched manually with an optional entry ID. It also has a
-   `push` trigger scoped to its own file and the two generator modules: that
-   registers the workflow with GitHub immediately (schedule-only workflows are
+   [`day-3.yml`](../.github/workflows/day-3.yml) runs it in a separate refresh
+   job every three hours on the default branch and commits only when the 15
+   players change. For a manual refresh, check **Refresh Player OUT choices only
+   (no video)** in Day 3; an optional entry ID override is available. The refresh
+   job has its own concurrency group and is the only job with contents-write
+   permission. The video job runs only on a normal manual dispatch. A `push`
+   trigger is scoped to the two generator modules (schedule-only workflows are
    not registered until their first tick) and re-validates the generator on
    every edit. `day-3.yml` is deliberately excluded from those paths so a
    refresh commit cannot trigger another refresh. It never touches the IN
@@ -96,8 +97,8 @@ python -m day3.refresh_day3_choices --entry-id 145784 --dry-run
 python -m unittest discover -s day3 -p 'test_*.py' -v
 ```
 
-If `FPL_ENTRY_ID` changes, update it in `day-3.yml`'s workflow `env` and pass
-`--entry-id` to the refresh workflow (or dispatch it with the new ID). The
+If `FPL_ENTRY_ID` changes, update it in `day-3.yml`'s workflow `env`. Scheduled
+refreshes use that same entry ID; a manual refresh can override it. The
 notebook's `FPL_ID` is overridden from that env at run time, so no Drive
 notebook edit is required.
 
