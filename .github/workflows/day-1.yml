@@ -483,21 +483,26 @@ jobs:
               print(f"::group::Day 1 block {index:02d}/33 — {label}", flush=True)
               try:
                   if label == "CELL 5 — PHASE 1A":
-                      # The legacy phase still needs match evidence even though
-                      # fixture forecasts now use the shared WC/FH model. Use
-                      # the same checksum- and identity-verified live archive.
+                      # Preserve the Drive-first path used by successful runs.
+                      # If its prior-season match files are missing, obtain the
+                      # verified archive used by the shared fixture model.
                       anchor = "_loaded_match_frame, PHASE1_MATCH_SOURCE_PATH = _vx_read_phase1_match_source()"
                       if cell.count(anchor) != 1:
                           raise RuntimeError("Day 1 Phase 1 archive insertion point changed")
-                      setup = """from vortex.fixture_forecast import SourceClient, input_root, records
-          from vortex.fixture_forecast_model import refresh_fpl_core
-          _phase1_input_root = input_root()
-          _phase1_now = datetime.now(timezone.utc)
-          PHASE1_FPL_CORE_ROOT = refresh_fpl_core(
-              data["bootstrap"], records(fixtures), _phase1_input_root, _phase1_now,
-              SourceClient(_phase1_input_root / "current_source_cache", _phase1_now),
-          )
-          _MATCH_CANDIDATES = [PHASE1_RAW_INPUT_DIR / "team_match_xg_raw.csv"]
+                      setup = """_MATCH_CANDIDATES = [PHASE1_RAW_INPUT_DIR / "team_match_xg_raw.csv"]
+          _phase1_previous_pl = _vx_fpl_core_pl_root(_start_year - 1)
+          if not any(_phase1_previous_pl.rglob("matches.csv")):
+              from vortex.fixture_forecast import SourceClient, input_root, records
+              from vortex.fixture_forecast_model import refresh_fpl_core
+              _phase1_input_root = input_root()
+              _phase1_now = datetime.now(timezone.utc)
+              print("Day 1: Drive match archive incomplete; refreshing verified FPL Core archive")
+              PHASE1_FPL_CORE_ROOT = refresh_fpl_core(
+                  data["bootstrap"], records(fixtures), _phase1_input_root, _phase1_now,
+                  SourceClient(_phase1_input_root / "current_source_cache", _phase1_now),
+              )
+          else:
+              print("Day 1: using restored Google Drive match archive")
           """
                       cell = cell.replace(anchor, setup + anchor, 1)
                   result = shell.run_cell(cell, store_history=False, silent=False)
