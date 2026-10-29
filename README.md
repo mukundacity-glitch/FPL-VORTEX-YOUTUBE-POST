@@ -70,6 +70,13 @@ The clip keeps its aspect ratio, plays muted below the captions, restarts for
 each occurrence and is trimmed at the program end. It adds no slide or time.
 See [`remotion-day1/README.md`](remotion-day1/README.md) for rendering details.
 
+Ryan narration uses measured word boundaries to correct an inaccurate initial
+word-count pacing estimate. Each section can be synthesized up to three times,
+within the existing -15% to +12% speaking-rate limits. The accepted audio and
+its own word timings pass through the original 0.78–1.22 tempo gate together;
+scripts and scene durations stay fixed. An unfittable or invalid take still
+fails before rendering.
+
 After an upgrade, start a new **Day 1** run on `main`; retrying an old job
 retains its old source commit.
 
