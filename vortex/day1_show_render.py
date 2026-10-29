@@ -40,11 +40,17 @@ def word_time(words, phrase, after=-1):
     return _phrase_span(words, phrase, after)[0]
 
 
-def fit_word_timing(section, words):
-    if not words or any(float(w['duration']) <= 0 or float(w['start']) < 0 for w in words):
+def _speech_tempo(section, words):
+    if (not words
+            or any(not math.isfinite(float(w[key])) for w in words for key in ('start', 'duration'))
+            or any(float(w['duration']) <= 0 or float(w['start']) < 0 for w in words)):
         raise RuntimeError(f'Missing or invalid Ryan word timings: {section["id"]}')
     speech_end = max(float(w['start']) + float(w['duration']) for w in words)
-    tempo = speech_end / (float(section['duration']) - .4)
+    return speech_end / (float(section['duration']) - .4)
+
+
+def fit_word_timing(section, words):
+    tempo = _speech_tempo(section, words)
     if not .78 <= tempo <= 1.22:
         raise RuntimeError(f'Natural speech fit is outside the allowed tempo range for {section["id"]}: {tempo:.3f}')
     fitted = [dict(w, start=section['start'] + float(w['start']) / tempo,
@@ -184,18 +190,37 @@ def show_html(show):
             '<div id="wordFlash"></div><div id="caption"></div><div id="progress"></div></div><script>' + script + '</script></body></html>')
 
 
+async def _synthesize_section(section, tts):
+    desired_wpm = len(section['text'].split()) * 60 / (section['duration'] - .4)
+    rate = max(-15, min(12, round((desired_wpm / 155 - 1) * 100)))
+    for attempt in range(3):
+        profile = {'rate': f'{rate:+d}%', 'pitch': '-2Hz', 'volume': '+0%'}
+        payload, boundaries = await tts(section['text'], profile)
+        tempo = _speech_tempo(section, boundaries)
+        if .78 <= tempo <= 1.22:
+            break
+        # Player names and punctuation defeat the word-count estimate. Measure
+        # the result and request new speech within the same Ryan rate limits.
+        corrected_rate = max(-15, min(12, round(((1 + rate / 100) * tempo - 1) * 100)))
+        if attempt == 2 or corrected_rate == rate:
+            break
+        print(f'Ryan pacing correction: {section["id"]} (tempo {tempo:.3f}; '
+              f'{profile["rate"]} -> {corrected_rate:+d}%; attempt {attempt + 2}/3)', flush=True)
+        rate = corrected_rate
+    # Keep the original fit gate. Captions and FFmpeg must use the boundaries
+    # and audio from the SAME accepted synthesis, never the discarded take.
+    tempo, fitted = fit_word_timing(section, boundaries)
+    return payload, profile, tempo, fitted
+
+
 async def synthesize_show(show, work, tts):
     work = Path(work)
     work.mkdir(parents=True, exist_ok=True)
     words, files = [], []
     for section in show['sections']:
-        desired_wpm = len(section['text'].split()) * 60 / (section['duration'] - .4)
-        rate = max(-15, min(12, round((desired_wpm / 155 - 1) * 100)))
-        profile = {'rate': f'{rate:+d}%', 'pitch': '-2Hz', 'volume': '+0%'}
-        payload, boundaries = await tts(section['text'], profile)
+        payload, profile, tempo, fitted = await _synthesize_section(section, tts)
         raw = work / f'{section["id"]}.mp3'
         raw.write_bytes(payload)
-        tempo, fitted = fit_word_timing(section, boundaries)
         # Slow/fast transport output outside the fit gate must not silently
         # become minutes of padding or a rushed voice.
         wav = work / f'{section["id"]}.wav'

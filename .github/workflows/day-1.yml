@@ -164,6 +164,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_day1_show.py' -v
           python -m unittest discover -s tests -p 'test_day1_show_media.py' -v
+          python -m unittest discover -s tests -p 'test_day1_speech_fit.py' -v
 
       - name: Install Python dependencies
         shell: bash
