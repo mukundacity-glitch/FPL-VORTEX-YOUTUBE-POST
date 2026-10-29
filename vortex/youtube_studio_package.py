@@ -150,7 +150,7 @@ def _vx23_chapters(qa, review_gw):
 
 def _vx23_metadata(preview_gw, review_gw, review_status, qa):
     title = (
-        f"FPL GW{preview_gw} Tips: Fixtures, Goals & Clean Sheets | "
+        f"FPL GW{preview_gw}: My "
         f"GW{review_gw} Review (1/3) #FPL"
     )
     status_text = "live/partial" if review_status == "LIVE/PARTIAL" else "completed"
@@ -159,20 +159,18 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
     description = "\n".join(
         [
             (
-                f"FPL Gameweek {preview_gw} tips and preview, plus a {status_text} "
+                f"My {status_text} "
                 f"GW{review_gw} review from FPL VORTEX."
             ),
             "",
             f"VIDEO {YT_VIDEO_PART}/{YT_VIDEO_TOTAL} for Gameweek {preview_gw} covers:",
-            f"• GW{review_gw} squad review and key returns",
-            f"• GW{preview_gw}–GW{min(38, preview_gw + 5)} fixture difficulty",
-            "• Model-projected team goals and attacking outlook",
-            "• Clean-sheet probabilities and defensive outlook",
+            f"• My GW{review_gw} squad review, player by player",
+            "• Minutes, captaincy, bench and key returns",
             "",
             "CHAPTERS",
             *chapters,
             "",
-            "FPL VORTEX uses public FPL data and model-led analysis. Projections can change with new team news and are provided for information, not guarantees.",
+            "FPL VORTEX reviews my squad using public FPL data. Live or provisional returns are identified in the review.",
             "",
             " ".join(hashtags),
         ]
@@ -182,12 +180,6 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
         "Fantasy Premier League",
         f"FPL GW{preview_gw}",
         f"Gameweek {preview_gw}",
-        f"FPL GW{preview_gw} tips",
-        f"FPL GW{preview_gw} preview",
-        "FPL fixtures",
-        "fixture difficulty",
-        "projected goals",
-        "clean sheet odds",
         "FPL review",
         "FPL VORTEX",
     ]

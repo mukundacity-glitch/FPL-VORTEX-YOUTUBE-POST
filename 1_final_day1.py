@@ -54,10 +54,10 @@ FORCE_RERENDER = False
 # @markdown **Uncheck any trusted slide you do not want rendered into MP4.**
 SLIDE_01_INTRO = True  # @param {type:"boolean"}
 SLIDE_02_GW_REVIEW = True  # @param {type:"boolean"}
-SLIDE_03_FDR = True  # @param {type:"boolean"}
-SLIDE_04_PROJECTED_GOALS = True  # @param {type:"boolean"}
-SLIDE_05_CLEAN_SHEETS = True  # @param {type:"boolean"}
-SLIDE_06_OUTRO = True  # @param {type:"boolean"}
+SLIDE_03_FDR = False  # @param {type:"boolean"}
+SLIDE_04_PROJECTED_GOALS = False  # @param {type:"boolean"}
+SLIDE_05_CLEAN_SHEETS = False  # @param {type:"boolean"}
+SLIDE_06_OUTRO = False  # @param {type:"boolean"}
 
 SLIDE_SELECTION = {
     "00_intro": SLIDE_01_INTRO,
@@ -19229,10 +19229,7 @@ INTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$st
 <header class="topHeader"><div class="brandLock"><div class="logoBox">$logo</div><div class="brandWords"><div class="channelName">FPL VORTEX</div><div class="channelSub">GAMEWEEK DATA • MODEL • DECISIONS</div></div></div><div class="gwPill">GAMEWEEK $gw</div></header>
 <div class="mainHeading">GAMEWEEK $gw <span>• VORTEX AGENDA</span></div><div class="headingRule"></div>
 <main class="agendaWrap">
-<div class="agenda-card agenda-1"><div class="agendaNum">01</div><div><div class="agenda-title" data-vx-type="GAMEWEEK REVIEW">GAMEWEEK REVIEW</div><div class="agenda-sub">MY PREVIOUS GAMEWEEK SQUAD • PLAYER BY PLAYER</div></div></div>
-<div class="agenda-card agenda-2"><div class="agendaNum">02</div><div><div class="agenda-title" data-vx-type="FIXTURE DIFFICULTY">FIXTURE DIFFICULTY</div><div class="agenda-sub">ALL 20 TEAMS • NEXT 6 GAMEWEEKS</div></div></div>
-<div class="agenda-card agenda-3"><div class="agendaNum">03</div><div><div class="agenda-title" data-vx-type="PROJECTED GOALS">PROJECTED GOALS</div><div class="agenda-sub">ATTACKING OUTLOOK • NEXT 6 GAMEWEEKS</div></div></div>
-<div class="agenda-card agenda-4"><div class="agendaNum">04</div><div><div class="agenda-title" data-vx-type="CLEAN SHEET ODDS">CLEAN SHEET ODDS</div><div class="agenda-sub">DEFENSIVE OUTLOOK • NEXT 6 GAMEWEEKS</div></div></div>
+<div class="agenda-card agenda-1"><div class="agendaNum">01</div><div><div class="agenda-title" data-vx-type="MY GAMEWEEK REVIEW">MY GAMEWEEK REVIEW</div><div class="agenda-sub">MY PREVIOUS GAMEWEEK SQUAD • PLAYER BY PLAYER</div></div></div>
 </main>$fixture_grid$results_strip<footer class="footer"><div class="footerLeft"><strong>FPL VORTEX</strong> &nbsp;|&nbsp; GAMEWEEK $gw</div><div class="footerSocial">$social</div><div class="footerRight"><span class="updated">UPDATED: $updated</span><span class="season">2026/27 SEASON</span></div></footer></div></body></html>''').substitute(style=STYLE,logo=vortex_logo_html,gw=int(NEXT_GW),social=SOCIAL,updated=str(VX_FOOTER_UPDATED_DATE),results_strip=LATEST_GW_REVIEW_STRIP,fixture_grid=NEXT_FIXTURE_GRID_HTML)
 
 OUTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$style</style></head><body><div class="scene outroScene">
@@ -19288,10 +19285,12 @@ print("✅ Verified on-disk INTRO HTML contains fixture grid markup + styling")
 
 if "export_4k_png" not in globals(): raise NameError("Run Cell 13 first — export_4k_png missing.")
 await export_4k_png(INTRO_HTML,INTRO_PNG)
-await export_4k_png(OUTRO_HTML,OUTRO_PNG)
+if SLIDE_SELECTION.get("05_outro", True):
+    await export_4k_png(OUTRO_HTML,OUTRO_PNG)
 print("✅ INTRO + OUTRO TRUE 4K")
 display(IPImage(filename=str(INTRO_PNG)))
-display(IPImage(filename=str(OUTRO_PNG)))
+if SLIDE_SELECTION.get("05_outro", True):
+    display(IPImage(filename=str(OUTRO_PNG)))
 
 # ============================================================
 # CELL 14B — ORIGINAL WEEKLY FDR / PROJECTED GOALS / CLEAN SHEET DESIGN
@@ -23360,9 +23359,12 @@ print(
 if "export_4k_png" not in globals():
     raise RuntimeError("Run Cell 14 first — shared 4K renderer is missing.")
 print("⏳ Rendering restored original matrix slides...")
-await export_4k_png(FDR_HTML_PATH, FDR_PNG_PATH)
-await export_4k_png(XG_HTML_PATH, XG_PNG_PATH)
-await export_4k_png(CS_HTML_PATH, CS_PNG_PATH)
+if SLIDE_SELECTION.get("02_fdr", True):
+    await export_4k_png(FDR_HTML_PATH, FDR_PNG_PATH)
+if SLIDE_SELECTION.get("03_projected_goals", True):
+    await export_4k_png(XG_HTML_PATH, XG_PNG_PATH)
+if SLIDE_SELECTION.get("04_clean_sheets", True):
+    await export_4k_png(CS_HTML_PATH, CS_PNG_PATH)
 print("✅ ORIGINAL WEEKLY FDR / GOALS / CLEAN-SHEET HTML + PNG RESTORED")
 
 # ============================================================
@@ -24571,21 +24573,13 @@ f"""
 
 Welcome back to Fantasy Premier League Vortex.
 
-Gameweek {NEXT_GW} brings a familiar question. Do you chase the players who returned last week, or focus on the fixtures and numbers that could matter next?
+Today, it's My Gameweek Review. We'll go through my squad player by player and look at what happened in the previous Gameweek.
 
-Let's work through it properly.
+The points tell part of the story. We'll also check the minutes, roles, captaincy and bench to understand each player's return.
 
-First, we'll revisit the last Gameweek. The points are useful, but the minutes and roles behind them tell us more.
+Where matches are still in progress or points are provisional, we'll keep that status clear. A player who has not played yet should never be treated as a confirmed zero.
 
-Then we'll look at the next six fixtures. Which teams have a run worth targeting, and which apparently easy schedules need a second look?
-
-From there, we'll compare projected goals and ask where the attacking upside might actually come from.
-
-And we'll look at clean-sheet probabilities, because a good fixture alone doesn't make a defender a good transfer.
-
-By the end, we'll have a clearer shortlist for Gameweek {NEXT_GW}, along with the reasons to act and the reasons to wait.
-
-The aim isn't to chase last week's result. It's to make the next decision count.
+Let's start with my Gameweek review.
 
 """.strip(),
 
@@ -25028,19 +25022,12 @@ def events_for(key, info):
 
         welcome_at,_=_sync("Welcome",0.35)
         # Agenda cards appear at fixed times, independent of narration wording.
-        agenda_1_dur = agenda_2_dur = agenda_3_dur = agenda_4_dur = 0.45
+        agenda_1_dur = 0.45
 
         # Intro visual order is clock-locked: fixtures remain visible through
         # 18.000s, disappear, then the agenda cards pop in from 18.000s.
         fixture_at=0.0
         agenda_1_at=18.0
-        agenda_2_at=18.12
-        agenda_3_at=18.24
-        agenda_4_at=18.36
-
-        agenda_times=[agenda_1_at,agenda_2_at,agenda_3_at,agenda_4_at]
-        if agenda_times != sorted(agenda_times) or len(set(agenda_times)) != 4:
-            raise RuntimeError(f"00_intro agenda timing is not sequential: {agenda_times}")
         if fixture_at != 0.0 or agenda_1_at != 18.0:
             raise RuntimeError(
                 f"00_intro visual order drifted: "
@@ -25058,9 +25045,6 @@ def events_for(key, info):
             # One card at a time. Each whole card rises as a single unit, so
             # its agenda title and short description always appear together.
             {"sel":".agenda-1","at":agenda_1_at,"dur":agenda_1_dur,"stagger":0,"fx":"rise"},
-            {"sel":".agenda-2","at":agenda_2_at,"dur":agenda_2_dur,"stagger":0,"fx":"rise"},
-            {"sel":".agenda-3","at":agenda_3_at,"dur":agenda_3_dur,"stagger":0,"fx":"rise"},
-            {"sel":".agenda-4","at":agenda_4_at,"dur":agenda_4_dur,"stagger":0,"fx":"rise"},
         ]
 
     if key=="02_fdr":
@@ -25816,7 +25800,7 @@ print("✅ Spoken-team highlighting")
 print("✅ Outro footer matches Intro")
 print("✅ Subscribe + follow CTA")
 print("✅ Original-logo growl finale")
-print("✅ Intro sequence: blank centre → centered fixtures → agenda 01–04 one by one")
+print("✅ Intro sequence: blank centre → centered fixtures → My Gameweek Review agenda")
 print("✅ Each agenda title and short description reveal together as one card")
 print("✅ Intro fixture board is fully removed before agenda 01")
 print("✅ Outro finale has a protected visible tail hold")
