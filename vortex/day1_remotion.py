@@ -98,12 +98,16 @@ async def capture_show(show, work, audio, output, width=3840, height=2160,
     asset_dir = Path(os.environ.get('DAY1_ASSET_DIR', '/content/drive/MyDrive/FPL_VORTEX/Assets'))
     baseline = json.dumps(show, sort_keys=True, ensure_ascii=False)
     try:
+        # The same fitted audio feeds the existing FFmpeg mux. Check its metadata
+        # before an expensive frame render; no re-encoding or new TTS provider.
+        await asyncio.to_thread(_run, ['node', str(PROJECT / 'scripts/inspect-media.mjs'),
+                                      str(Path(audio).resolve()), str(end or show['duration'])])
         props, popup_report = prepare_props(show, stage, asset_dir, width=width, height=height,
                                             start=start, end=end, vertical=vertical)
         props_file = work / 'remotion-props.json'
         props_file.write_text(json.dumps(props, ensure_ascii=False), encoding='utf-8')
         picture = work / 'picture.mp4'
-        duration = math.ceil((props['end'] - start) * FPS) / FPS
+        duration = math.ceil((props['end'] - start) * FPS - 1e-6) / FPS
         await asyncio.to_thread(_render, remotion_command('render', picture, props_file,
             '--codec=h264', '--crf=18', '--pixel-format=yuv420p', '--concurrency=2', '--muted'))
         _run(['ffmpeg', '-y', '-v', 'error', '-i', str(picture), '-ss', f'{start:.9f}',

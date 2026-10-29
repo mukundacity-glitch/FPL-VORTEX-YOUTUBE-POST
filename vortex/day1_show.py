@@ -353,8 +353,9 @@ def validate_show(show):
 
 
 def prepare_show(ns):
-    package = package_snapshot(ns)
-    show = build_show(package)
+    from .day1_review import build_review, enrich_review_package
+    package = enrich_review_package(ns, package_snapshot(ns))
+    show = build_review(package)
     logo = Path('/content/drive/MyDrive/elements/logo.png')
     if logo.is_file():
         show['brand_logo'] = 'data:image/png;base64,' + base64.b64encode(logo.read_bytes()).decode()
@@ -363,11 +364,22 @@ def prepare_show(ns):
     root = Path(ns['DATA_DIR'])
     _json(root / 'gw_review_package.json', package)
     _json(root / 'day1_show.json', show)
-    print(f'Premium decision show: GW{package["gw"]} → GW{package["preview_gw"]}; three decisions; no results roll call')
+    print(f'Pitch review: GW{package["gw"]} → GW{package["preview_gw"]}; nine scenes; all fifteen players')
     return show
 
 
 def production_brief(show):
+    if show.get('version') == 'VORTEX-PITCH-REVIEW-2':
+        rows = ['# FPL VORTEX — Pitch Review', '', show['concept'], '',
+                '6:40 · 4K/24 fps · one final, reconciled snapshot · pitch stays visible', '']
+        for section in show['sections']:
+            rows += [f'## {section["start"]//60:02.0f}:{section["start"]%60:02.0f} — {section["title"]}',
+                     '', section['text'], '', section['direction'], '']
+        rows += ['## Accuracy', '', show['performer_scope'],
+                 'Original picks and multipliers control captaincy, bench status and counted points.',
+                 'Missing event statistics display Data pending. Verdicts are provisional editorial decisions.',
+                 'YouTube upload remains private; the existing output and data validation contracts remain in place.']
+        return '\n'.join(rows)
     def stamp(t):
         return f'{int(t)//60}:{int(t)%60:02}'
     rows = ['# FPL VORTEX — Decision Show', '',

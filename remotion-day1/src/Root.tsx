@@ -1,22 +1,23 @@
 import { Composition } from "remotion";
 import { Day1Premium } from "./Composition";
 import type { RenderProps } from "./types";
+import sample from "../sample-props.json";
 
 export const RemotionRoot: React.FC = () => {
   return (
     <Composition
       id="Day1Premium"
       component={Day1Premium}
-      width={3840}
-      height={2160}
+      width={1920}
+      height={1080}
       fps={24}
-      durationInFrames={24}
+      durationInFrames={9600}
       defaultProps={{
-        show: null,
+        show: sample.show,
         start: 0,
-        end: 1,
-        width: 3840,
-        height: 2160,
+        end: 400,
+        width: 1920,
+        height: 1080,
         vertical: false,
         fontCss: "",
         verdictColors: {},
@@ -27,7 +28,7 @@ export const RemotionRoot: React.FC = () => {
         height: props.height,
         durationInFrames: Math.max(
           1,
-          Math.ceil((props.end - props.start) * 24),
+          Math.ceil((props.end - props.start) * 24 - 1e-6),
         ),
       })}
     />
