@@ -1972,6 +1972,10 @@ PHASE1_SIGNAL_FIELDS = (
 # No alternative strength proxy is substituted when it is absent.
 PHASE1_RAW_INPUT_DIR = Path(PROJECT_ROOT) / "MODEL_INPUTS"
 PHASE1_RAW_INPUT_DIR.mkdir(parents=True, exist_ok=True)
+_MATCH_CANDIDATES = [
+    PHASE1_RAW_INPUT_DIR / f"team_match_xg_raw{suffix}"
+    for suffix in (".parquet", ".csv", ".json")
+]
 
 # Preferred Drive evidence discovered during the clean-room audit.
 # This source has full 2025/26 Premier League match coverage plus current-season
