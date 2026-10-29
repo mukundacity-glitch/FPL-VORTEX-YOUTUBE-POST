@@ -4,7 +4,6 @@ import copy
 import json
 import math
 import os
-import re
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -16,7 +15,7 @@ import pandas as pd
 from day3.evidence_narration import next_fixture_packs, player_analysis, team_analysis, validated_fixture_forecasts
 from day3.live_evidence import (
     VERSION, assert_snapshot_current, audit_fixture_rows, availability, build_evidence, dc_forecast, digest,
-    live_role, material_state, player_projection, save_snapshot,
+    live_role, material_state, player_projection,
 )
 from day3.verify_evidence import file_hash, verify_bundle
 
@@ -68,23 +67,6 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(live_role(snapshot, 22)["start"], 1)
         self.assertEqual(player_projection(snapshot, 11)["actions"], 12)
         self.assertEqual(player_projection(snapshot, 22)["actions"], 8)
-
-    def test_snapshot_excludes_legacy_fixture_difficulty_fields(self) -> None:
-        baseline = self.snapshot()
-        for fixture in self.fixtures:
-            fixture.update(team_a_difficulty=4, team_h_difficulty=2)
-
-        snapshot = self.snapshot()
-        forbidden = {"team_a_difficulty", "team_h_difficulty"}
-        self.assertEqual(snapshot["source_hash"], baseline["source_hash"])
-        self.assertTrue(all(forbidden.isdisjoint(fixture) for fixture in snapshot["fixtures"]))
-        self.assertTrue(all(forbidden.issubset(fixture.keys()) for fixture in self.fixtures))
-
-        with tempfile.TemporaryDirectory() as directory:
-            save_snapshot(snapshot, Path(directory))
-            serialized = (Path(directory) / "day3_live_evidence.json").read_text(encoding="utf-8")
-        self.assertNotIn("team_a_difficulty", serialized)
-        self.assertNotIn("team_h_difficulty", serialized)
 
     def test_missing_forecast_is_not_a_blank_or_zero(self) -> None:
         snapshot = self.snapshot()
@@ -163,20 +145,6 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("3 goals", text)
         self.assertIn("10 percent", text)
         self.assertIn("does not establish a strong clean-sheet target", text)
-
-    def test_defcon_analysis_avoids_repeating_dynamic_sentences(self) -> None:
-        """Different subjects must make repeated template values safe for shared narration QA."""
-        snapshot = self.snapshot()
-        _, alpha = team_analysis(snapshot, 1, 1, "high", 0.25)
-        _, beta = team_analysis(snapshot, 2, 2, "high", 0.25)
-        for player in snapshot["players"].values():
-            player["recent_minutes"][-1] = 45
-        _, first_player = player_analysis(snapshot, 11, 1)
-        _, second_player = player_analysis(snapshot, 22, 2)
-        sentences = [sentence.casefold() for text in (alpha, beta, first_player, second_player)
-                     for sentence in re.split(r"(?<=[.!?])\\s+", text) if sentence]
-        duplicates = {sentence for sentence in sentences if sentences.count(sentence) > 1}
-        self.assertFalse(duplicates, duplicates)
 
     def test_changed_position_and_transfer_are_not_name_mapped(self) -> None:
         self.bootstrap["element_types"].append({"id": 3, "singular_name_short": "MID"})

@@ -43,13 +43,6 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
         raise RuntimeError("DEFCON numeric fitter was not installed in production runtime")
 
     fitter = runtime_script[start:end]
-
-    capture_start = runtime_script.find("  const prepare=window.vxPrepareCapture;")
-    capture_end = runtime_script.find("  };\n})();", capture_start)
-    if capture_start == -1 or capture_end <= capture_start:
-        raise RuntimeError("DEFCON capture wrapper was not installed in the production runtime")
-    capture_wrapper = runtime_script[capture_start:capture_end + len("  };")]
-
     sample_values = ["104.4", "999.9", "9999.9", "100.0", "88.8"] * 4
     rows = "".join(
         '<div class="d3DefTeamRow" data-team-id="' + str(index + 1) + '">'
@@ -62,20 +55,12 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
         '</div>'
         for index, value in enumerate(sample_values)
     )
-    fixture_labels = "".join(
-        '<div class="d3Def20Fdr"><span class="d3Def20FdrFixture">'
-        + label
-        + '</span><strong class="d3Def20FdrScore">2.8</strong></div>'
-        for label in ("Crystal Palace H", "Bournemouth A")
-    )
     page_html = (
         "<!doctype html><html><head><style>:root{--vx-dense:Arial,sans-serif}"
         ".d3DefTeamRow{width:850px;height:130px}</style>"
         + stylesheet
-        + '<style>body.vxPremium .d3Def20Fdr{width:280px;box-sizing:border-box}</style>'
         + "</head><body class=\"vxPremium\">"
         + rows
-        + fixture_labels
         + "<script>(()=>{" + fitter
         + "window.testDefconNumericFit=fitDefconTeamForecasts;})();</script>"
         + "</body></html>"
@@ -111,116 +96,7 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
                 raise AssertionError("DEFCON fitter used unreadable type below 32px")
             if result[0]["fontSize"] >= 61:
                 raise AssertionError("104.4 regression value was not resized to fit")
-
-            label_result = page.evaluate("""()=>{
-                return [...document.querySelectorAll('.d3Def20FdrFixture')].map(element=>{
-                  const box=element.getBoundingClientRect();
-                  const range=document.createRange();
-                  range.selectNodeContents(element);
-                  const text=range.getBoundingClientRect();
-                  return {
-                    text:element.textContent.trim(),
-                    fontSize:parseFloat(getComputedStyle(element).fontSize),
-                    fits:text.left>=box.left-1 && text.right<=box.right+1
-                      && element.scrollWidth<=element.clientWidth+1
-                  };
-                });
-            }""")
-            if len(label_result) != 2:
-                raise AssertionError(f"Expected 2 long fixture-label regressions; found {len(label_result)}")
-            label_overflow = [item for item in label_result if not item["fits"]]
-            if label_overflow:
-                raise AssertionError(f"DEFCON fixture label clips after fit: {label_overflow}")
-            if any(item["fontSize"] < 25 for item in label_result):
-                raise AssertionError("DEFCON fixture label fitter used unreadable type below 25px")
-            if all(item["fontSize"] >= 29 for item in label_result):
-                raise AssertionError("Long DEFCON fixture labels were not resized")
-
-            # Reproduce the production call chain: premium QA runs inside prepare(),
-            # so fitting must be applied at its layout-report boundary, before QA throws.
-            capture_html = (
-                page_html.split("<script>(()=>{", 1)[0]
-                + "<script>(()=>{"
-                + """
-                window.__ready = true;
-                window.__vxDefconRenderScaleReady = true;
-                window.__vxDefconTeamNumbersFitted = false;
-                window.__seekCalls = [];
-                window.__seek = time => window.__seekCalls.push(Number(time));
-                window.VX = {defcon_focus: {team_intro_at: 1}};
-                window.vxPremiumReady = Promise.resolve();
-                window.vxDefconCardsReady = Promise.resolve();
-                window.vxLayoutReport = () => {
-                    const clipped = [...document.querySelectorAll('.d3Def20FdrFixture')].filter(element => {
-                        const box = element.getBoundingClientRect();
-                        const range = document.createRange();
-                        range.selectNodeContents(element);
-                        const text = range.getBoundingClientRect();
-                        return text.left < box.left - 1 || text.right > box.right + 1
-                            || element.scrollWidth > element.clientWidth + 1;
-                    }).map(element => element.textContent.trim());
-                    window.__labelsAtPremiumQa = clipped;
-                    return {passed: clipped.length === 0, clippedText: clipped};
-                };
-                // Mirror production nested wrappers: QA captures the original report function.
-                const capturedLayoutReport = window.vxLayoutReport;
-                window.vxPrepareCapture = async () => {
-                    await window.vxPremiumReady;
-                    await document.fonts.ready;
-                    const report = capturedLayoutReport();
-                    if (!report.passed) throw Error('Premium slide QA failed: ' + JSON.stringify(report));
-                    return report;
-                };
-                const assertDefconBoardFit = () => {};
-                """
-                + fitter
-                + capture_wrapper
-                + "})();</script></body></html>"
-            )
-            capture_page = browser.new_page(viewport={"width": 3840, "height": 2160})
-            try:
-                capture_page.set_content(capture_html, wait_until="load")
-                capture_result = capture_page.evaluate("""async () => {
-                    try {
-                        const report = await window.vxPrepareCapture();
-                        return {
-                            passed: true,
-                            report,
-                            clippedAtQa: window.__labelsAtPremiumQa,
-                            seekCalls: window.__seekCalls,
-                            fitted: window.__vxDefconTeamNumbersFitted,
-                        };
-                    } catch (error) {
-                        return {
-                            passed: false,
-                            error: String(error),
-                            clippedAtQa: window.__labelsAtPremiumQa,
-                            seekCalls: window.__seekCalls,
-                            fitted: window.__vxDefconTeamNumbersFitted,
-                        };
-                    }
-                }""")
-                if not capture_result["passed"]:
-                    raise AssertionError(
-                        "Premium capture QA ran before DEFCON fixture fitting: "
-                        + json.dumps(capture_result, ensure_ascii=False)
-                    )
-                if capture_result["clippedAtQa"] != []:
-                    raise AssertionError(
-                        "Premium QA observed clipped labels after fitting: "
-                        + json.dumps(capture_result, ensure_ascii=False)
-                    )
-                if capture_result["seekCalls"] != [1.05, 0]:
-                    raise AssertionError(
-                        "DEFCON fitting must reveal the team board and restore the opening frame: "
-                        + json.dumps(capture_result, ensure_ascii=False)
-                    )
-                if capture_result["fitted"] is not True:
-                    raise AssertionError("DEFCON fit state was not recorded before premium QA")
-            finally:
-                capture_page.close()
-
-            print("✅ DEFCON forecast, fixture-label, and pre-QA capture-order browser tests passed")
+            print("✅ DEFCON 20-team live forecast browser test passed, including 104.4 and 9999.9")
         finally:
             browser.close()
 

@@ -21,7 +21,6 @@ from IPython.core.interactiveshell import InteractiveShell
 from .common import read_json
 from .visuals import install_visual_polish
 from .player_images import install_player_images, patch_player_images
-from .fixture_forecast import patch_notebook as patch_fixture_forecast
 
 
 DAY2_OUTPUT_ROOT = "/content/drive/MyDrive/FPL_VORTEX/Day_2"
@@ -224,7 +223,7 @@ def _vx_minutes(row):
 def _vx_fdr(row):
     return _vx_num(_vx_nested_pick(
         row,
-        "fixture_fdr", "fixture_rating", "fdr", "next_fdr", "fixture_difficulty", "difficulty"
+        "fixture_rating", "fdr", "next_fdr", "fixture_difficulty", "difficulty"
     ))
 
 def _vx_projection(row):
@@ -1170,7 +1169,6 @@ def execute_notebook(notebook_path: Path, quality: str) -> None:
     _patch_quality(payload, quality, notebook_path)
     _patch_brand_asset(payload)
     patch_player_images(payload)
-    patch_fixture_forecast(payload)
 
     # The execution copy is ephemeral. Only the Python 3.11 source repair above
     # is synced back to Drive; workflow-only quality/path overrides stay local.

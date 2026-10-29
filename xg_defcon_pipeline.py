@@ -134,23 +134,28 @@ def prepare() -> None:
             run_command(["rclone", "copy", remote, str(local), "--transfers", "4"], env=environment)
         else:
             print(f"[XG-DEFCON] Optional archive is unavailable: {asset_name}")
-    # Restore from the shared FPL VORTEX assets folder, not individual Drive
-    # file IDs. The pinned opening.mp4 ID became unavailable (Drive 404) even
-    # though the canonical shared assets folder remains configured above.
+    music_remote = "xg-defcon-assets:Background_music.mp3"
+    music_check = subprocess.run([
+        "rclone", "lsf", music_remote
+    ], env=environment, capture_output=True, text=True)
+    if music_check.returncode == 0:
+        run_command([
+            "rclone", "copyto", music_remote, str(source / "background.mp3")
+        ], env=environment)
+    # Load the established FPL VORTEX assets, without modifying any Google Drive files.
     media_files = {
-        "opening.mp4": "opening.mp4",
-        "outro.mp4": "outro.mp4",
-        "background.mp3": "Background_music.mp3",
+        "opening.mp4": "1KlxpGOUrC-2-rNMZINuZWbfL05nQj0U-",
+        "outro.mp4": "1M4w9Adk1H9xsVLQHCIcf6HdUn4XOqPmg",
+        "background.mp3": "1Vmwc1Qlvx1Vi1DHJ3BEOzbqG8oOUusXW",
     }
-    for filename, drive_name in media_files.items():
+    for filename, file_id in media_files.items():
         destination = source / filename
-        remote = f"xg-defcon-assets:{drive_name}"
         run_command(
-            ["rclone", "copyto", remote, str(destination)],
+            ["rclone", "backend", "copyid", "xg-defcon-drive:", file_id, str(destination)],
             env=environment,
         )
         if not destination.is_file() or destination.stat().st_size < 1000:
-            raise RuntimeError(f"Required Google Drive media is missing: {drive_name}")
+            raise RuntimeError(f"Required Google Drive media is missing: {filename}")
     config.unlink(missing_ok=True)
     print("[XG-DEFCON] Pinned notebook, logo, intro/outro and licensed music assets restored.")
 

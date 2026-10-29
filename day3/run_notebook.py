@@ -6,7 +6,6 @@ import json
 import os
 import re
 import sys
-import textwrap
 import types
 from pathlib import Path
 from typing import Iterable
@@ -26,7 +25,6 @@ from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_c
 from day3.narration_pacing import patch_narration_pacing_source
 from day3.popup_audio import patch_popup_audio_source
 from day3.evidence_pipeline import patch_evidence_pipeline
-from vortex.fixture_forecast import patch_weekly_source
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -34,8 +32,6 @@ TRANSFER_MODE_VALUES = {"AUTO", "MANUAL"}
 NOTEBOOK_CONTROL_CELL_INDEX = 1
 NARRATION_EXPORT_CELL_INDEX = 2
 VISUAL_ENRICHMENT_CELL_INDEX = 5
-PHASE11_DECISION_CELL_INDEX = 19
-MY_PLAN_TRANSFER_CELL_INDEX = 30
 PREVIEW_CELL_MARKER = "CELL 14C — ALL SELECTED SLIDES • LIVE HTML PREVIEW IN COLAB"
 PITCH_ANIMATION_CELL_INDEX = 30
 PITCH_RENDER_CELL_INDEX = 31
@@ -49,54 +45,6 @@ ELITE_TOP10K_CELL_INDEX = 26
 TTS_PROFILE_CELL_INDEX = 10
 PLAYER_CARD_DESIGN_CELL_INDEX = 23
 FULL_WORD_NARRATION_CELL_INDEX = 28
-
-
-_NARRATION_TEMPLATE_FUNCTIONS = {"player_analysis", "team_analysis", "defcon_narration"}
-# These are intentional source/data identifiers, not spoken abbreviations.
-_NARRATION_SOURCE_TOKEN_ALLOWLIST = {
-    "DC", "DEF", "DEFCON", "FDR", "FPL", "GK",
-    "INJURED", "SUSPENDED", "UNAVAILABLE",
-}
-_CAPITAL_NARRATION_TOKEN = re.compile(r"\b[A-Z]{2,}\b")
-
-
-def _preflight_narration_templates(source: str | None = None) -> None:
-    """Fail early if a DEFCON speech-template contains an unexpanded all-caps token."""
-    if source is None:
-        source = Path(__file__).with_name("evidence_narration.py").read_text(encoding="utf-8")
-
-    tree = ast.parse(source)
-    functions = {
-        node.name: node
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name in _NARRATION_TEMPLATE_FUNCTIONS
-    }
-    missing = _NARRATION_TEMPLATE_FUNCTIONS - functions.keys()
-    if missing:
-        raise RuntimeError(
-            "Fast narration template preflight could not locate required helper(s): "
-            + ", ".join(sorted(missing))
-        )
-
-    problems: list[str] = []
-    for name, function in functions.items():
-        for node in ast.walk(function):
-            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
-                continue
-            for match in _CAPITAL_NARRATION_TOKEN.finditer(node.value):
-                token = match.group(0)
-                if token not in _NARRATION_SOURCE_TOKEN_ALLOWLIST:
-                    problems.append(f"{name}:{node.lineno}: {token}")
-
-    if problems:
-        details = ", ".join(sorted(set(problems)))
-        raise RuntimeError(
-            "Fast narration template preflight failed before expensive renders; "
-            f"unexpanded capital abbreviation(s): {details}"
-        )
-
-    print("✅ Fast DEFCON narration-template preflight passed before rendering.")
 
 
 def _replace_once(source: str, pattern: str, replacement: str, label: str) -> str:
@@ -155,169 +103,6 @@ def _manual_pairs_from_env() -> tuple[list[int], list[int]]:
     return outs, ins
 
 
-def _inject_before_line(source: str, pattern: str, block: str, label: str) -> str:
-    """Insert ``block`` immediately above a unique source line, keeping its indent."""
-    matches = list(re.finditer(pattern, source, flags=re.MULTILINE))
-    if len(matches) != 1:
-        raise RuntimeError(f"{label}: expected exactly one anchor, found {len(matches)}")
-    match = matches[0]
-    indent = match.group("indent") or ""
-    injected = textwrap.indent(textwrap.dedent(block).strip("\n"), indent) + "\n"
-    return source[: match.start()] + injected + source[match.start() :]
-
-
-# Executed inside Cell 1. The workflow writes a live-squad snapshot before the
-# notebook runs; the resolver is the fallback for local/standalone runs. Either
-# way there is no silent "remembered squad": a failed API read fails the render.
-_LIVE_SQUAD_CONTRACT_BLOCK = '''
-# --- GitHub Actions live FPL squad contract (official public entry picks) ---
-import json as _d3_live_json
-import os as _d3_live_os
-from pathlib import Path as _D3LivePath
-from day3.fpl_squad import (
-    LiveSquad as _D3LiveSquad,
-    describe as _d3_describe_live_squad,
-    resolve_live_squad as _d3_resolve_live_squad,
-    validate_transfer_selections as _d3_validate_transfer_selections,
-)
-
-_d3_live_snapshot_path = _d3_live_os.environ.get("DAY3_LIVE_SQUAD_JSON", "")
-if _d3_live_snapshot_path and _D3LivePath(_d3_live_snapshot_path).is_file():
-    _d3_live_squad = _D3LiveSquad.from_dict(
-        _d3_live_json.loads(
-            _D3LivePath(_d3_live_snapshot_path).read_text(encoding="utf-8")
-        )
-    )
-else:
-    _d3_live_squad = _d3_resolve_live_squad(int(FPL_TEAM_ID))
-
-if int(_d3_live_squad.entry_id) != int(FPL_TEAM_ID):
-    raise RuntimeError(
-        f"Live FPL squad entry {_d3_live_squad.entry_id} "
-        f"does not match notebook entry {FPL_TEAM_ID}"
-    )
-
-DAY3_LIVE_SQUAD = _d3_live_squad
-DAY3_LIVE_SQUAD_IDS = tuple(int(x) for x in _d3_live_squad.squad_ids)
-DAY3_LIVE_SQUAD_GW = int(_d3_live_squad.base_gw)
-globals()["DAY3_LIVE_SQUAD"] = DAY3_LIVE_SQUAD
-globals()["DAY3_LIVE_SQUAD_IDS"] = DAY3_LIVE_SQUAD_IDS
-globals()["DAY3_LIVE_SQUAD_GW"] = DAY3_LIVE_SQUAD_GW
-
-_d3_manual_transfer = (
-    str(globals().get("MY_PLAN_SELECTION_MODE", "AUTO MODEL")) == "MANUAL PICKER"
-    and str(globals().get("MY_PLAN_TRANSFER_SELECTION", "AUTO MODEL"))
-    .upper().startswith("MANUAL")
-)
-if _d3_manual_transfer:
-    _d3_verified_outs, _d3_verified_ins = _d3_validate_transfer_selections(
-        _d3_live_squad,
-        globals().get("MY_PLAN_MANUAL_OUT_PLAYER_IDS", ""),
-        globals().get("MY_PLAN_MANUAL_IN_PLAYER_IDS", ""),
-    )
-    MY_PLAN_MANUAL_OUT_PLAYER_IDS = ",".join(map(str, _d3_verified_outs))
-    MY_PLAN_MANUAL_IN_PLAYER_IDS = ",".join(map(str, _d3_verified_ins))
-    globals()["MY_PLAN_MANUAL_OUT_PLAYER_IDS"] = MY_PLAN_MANUAL_OUT_PLAYER_IDS
-    globals()["MY_PLAN_MANUAL_IN_PLAYER_IDS"] = MY_PLAN_MANUAL_IN_PLAYER_IDS
-    print(
-        "✅ MY PLAN OUT/IN verified against the live FPL 15 for team "
-        + str(FPL_TEAM_ID)
-    )
-print(_d3_describe_live_squad(_d3_live_squad))
-'''
-
-# Injected into Cell 19 (Phase 11). SLIDE_CURRENT_SQUAD feeds both the Transfer
-# Desk HOLD/SELL cards and the video's 5A/5B base squad; it must be the real 15.
-_PHASE11_LIVE_SQUAD_GUARD = '''
-# Day 3 runner: reject any current squad that is not the live official FPL 15.
-_d3_live_ids = set(int(x) for x in globals().get("DAY3_LIVE_SQUAD_IDS", ()))
-if _d3_live_ids:
-    _d3_phase11_ids = set(
-        int(x)
-        for x in phase11_current_squad_state["player_id"].astype(int).tolist()
-    )
-    if len(_d3_phase11_ids) != 15 or _d3_phase11_ids != _d3_live_ids:
-        raise RuntimeError(
-            "Day 3 current squad does not match the live official FPL entry "
-            f"(GW{int(globals().get('DAY3_LIVE_SQUAD_GW', 0))}): "
-            f"missing={sorted(_d3_live_ids - _d3_phase11_ids)} "
-            f"extra={sorted(_d3_phase11_ids - _d3_live_ids)}"
-        )
-    print("✅ Phase 11 current squad equals the live FPL 15")
-'''
-
-# Injected into Cell 30 (5B transfer engine). Even if some upstream state were
-# replaced, the OUT cards drawn in the video must be owned players.
-_MY_PLAN_TRANSFER_LIVE_SQUAD_GUARD = '''
-# Day 3 runner: the transfer-plan OUT cards must come from the live FPL 15.
-_d3_live_ids = set(int(x) for x in globals().get("DAY3_LIVE_SQUAD_IDS", ()))
-if _d3_live_ids:
-    _d3_scene_ids = set(
-        int(x) for x in SLIDE_CURRENT_SQUAD["player_id"].astype(int).tolist()
-    )
-    if _d3_scene_ids != _d3_live_ids:
-        raise RuntimeError(
-            "MY PLAN 5B base squad is stale; refusing to render another FPL team"
-        )
-    if not set(int(x) for x in _outs).issubset(_d3_live_ids):
-        raise RuntimeError(
-            "MY PLAN 5B OUT players are not in the live FPL squad: "
-            + str(sorted(set(int(x) for x in _outs) - _d3_live_ids))
-        )
-    if set(int(x) for x in _ins) & _d3_live_ids:
-        raise RuntimeError("MY PLAN 5B IN players are already in the live FPL squad")
-'''
-
-
-def _patch_fpl_entry_id(source: str) -> str:
-    """Make the notebook's entry ID follow ``FPL_ENTRY_ID`` from the workflow."""
-    raw_entry_id = str(os.environ.get("FPL_ENTRY_ID", "")).strip()
-    if not raw_entry_id:
-        return source
-    try:
-        entry_id = int(raw_entry_id)
-    except ValueError as exc:
-        raise ValueError(f"FPL_ENTRY_ID must be an integer, got {raw_entry_id!r}") from exc
-    if entry_id <= 0:
-        raise ValueError("FPL_ENTRY_ID must be positive")
-    return _replace_once(
-        source,
-        r'^(?P<indent>[ \t]*)FPL_ID[ \t]*=[ \t]*\d+[ \t]*# @param \{type:"integer"\}[ \t]*$',
-        r"\g<indent>FPL_ID = " + str(entry_id) + r'  # @param {type:"integer"}',
-        "FPL entry id",
-    )
-
-
-def patch_live_squad_contract(source: str) -> str:
-    """Inject the shared live-squad resolver into the Day 3 control cell."""
-    return _inject_before_line(
-        source,
-        r"^(?P<indent>[ \t]*)MY_PLAN_SCENARIOS = tuple\(MY_PLAN_SCENARIO_MAP\.values\(\)\)[ \t]*$",
-        _LIVE_SQUAD_CONTRACT_BLOCK,
-        "Day 3 live squad contract",
-    )
-
-
-def patch_phase11_live_squad_guard(source: str) -> str:
-    """Assert Phase 11's current squad is the live official FPL 15."""
-    return _inject_before_line(
-        source,
-        r"^(?P<indent>[ \t]*)# Merge xPts and decision features onto the squad\.[ \t]*$",
-        _PHASE11_LIVE_SQUAD_GUARD,
-        "Phase 11 live squad guard",
-    )
-
-
-def patch_my_plan_transfer_live_squad_guard(source: str) -> str:
-    """Assert the 5B transfer scene's OUT cards are owned players."""
-    return _inject_before_line(
-        source,
-        r"^(?P<indent>[ \t]*)if len\(_outs\) != len\(_ins\) or not 1 <= len\(_outs\) <= 5:[ \t]*$",
-        _MY_PLAN_TRANSFER_LIVE_SQUAD_GUARD,
-        "MY PLAN 5B live squad guard",
-    )
-
-
 def _patch_control_cell(source: str) -> str:
     plan = str(os.environ.get("DAY3_PLAN", "NEITHER")).strip().upper()
     transfer_mode = str(os.environ.get("DAY3_TRANSFER_MODE", "AUTO")).strip().upper()
@@ -329,10 +114,6 @@ def _patch_control_cell(source: str) -> str:
             f"DAY3_TRANSFER_MODE must be one of {sorted(TRANSFER_MODE_VALUES)}, "
             f"got {transfer_mode!r}"
         )
-
-    # The notebook's own FPL_ID must agree with the entry used by the workflow's
-    # live-squad resolver; otherwise the video would show a different manager.
-    source = _patch_fpl_entry_id(source)
 
     if plan == "NEITHER":
         chip = os.environ.get("DAY3_PLANNED_CHIP", "Wildcard").strip()
@@ -458,8 +239,7 @@ print("✅ GitHub Manual Transfer selection loaded: "
         # scenes; Roll keeps only 5A.
         transfer_mode = "AUTO"
 
-    # One live-squad source of truth for every downstream scene and validation.
-    return patch_live_squad_contract(source)
+    return source
 
 
 def _patch_narration_exports(source: str) -> str:
@@ -538,141 +318,6 @@ def _patch_pitch_reveal_audit(source: str) -> str:
     )
 
 
-def _patch_full_word_abbreviation_normalization(source: str) -> str:
-    """Normalize DEFCON narration at the strict full-word audit boundary."""
-    audit_marker = "# Normalize DEFCON narration immediately before the full-word audit."
-    audit_pattern = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)_full_word_errors\s*=\s*\[\s*\]\s*$"
-    )
-    audit_matches = list(audit_pattern.finditer(source))
-    if len(audit_matches) > 1:
-        raise RuntimeError(
-            "Full-word narration normalization: expected one audit error-list initializer, "
-            f"found {len(audit_matches)}"
-        )
-
-    # The live notebook may contain an old expansion marker or may rebuild/overwrite
-    # its narration map after that old patch ran. Normalize at the actual audit
-    # boundary so the strict validator sees the spoken form, not an earlier snapshot.
-    if audit_matches:
-        audit_match = audit_matches[0]
-        existing_marker = source.rfind(audit_marker, 0, audit_match.start())
-        if existing_marker >= 0:
-            existing_block = source[existing_marker:audit_match.start()]
-            assignment_count = len(
-                re.findall(r"(?m)^[ \t]*_full_word_scripts\s*=", existing_block)
-            )
-            if "import re as _vx_preflight_re" in existing_block and assignment_count == 1:
-                return source
-
-        indent = audit_match.group("indent")
-        normalization_block = (
-            f"{indent}{audit_marker}\n"
-            f"{indent}import re as _vx_preflight_re\n"
-            f"{indent}_full_word_scripts = {{\n"
-            f"{indent}    _vx_preflight_key: _vx_preflight_re.sub(r\"\\bAPI\\b\", "
-            f"\"application programming interface\", _vx_preflight_script)\n"
-            f"{indent}    if _vx_preflight_key == \"03_defcon\" and isinstance(_vx_preflight_script, str) "
-            f"else _vx_preflight_script\n"
-            f"{indent}    for _vx_preflight_key, _vx_preflight_script in _full_word_scripts.items()\n"
-            f"{indent}}}\n"
-        )
-        updated = source[:audit_match.start()] + normalization_block + source[audit_match.start():]
-        print("✅ DEFCON narration: normalized API immediately before the strict full-word audit")
-        return updated
-
-    # Fallback for notebook revisions whose validation loop is directly visible.
-    loop_marker = "# Normalize the exact DEFCON script being checked and retained for speech."
-    pattern = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)for\s+\(?\s*(?P<key>\w+)\s*,\s*(?P<script>\w+)\s*\)?\s+in\s+_full_word_scripts\.items\(\)\s*:\s*$"
-    )
-    matches = list(pattern.finditer(source))
-    if len(matches) > 1:
-        raise RuntimeError(
-            "Full-word narration normalization: expected at most one validation loop, "
-            f"found {len(matches)}"
-        )
-
-    if matches:
-        match = matches[0]
-        if loop_marker in source:
-            return source
-
-        indent = match.group("indent")
-        child_indent = indent + ("\t" if indent.endswith("\t") else "    ")
-        key_name = match.group("key")
-        script_name = match.group("script")
-        block = (
-            f"{child_indent}{loop_marker}\n"
-            f"{child_indent}import re as _vx_full_word_re\n"
-            f"{child_indent}if {key_name} == \"03_defcon\" and isinstance({script_name}, str):\n"
-            f"{child_indent}    {script_name} = _vx_full_word_re.sub(r\"\\bAPI\\b\", "
-            f"\"application programming interface\", {script_name})\n"
-            f"{child_indent}    _full_word_scripts[{key_name}] = {script_name}\n"
-        )
-        insert_at = match.end()
-        if source.startswith("\r\n", insert_at):
-            insert_at += 2
-        elif source.startswith("\n", insert_at):
-            insert_at += 1
-        else:
-            block = "\n" + block
-        updated = source[:insert_at] + block + source[insert_at:]
-        print("✅ DEFCON narration: normalized API at the full-word validation boundary")
-        return updated
-
-    # A small number of notebook revisions consume the dictionary without an inline
-    # validation loop. In that shape, normalize immediately after its construction.
-    if "_full_word_scripts" not in source:
-        print("ℹ️ Skipping legacy DEFCON API hook: this notebook revision uses a different narration structure")
-        return source
-
-    fallback_marker = "# Expand API after script dictionary construction before narration consumption."
-    if fallback_marker in source:
-        return source
-
-    try:
-        syntax_tree = ast.parse(source)
-    except SyntaxError as error:
-        raise RuntimeError(
-            "Full-word narration normalization: cannot locate the script dictionary in changed notebook code"
-        ) from error
-
-    assignments = []
-    for node in ast.walk(syntax_tree):
-        if isinstance(node, ast.Assign):
-            targets = node.targets
-        elif isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        else:
-            continue
-        if any(isinstance(target, ast.Name) and target.id == "_full_word_scripts" for target in targets):
-            assignments.append(node)
-
-    if len(assignments) != 1:
-        raise RuntimeError(
-            "Full-word narration normalization: expected one _full_word_scripts assignment when "
-            f"the validation loop is absent, found {len(assignments)}"
-        )
-
-    assignment = assignments[0]
-    lines = source.splitlines(keepends=True)
-    assignment_line = lines[assignment.lineno - 1]
-    indent_match = re.match(r"^[ \t]*", assignment_line)
-    indent = indent_match.group(0) if indent_match else ""
-    normalization_block = (
-        f"{indent}{fallback_marker}\n"
-        f"{indent}import re as _vx_narration_re\n"
-        f"{indent}_full_word_scripts = {{\n"
-        f"{indent}    _vx_key: _vx_narration_re.sub(r\"\\bAPI\\b\", "
-        f"\"application programming interface\", _vx_script)\n"
-        f"{indent}    if _vx_key == \"03_defcon\" and isinstance(_vx_script, str) else _vx_script\n"
-        f"{indent}    for _vx_key, _vx_script in _full_word_scripts.items()\n"
-        f"{indent}}}\n"
-    )
-    lines.insert(assignment.end_lineno, normalization_block)
-    print("✅ DEFCON narration: expanded API after script dictionary construction")
-    return "".join(lines)
 def _patch_benching_narration(source: str) -> str:
     # Clubmates can share fixtures, rounded projections and team probabilities.
     # Keep each spoken fact tied to its player instead of repeating team-only prose.
@@ -792,14 +437,6 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
         raise RuntimeError("DEFCON numeric fit: expected one team-board QA function")
 
     fitter = r"""
-  // Install this before the guarded fit pass; fixture labels may be populated later.
-  const fixtureStyleId='vx-defcon-fixture-label-fit';
-  if(!document.getElementById(fixtureStyleId)){
-    const fixtureStyle=document.createElement('style');
-    fixtureStyle.id=fixtureStyleId;
-    fixtureStyle.textContent='body.vxPremium .d3Def20FdrFixture{font-size:25px!important;}';
-    document.head.appendChild(fixtureStyle);
-  }
   const fitDefconTeamForecasts=()=>{
     const numbers=[...document.querySelectorAll('.d3DefTeamForecast')];
     if(numbers.length!==20) throw Error('DEFCON requires 20 team forecasts before capture');
@@ -833,64 +470,22 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
       if(!fits())
         throw Error('DEFCON forecast fit regression: '+String(number.textContent||'').trim());
     }
-
-    // Live club names can be wider than the fixture chip when paired with its FDR
-    // score. Fit the label instead of truncating the name or letting it clip.
-    const fixtureLabels=[...document.querySelectorAll('.d3Def20FdrFixture')];
-    for(const label of fixtureLabels){
-      const initialBox=label.getBoundingClientRect();
-      if(initialBox.width<=0 || initialBox.height<=0) continue;
-      const range=document.createRange();
-      range.selectNodeContents(label);
-      const fits=()=>{
-        // A flex item may shrink to the text's intrinsic width after fitting, so
-        // use a one-pixel tolerance at its edges rather than demanding inner padding.
-        const box=label.getBoundingClientRect();
-        const text=range.getBoundingClientRect();
-        return text.left>=box.left-1 && text.right<=box.right+1
-          && label.scrollWidth<=label.clientWidth+1;
-      };
-      if(fits()) continue;
-      const original=parseFloat(getComputedStyle(label).fontSize);
-      const floor=25;
-      label.style.setProperty('font-size', String(floor)+'px', 'important');
-      if(!fits())
-        throw Error('DEFCON fixture label is too wide at readable minimum: '+
-                    String(label.textContent||'').trim());
-      let low=floor;
-      let high=Math.max(floor,original);
-      for(let iteration=0;iteration<12;iteration++){
-        const candidate=(low+high)/2;
-        label.style.setProperty('font-size', String(candidate)+'px', 'important');
-        if(fits()) low=candidate;
-        else high=candidate;
-      }
-      label.style.setProperty('font-size', String(Math.max(floor,low-0.5))+'px', 'important');
-      if(!fits())
-        throw Error('DEFCON fixture label fit regression: '+String(label.textContent||'').trim());
-    }
-    // Reset labels to the persistent 25px rule; the gameweek fixture list is live
-    // and may be repopulated after the initial fit, so per-node sizes are not stable.
-    for(const label of document.querySelectorAll('.d3Def20FdrFixture'))
-      label.style.setProperty('font-size','25px','important');
   };
 """
     source = source.replace(function_anchor, fitter + function_anchor, 1)
 
-    capture_anchor = "    const result=prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});"
-    capture_replacement = """\
-    if (prepare && window.__ready === true &&
-        window.__vxDefconRenderScaleReady === true &&
-        typeof window.__seek === "function" &&
-        !window.__vxDefconTeamNumbersFitted) {
-      const focus = (typeof VX !== "undefined" ? VX : window.VX)?.defcon_focus;
-      if (!focus || focus.team_intro_at == null ||
-          !Number.isFinite(Number(focus.team_intro_at)))
-        throw Error("DEFCON focus timeline is incomplete before numeric fitting");
-      // Fit before entering prepare(): its QA may use a layout-report function
-      // captured in a closure, so replacing window.vxLayoutReport is too late.
-      await document.fonts.ready;
-      window.__seek(Number(focus.team_intro_at) + 0.05);
+    capture_anchor = """    assertDefconBoardFit();
+    return result;"""
+    capture_replacement = """    // Team panel starts hidden. Reveal it briefly to fit live xGW numbers,
+    // then reset the timeline so the captured video still opens normally.
+    const focus=(typeof VX !== 'undefined' ? VX : window.VX)?.defcon_focus;
+    if(window.__ready === true && window.__vxDefconRenderScaleReady === true &&
+       typeof window.__seek === 'function' &&
+       !window.__vxDefconTeamNumbersFitted) {
+      if(!focus || focus.team_intro_at == null ||
+         !Number.isFinite(Number(focus.team_intro_at)))
+        throw Error('DEFCON focus timeline is incomplete before numeric fitting');
+      window.__seek(Number(focus.team_intro_at)+0.05);
       try {
         fitDefconTeamForecasts();
         window.__vxDefconTeamNumbersFitted = true;
@@ -898,15 +493,11 @@ def _patch_defcon_team_numeric_fit(source: str) -> str:
         window.__seek(0);
       }
     }
-    const result = prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});\
-"""
-    if source.count(capture_anchor) != 1:
-        raise RuntimeError("DEFCON numeric fit: expected one capture prepare invocation")
-    qa_anchor = """    assertDefconBoardFit();
+    assertDefconBoardFit();
     return result;"""
-    if source.count(qa_anchor) != 1:
-        raise RuntimeError("DEFCON numeric fit: expected one post-capture board QA call")
-    print("✅ DEFCON fixture fitting runs before premium layout validation")
+    if source.count(capture_anchor) != 1:
+        raise RuntimeError("DEFCON numeric fit: expected one capture QA call")
+    print("✅ DEFCON team forecasts auto-fit after fonts load and before 4K capture")
     return source.replace(capture_anchor, capture_replacement, 1)
 
 def _patch_defcon_render_preflight(source: str) -> str:
@@ -1497,7 +1088,6 @@ def _patch_transition_titles(source: str) -> str:
 
 
 def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
-    _preflight_narration_templates()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     cells = list(_iter_code_cells(notebook))
     if len(cells) < 30:
@@ -1506,16 +1096,10 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
     prepared_cells: list[tuple[int, str]] = []
     transformer = TransformerManager()
     for cell_index, source in cells:
-        if cell_index in (10, 11, 12):
-            source = patch_weekly_source(source)
         if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
             source = _patch_control_cell(source)
         if cell_index == NARRATION_EXPORT_CELL_INDEX:
             source = _patch_narration_exports(source)
-        if cell_index == PHASE11_DECISION_CELL_INDEX:
-            source = patch_phase11_live_squad_guard(source)
-        if cell_index == MY_PLAN_TRANSFER_CELL_INDEX:
-            source = patch_my_plan_transfer_live_squad_guard(source)
         if cell_index == TTS_PROFILE_CELL_INDEX:
             source = _patch_tts_profile(source)
         if cell_index == PLAYER_CARD_DESIGN_CELL_INDEX:
@@ -1532,7 +1116,6 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_pitch_reveal_audit(source)
         if cell_index == SHARED_NARRATION_CELL_INDEX:
             source = _patch_benching_narration(source)
-            source = _patch_full_word_abbreviation_normalization(source)
             source = patch_transfer_desk_audio_source(source)
         if cell_index == SCENE_DESIGN_CELL_INDEX:
             source = _patch_defcon_gameweek_contract(source)

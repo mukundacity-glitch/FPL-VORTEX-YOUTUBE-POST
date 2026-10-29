@@ -313,10 +313,6 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
             "Day 1 QA says media was integrated, but the final MP4 hash changed"
         )
 
-    if (data_dir / 'day1_show.json').is_file():
-        from .day1_show_media import integrate_show_media
-        return integrate_show_media(output_root, asset_dir, existing_qa, final_mp4, combined_mp3)
-
     opening = _required_file(asset_dir / OPENING_NAME)
     background = _required_file(asset_dir / BACKGROUND_NAME)
     outro = _required_file(asset_dir / OUTRO_NAME)
@@ -335,11 +331,6 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
 
     opening_duration = _duration(opening_probe)
     program_duration = _duration(program_probe)
-    if opening_duration + program_duration > 420.0:
-        raise RuntimeError(
-            "Day 1 exceeds seven minutes including the opening; tighten only the results opening "
-            "and preserve the full squad review and original Ryan profiles."
-        )
     background_source_duration = _duration(background_probe)
     outro_source_duration = _duration(outro_probe)
 

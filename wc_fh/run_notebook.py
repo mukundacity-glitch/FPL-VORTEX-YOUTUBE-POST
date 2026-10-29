@@ -115,67 +115,6 @@ def patch_render(source: str) -> str:
     return "from wc_fh.render_qa import verified_visual as _wc_fh_verified_visual\n" + "".join(lines)
 
 
-def patch_freehit_narration_timeline(source: str) -> str:
-    """Refresh stale Free Hit prose from the current structured scene cues."""
-    tree = ast.parse(source)
-    markers = [
-        node for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "words" for target in node.targets)
-        and (expression := ast.get_source_segment(source, node)) is not None
-        and expression.startswith("words=sum(len(seg['text'].split()) for seg in VX_NARRATION[key])")
-    ]
-    if len(markers) != 1:
-        raise ValueError("Free Hit narration refresh contract changed; expected one narration word-count marker.")
-
-    lines = source.splitlines(keepends=True)
-    marker = markers[0]
-    line = lines[marker.lineno - 1]
-    indentation = line[:len(line) - len(line.lstrip())]
-    refresh = '''if key.startswith('free_hit'):
-    _vx_freehit_sync_ids = []
-    for _vx_scene in VX_SCENE_MANIFESTS[key]:
-        _vx_timeline = _vx_scene.get('narration_timeline') or []
-        if not _vx_timeline:
-            continue
-        _vx_approved = ' '.join(str(_vx_cue.get('narration_text') or '').strip()
-                                for _vx_cue in _vx_timeline
-                                if str(_vx_cue.get('narration_text') or '').strip())
-        _vx_segment = next((item for item in VX_NARRATION[key]
-                            if item.get('id') == _vx_scene.get('scene_id')), None)
-        if _vx_segment is None:
-            raise ValueError(f"{key}: structured narration scene {_vx_scene.get('scene_id')} is missing from its TXT script")
-        if _vx_segment.get('text', '') != _vx_approved:
-            _vx_segment['text'] = _vx_approved
-            _vx_freehit_sync_ids.append(_vx_scene['scene_id'])
-        _vx_scene['narration_text'] = _vx_approved
-    if _vx_freehit_sync_ids:
-        _vx_previous_script = path.read_text(encoding='utf-8') if path.is_file() else ''
-        if _vx_previous_script:
-            _vx_archive_dir = VX_ANALYSIS_ROOT / 'previous_narration'
-            _vx_archive_dir.mkdir(parents=True, exist_ok=True)
-            _vx_digest = hashlib.sha256(_vx_previous_script.encode()).hexdigest()[:16]
-            _vx_archive = _vx_archive_dir / f'{path.stem}_{_vx_digest}{path.suffix}'
-            if not _vx_archive.exists():
-                _vx_archive.write_text(_vx_previous_script, encoding='utf-8')
-        _vx_headers = '\\n'.join(line for line in _vx_previous_script.splitlines() if line.startswith('#'))
-        _vx_updated_script = (_vx_headers + '\\n' if _vx_headers else '') + encode_script(VX_NARRATION[key])
-        path.write_text(_vx_updated_script, encoding='utf-8')
-        _vx_provenance_dir = VX_ANALYSIS_ROOT / 'narration_provenance'
-        _vx_provenance_dir.mkdir(parents=True, exist_ok=True)
-        _vx_provenance = _vx_provenance_dir / (path.name + '.provenance.json')
-        _vx_provenance.write_text(json.dumps(dict(
-            data_hash=VX_DATA_CONTRACTS[key]['data_hash'],
-            generated_sha256=hashlib.sha256(_vx_updated_script.encode()).hexdigest(),
-        ), indent=2), encoding='utf-8')
-        print('Free Hit narration synchronized with current structured scene cues; previous TXT archived: '
-              + ', '.join(_vx_freehit_sync_ids), flush=True)
-'''
-    block = "\n".join(indentation + part if part else "" for part in refresh.splitlines(keepends=False)) + "\n"
-    lines.insert(marker.lineno - 1, block)
-    return "".join(lines)
-
-
 def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tuple[int, str, str]]:
     from IPython.core.inputtransformer2 import TransformerManager
 
@@ -197,15 +136,6 @@ def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tu
             source = patch_setup(source, controls)
         if label == "1":
             source = patch_forecast_loader(source)
-            source += '''\nfrom vortex import fixture_forecast_model as vortex_upstream_fdr
-sys.modules['vortex_upstream_fdr'] = vortex_upstream_fdr
-'''
-        if label == "2":
-            source += '''\nfrom vortex.fixture_forecast import forecast_rows as _shared_fixture_forecast
-def _shared_wc_fh_forecast(boot, fixtures, cfg, now):
-    return _shared_fixture_forecast(boot, fixtures, now), None
-VXWC.canonical_fdr = _shared_wc_fh_forecast
-'''
         if label == "11":
             lines = source.splitlines(keepends=True)
             function = next(node for node in ast.parse(source).body
@@ -222,7 +152,6 @@ VXWC.canonical_fdr = _shared_wc_fh_forecast
             if source.count(marker) != 1:
                 raise ValueError("The scene-preparation reload contract changed.")
             source = source.replace(marker, "\nfrom wc_fh.manual_plans import install_manual_narration\ninstall_manual_narration()\n" + marker, 1)
-            source = patch_freehit_narration_timeline(source)
         if label == "14":
             source = patch_render(source)
             source = patch_narration_loader(source)

@@ -22,7 +22,7 @@ jobs:
       PYTHONUNBUFFERED: "1"
 
     steps:
-      - name: Checkout repository
+      - name: Checkout only the current repository
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11

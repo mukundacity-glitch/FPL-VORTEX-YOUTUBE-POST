@@ -85,8 +85,6 @@ def restore() -> None:
     cache = root / "analysis" / "model_inputs"
     if not copy_optional(f"{REMOTE_ROOT}/cache/model_inputs", cache):
         copy_optional("FPL_VORTEX/Analysis/wc_fh/model_inputs", cache)
-    from vortex.fixture_forecast import input_root
-    copy_optional("FPL_VORTEX/MODEL_INPUTS/canonical_fixtures", input_root())
     if os.environ.get("WC_FH_TASK") != "Refresh player picker":
         assets = Path(os.environ["FPL_MEDIA_ASSET_DIR"])
         assets.mkdir(parents=True, exist_ok=True)
@@ -107,9 +105,6 @@ def publish() -> None:
     cache = root / "analysis" / "model_inputs"
     if cache.is_dir():
         run("rclone", "copy", str(cache), f"wc-fh-drive:{REMOTE_ROOT}/cache/model_inputs", "--transfers", "4")
-    from vortex.fixture_forecast import input_root
-    if input_root().is_dir():
-        run("rclone", "copy", str(input_root()), "wc-fh-drive:FPL_VORTEX/MODEL_INPUTS/canonical_fixtures", "--transfers", "4")
     print(f"WC- FH: saved outputs and metadata to My Drive/{remote}")
 
 

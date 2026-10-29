@@ -148,9 +148,9 @@ def _vx23_chapters(qa, review_gw):
     return rows
 
 
-def _vx23_metadata(preview_gw, review_gw, review_status, qa, show=None):
+def _vx23_metadata(preview_gw, review_gw, review_status, qa):
     title = (
-        f"FPL GW{preview_gw}: Results & My Squad | "
+        f"FPL GW{preview_gw} Tips: Fixtures, Goals & Clean Sheets | "
         f"GW{review_gw} Review (1/3) #FPL"
     )
     status_text = "live/partial" if review_status == "LIVE/PARTIAL" else "completed"
@@ -159,14 +159,15 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa, show=None):
     description = "\n".join(
         [
             (
-                f"FPL VORTEX match results and my squad: a {status_text} "
+                f"FPL Gameweek {preview_gw} tips and preview, plus a {status_text} "
                 f"GW{review_gw} review from FPL VORTEX."
             ),
             "",
             f"VIDEO {YT_VIDEO_PART}/{YT_VIDEO_TOTAL} for Gameweek {preview_gw} covers:",
             f"• GW{review_gw} squad review and key returns",
-            f"• GW{review_gw} match results, scorers and assists",
-            "• Current availability and disciplinary cautions",
+            f"• GW{preview_gw}–GW{min(38, preview_gw + 5)} fixture difficulty",
+            "• Model-projected team goals and attacking outlook",
+            "• Clean-sheet probabilities and defensive outlook",
             "",
             "CHAPTERS",
             *chapters,
@@ -183,23 +184,13 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa, show=None):
         f"Gameweek {preview_gw}",
         f"FPL GW{preview_gw} tips",
         f"FPL GW{preview_gw} preview",
-        "FPL results",
-        "FPL squad review",
+        "FPL fixtures",
+        "fixture difficulty",
+        "projected goals",
+        "clean sheet odds",
         "FPL review",
         "FPL VORTEX",
     ]
-    if show:
-        title = show['title_options'][0]
-        chapters = [f'{_vx23_timestamp(s["start"])} {s["title"]}' for s in show['sections']]
-        description = '\n'.join([
-            show['concept'], '',
-            'My early decisions, based on the verified FPL snapshot:',
-            *[f'• {d["player"]["name"]}: {d["verdict"]}' for d in show['decisions']], '',
-            'These are provisional opinions, not transfers already made. Check the final team news before your deadline.', '',
-            'CHAPTERS', *chapters, '', show['pinned_comment'], '', ' '.join(hashtags),
-        ])
-        tags = ['FPL', 'Fantasy Premier League', f'FPL GW{preview_gw}', 'FPL team selection',
-                'FPL captaincy', 'FPL transfers', 'FPL Vortex']
     if len(title) > 100:
         raise RuntimeError(f"YouTube title exceeds 100 characters: {len(title)}")
     if len(description.encode("utf-8")) > 5000:
@@ -282,16 +273,7 @@ def build_youtube_studio_package(output_root):
     if review_status not in {"FINAL", "LIVE/PARTIAL"}:
         raise RuntimeError(f"Invalid Gameweek review status: {review_status!r}")
 
-    show_path = data_dir / 'day1_show.json'
-    show = _vx23_read_json(show_path, 'decision show') if show_path.is_file() else None
-    if show and (int(show['preview_gw']) != preview_gw or int(show['review_gw']) != review_gw):
-        raise RuntimeError('Decision-show metadata does not match the verified Gameweeks')
-    metadata = _vx23_metadata(preview_gw, review_gw, review_status, qa, show)
-    if show:
-        metadata.update({'title_options': show['title_options'],
-                         'thumbnail_text_options': show['thumbnail_text_options'],
-                         'community_poll': show['poll'], 'pinned_comment': show['pinned_comment'],
-                         'shorts': show['shorts'], 'analytics_review': show['analytics_review']})
+    metadata = _vx23_metadata(preview_gw, review_gw, review_status, qa)
 
     package = {
         "version": "FPL-VORTEX-YOUTUBE-PRIVATE-AUTO-V4",

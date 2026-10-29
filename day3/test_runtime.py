@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import tempfile
 import unittest
@@ -13,127 +12,8 @@ from unittest.mock import patch
 
 from day3 import live_evidence
 from day3 import run_notebook as runner
-from day3.evidence_pipeline import patch_defcon_sync_cue_normalization
 from day3.chip_plan import DAY3_CHIP_PLAN_SCENE, DAY3_PLANNED_CHIP_OPTIONS, chip_plan_copy
 from day3.publish_private import _one_final_video
-
-
-class FullWordNarrationAbbreviationPatchTests(unittest.TestCase):
-    def test_fast_template_preflight_passes_current_templates_and_rejects_new_abbreviations(self) -> None:
-        runner._preflight_narration_templates()
-
-        bad_source = (
-            'def player_analysis():\n    return "The API still gives a playing chance."\n'
-            'def team_analysis():\n    return "Recorded evidence is available."\n'
-            'def defcon_narration():\n    return "No tactical conclusion is assumed."\n'
-            'def unrelated_metadata():\n    return "API documentation is not spoken."\n'
-        )
-        with self.assertRaisesRegex(RuntimeError, "API"):
-            runner._preflight_narration_templates(bad_source)
-
-    def test_defcon_api_is_expanded_at_validation_and_other_scenes_are_unchanged(self) -> None:
-        source = (
-            '_full_word_scripts = {"03_defcon": "The API confirms the forecast.", "intro": "API remains."}\n'
-            'seen = {}\n'
-            'for key, script in _full_word_scripts.items():\n'
-            '    seen[key] = script\n'
-        )
-        patched = runner._patch_full_word_abbreviation_normalization(source)
-        namespace: dict[str, Any] = {}
-        exec(compile(patched, "<narration-abbreviation-patch-test>", "exec"), namespace)
-
-        loop_marker = "# Normalize the exact DEFCON script being checked and retained for speech."
-        self.assertLess(patched.index("for key, script in _full_word_scripts.items():"), patched.index(loop_marker))
-        self.assertLess(patched.index(loop_marker), patched.index("seen[key] = script"))
-        self.assertEqual(
-            namespace["seen"]["03_defcon"],
-            "The application programming interface confirms the forecast.",
-        )
-        self.assertEqual(
-            namespace["_full_word_scripts"]["03_defcon"],
-            "The application programming interface confirms the forecast.",
-        )
-        self.assertEqual(namespace["seen"]["intro"], "API remains.")
-        self.assertEqual(namespace["_full_word_scripts"]["intro"], "API remains.")
-
-    def test_normalizes_after_late_dictionary_overwrite_before_audit_even_without_matching_loop(self) -> None:
-        source = (
-            '_full_word_scripts = {"03_defcon": "Earlier API", "intro": "API remains."}\n'
-            '# Expand API before the full-word audit so speech uses the spoken form.\n'
-            '_full_word_scripts = {"03_defcon": "Final API confirms the forecast.", "intro": "API remains."}\n'
-            '_full_word_errors = []\n'
-            'audit_text = _full_word_scripts["03_defcon"]\n'
-            'scripts = _full_word_scripts\n'
-        )
-        patched = runner._patch_full_word_abbreviation_normalization(source)
-        namespace: dict[str, Any] = {}
-        exec(compile(patched, "<narration-audit-boundary-test>", "exec"), namespace)
-
-        self.assertLess(
-            patched.index("# Normalize DEFCON narration immediately before the full-word audit."),
-            patched.index("_full_word_errors = []"),
-        )
-        self.assertEqual(
-            namespace["audit_text"],
-            "Final application programming interface confirms the forecast.",
-        )
-        self.assertEqual(
-            namespace["scripts"]["03_defcon"],
-            "Final application programming interface confirms the forecast.",
-        )
-        self.assertEqual(namespace["scripts"]["intro"], "API remains.")
-
-    def test_stale_marker_cannot_skip_normalization_after_script_dictionary_is_overwritten(self) -> None:
-        # This models the production failure: the prior patch marker already exists,
-        # but a later dictionary assignment restores API after that earlier patch ran.
-        source = (
-            '_full_word_scripts = {"03_defcon": "Earlier API"}\n'
-            '# Expand API before the full-word audit so speech uses the spoken form.\n'
-            'import re as _vx_narration_re\n'
-            '_full_word_scripts = {_key: _vx_narration_re.sub(r"\\bAPI\\b", "application programming interface", _value) '
-            'if _key == "03_defcon" else _value for _key, _value in _full_word_scripts.items()}\n'
-            '_full_word_scripts = {"03_defcon": "Final API confirms the forecast.", "intro": "API remains."}\n'
-            'seen = {}\n'
-            'for key, script in _full_word_scripts.items():\n'
-            '    seen[key] = script\n'
-            'scripts = _full_word_scripts\n'
-        )
-        patched = runner._patch_full_word_abbreviation_normalization(source)
-        namespace: dict[str, Any] = {}
-        exec(compile(patched, "<narration-abbreviation-stale-marker-test>", "exec"), namespace)
-
-        self.assertEqual(
-            namespace["seen"]["03_defcon"],
-            "Final application programming interface confirms the forecast.",
-        )
-        self.assertEqual(
-            namespace["scripts"]["03_defcon"],
-            "Final application programming interface confirms the forecast.",
-        )
-        self.assertEqual(namespace["scripts"]["intro"], "API remains.")
-
-    def test_assignment_fallback_handles_validation_without_inline_loop(self) -> None:
-        source = (
-            '_full_word_scripts = {"03_defcon": "The API confirms the forecast.", "intro": "API remains."}\n'
-            'consume(_full_word_scripts)\n'
-        )
-        patched = runner._patch_full_word_abbreviation_normalization(source)
-        namespace: dict[str, Any] = {"consume": lambda value: None}
-        exec(compile(patched, "<narration-abbreviation-fallback-test>", "exec"), namespace)
-
-        self.assertLess(
-            patched.index("import re as _vx_narration_re"),
-            patched.index("consume(_full_word_scripts)"),
-        )
-        self.assertEqual(
-            namespace["_full_word_scripts"]["03_defcon"],
-            "The application programming interface confirms the forecast.",
-        )
-        self.assertEqual(namespace["_full_word_scripts"]["intro"], "API remains.")
-
-    def test_newer_narration_structure_does_not_fail_on_legacy_hook(self) -> None:
-        source = 'def narrate():\n    return "Narration is assembled by a helper."\n'
-        self.assertEqual(runner._patch_full_word_abbreviation_normalization(source), source)
 
 
 class LiveEvidencePollingTests(unittest.TestCase):
@@ -205,56 +85,6 @@ class LiveEvidencePollingTests(unittest.TestCase):
         self.assertEqual(snapshot["next_gw"], 2)
         self.assertEqual(sleep.call_count, 2)
 
-    def test_score_locked_gameweek_overrides_stale_fixture_finished_flag(self) -> None:
-        # The API can leave fixture.finished=False after the event's official
-        # data_checked score lock. Provisional fixture data is accepted only
-        # for that locked event, then still reconciled against live/bootstrap stats.
-        self.bootstrap["events"][0].update(finished=True, data_checked=True)
-        state = {"fixtures": 0}
-        stale_fixture = self.fixture(False, True)
-
-        def loader(path: str) -> Any:
-            if path == "/bootstrap-static/":
-                return self.bootstrap
-            if path == "/fixtures/":
-                state["fixtures"] += 1
-                return [stale_fixture]
-            if path == "/event/1/live/":
-                return self.live_payload
-            raise AssertionError(f"Unexpected FPL path: {path}")
-
-        with patch.object(live_evidence.time, "sleep") as sleep:
-            snapshot = live_evidence.capture_evidence(
-                {"next_gw": 2, "api_fallback_used": False},
-                loader=loader,
-                poll_interval_seconds=0,
-                max_wait_seconds=0,
-            )
-
-        self.assertEqual(state["fixtures"], 1)
-        self.assertEqual(snapshot["history_gameweeks"], [1])
-        self.assertEqual(snapshot["next_gw"], 2)
-        sleep.assert_not_called()
-
-    def test_provisional_fixture_still_waits_without_official_score_lock(self) -> None:
-        def loader(path: str) -> Any:
-            if path == "/bootstrap-static/":
-                return self.bootstrap
-            if path == "/fixtures/":
-                return [self.fixture(False, True)]
-            raise AssertionError(f"Unexpected FPL path: {path}")
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            r"fixture #701 \(Home FC vs Away FC;.*No video was rendered from incomplete data",
-        ):
-            live_evidence.capture_evidence(
-                {"next_gw": 2, "api_fallback_used": False},
-                loader=loader,
-                poll_interval_seconds=0,
-                max_wait_seconds=0,
-            )
-
     def test_wait_timeout_reports_the_exact_fixture_and_stops_safely(self) -> None:
         def loader(path: str) -> Any:
             if path == "/bootstrap-static/":
@@ -273,119 +103,6 @@ class LiveEvidencePollingTests(unittest.TestCase):
                 poll_interval_seconds=0,
                 max_wait_seconds=0,
             )
-
-    def test_provisional_fixture_can_be_accepted_when_explicitly_enabled(self) -> None:
-        def loader(path: str) -> Any:
-            if path == "/bootstrap-static/":
-                return self.bootstrap
-            if path == "/fixtures/":
-                return [self.fixture(False, True)]
-            if path == "/event/1/live/":
-                return self.live_payload
-            raise AssertionError(f"Unexpected FPL path: {path}")
-
-        with patch.object(live_evidence.time, "sleep") as sleep:
-            snapshot = live_evidence.capture_evidence(
-                {"next_gw": 2, "api_fallback_used": False},
-                loader=loader,
-                poll_interval_seconds=0,
-                max_wait_seconds=0,
-                accept_provisional=True,
-                allow_partial=False,
-            )
-
-        self.assertEqual(snapshot["history_gameweeks"], [1])
-        self.assertEqual(snapshot["next_gw"], 2)
-        sleep.assert_not_called()
-
-    def test_partial_gameweek_can_be_allowed_when_explicitly_enabled(self) -> None:
-        def loader(path: str) -> Any:
-            if path == "/bootstrap-static/":
-                return self.bootstrap
-            if path == "/fixtures/":
-                return [self.fixture(False, False)]
-            raise AssertionError(f"Unexpected FPL path: {path}")
-
-        with patch.object(live_evidence.time, "sleep") as sleep:
-            snapshot = live_evidence.capture_evidence(
-                {"next_gw": 2, "api_fallback_used": False},
-                loader=loader,
-                poll_interval_seconds=0,
-                max_wait_seconds=0,
-                accept_provisional=False,
-                allow_partial=True,
-            )
-
-        self.assertTrue(snapshot["partial_gameweek"])
-        self.assertEqual(snapshot["pending_fixture_ids"], [701])
-        self.assertEqual(snapshot["history_gameweeks"], [])
-        sleep.assert_not_called()
-
-    def test_environment_flags_can_enable_both_overrides(self) -> None:
-        def loader(path: str) -> Any:
-            if path == "/bootstrap-static/":
-                return self.bootstrap
-            if path == "/fixtures/":
-                return [self.fixture(False, True)]
-            if path == "/event/1/live/":
-                return self.live_payload
-            raise AssertionError(f"Unexpected FPL path: {path}")
-
-        environment = {
-            "DAY3_ACCEPT_PROVISIONAL": "1",
-            "DAY3_ALLOW_PARTIAL_GAMEWEEK": "1",
-            "DAY3_EVIDENCE_MAX_WAIT_MINUTES": "0",
-        }
-        with patch.dict(os.environ, environment, clear=False):
-            with patch.object(live_evidence.time, "sleep") as sleep:
-                snapshot = live_evidence.capture_evidence(
-                    {"next_gw": 2, "api_fallback_used": False},
-                    loader=loader,
-                    poll_interval_seconds=0,
-                )
-
-        self.assertEqual(snapshot["history_gameweeks"], [1])
-        sleep.assert_not_called()
-
-
-class DefconSyncCueTests(unittest.TestCase):
-    def test_cues_are_normalized_with_the_final_spoken_script(self) -> None:
-        source = (
-            "DEFCON_NARRATION_CUES = {\n"
-            '    "opening": "For the upcoming Gameweek",\n'
-            '    "individual": [{"anchor": "The historical player leader is James Hill"}],\n'
-            '    "team_intro": "Now lets examine every club",\n'
-            '    "target_teams": [{"anchor": "Man City defensive-action record"}],\n'
-            '    "avoid_intro": "Now to the clubs",\n'
-            '    "avoid_teams": [{"anchor": "Moving to Spurs"}],\n'
-            "}\n"
-            'scripts = {"03_defcon": "raw"}\n'
-            '_full_word_scripts = {"03_defcon": "spoken The historical player leader is James Hill"}\n'
-            "scripts = _full_word_scripts\n"
-            '_d3_sync_anchors = {"03_defcon": [DEFCON_NARRATION_CUES["individual"][0]["anchor"]]}\n'
-        )
-        patched = patch_defcon_sync_cue_normalization(source)
-        namespace: dict[str, Any] = {
-            "_d3_full_word_script": lambda text: text.replace("Man City", "Manchester City"),
-            "vx_full_word_narration": lambda text, **kwargs: "spoken " + text,
-        }
-        exec(compile(patched, "<defcon-sync-cue-test>", "exec"), namespace)
-
-        cues = namespace["DEFCON_NARRATION_CUES"]
-        self.assertEqual(cues["opening"], "spoken For the upcoming Gameweek")
-        self.assertEqual(
-            cues["individual"][0]["anchor"],
-            "spoken The historical player leader is James Hill",
-        )
-        self.assertEqual(
-            cues["target_teams"][0]["anchor"],
-            "spoken Manchester City defensive-action record",
-        )
-        self.assertIn(cues["individual"][0]["anchor"], namespace["scripts"]["03_defcon"])
-
-    def test_unknown_notebook_shape_fails_clearly(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "expected exactly one full-word script assignment"):
-            patch_defcon_sync_cue_normalization("pass\n")
 
 
 class FinalVideoSelectionTests(unittest.TestCase):
@@ -843,13 +560,9 @@ class NotebookPreflightTests(unittest.TestCase):
         self.addCleanup(self.patch_stack.close)
         for function_name in (
             "_patch_control_cell",
-            "patch_live_squad_contract",
-            "patch_phase11_live_squad_guard",
-            "patch_my_plan_transfer_live_squad_guard",
             "_patch_narration_exports",
             "_patch_outro_social_icon",
             "_patch_tts_profile",
-            "patch_weekly_source",
             "patch_narration_pacing_source",
             "patch_popup_audio_source",
             "patch_evidence_pipeline",
@@ -859,7 +572,6 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_pitch_card_entrance",
             "_patch_pitch_reveal_audit",
             "_patch_benching_narration",
-            "_patch_full_word_abbreviation_normalization",
             "_patch_pitch_player_names",
             "_patch_shared_card_scene_checks",
             "_patch_defcon_team_numeric_fit",
@@ -900,13 +612,6 @@ class NotebookPreflightTests(unittest.TestCase):
         })
         self.assertEqual(len(runner._prepare_code_cells(self.notebook_path)), 37)
 
-    def test_shared_fixture_replacement_covers_goals_cs_and_fdr_cells(self) -> None:
-        sources = {10: "metric = 'goals'\n", 11: "metric = 'clean_sheets'\n", 12: "metric = 'fdr'\n"}
-        self.write_notebook(sources)
-        with patch.object(runner, 'patch_weekly_source', side_effect=lambda source: source) as replace_math:
-            runner._prepare_code_cells(self.notebook_path)
-        self.assertEqual([call.args[0] for call in replace_math.call_args_list], list(sources.values()))
-
 
 class DefconNumericRegressionTests(unittest.TestCase):
     def test_renderer_fits_after_timeline_ready_but_before_clip_audit(self) -> None:
@@ -929,30 +634,18 @@ class DefconNumericRegressionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "expected one renderer entry point"):
             runner._patch_defcon_render_preflight("pass\n")
 
-    def test_forecast_fit_runs_before_premium_layout_validation(self) -> None:
+    def test_forecast_fit_waits_until_ready_and_preserves_later_frame_seeks(self) -> None:
         source = (
             "  const assertDefconBoardFit=()=>{};\n"
-            "  const prepare=window.vxPrepareCapture;\n"
-            "  window.vxPrepareCapture=async(...args)=>{\n"
-            "    await window.vxDefconCardsReady;\n"
-            "    const result=prepare ? await prepare(...args) : (window.vxLayoutReport ? window.vxLayoutReport() : {passed:true});\n"
             "    assertDefconBoardFit();\n"
             "    return result;\n"
-            "  };\n"
         )
         updated = runner._patch_defcon_team_numeric_fit(source)
-        self.assertLess(
-            updated.index("fitDefconTeamForecasts();"),
-            updated.index("result = prepare ? await prepare(...args)"),
-        )
-        self.assertIn("await document.fonts.ready;", updated)
         self.assertIn("window.__ready === true", updated)
         self.assertIn("window.__vxDefconRenderScaleReady === true", updated)
         self.assertIn("!window.__vxDefconTeamNumbersFitted", updated)
         self.assertIn("window.__vxDefconTeamNumbersFitted = true", updated)
         self.assertIn("window.__seek(0);", updated)
-        self.assertIn("finally {", updated)
-        self.assertIn("captured in a closure", updated)
 
 
 if __name__ == "__main__":

@@ -1,35 +1,5 @@
 # FPL VORTEX AUTO
 
-## Shared fixture calculations
-
-Day 1, Day 2, Day 3 and WC/FH use `vortex/fixture_forecast.py` and the
-WC/FH model vendored from `FPL-VORTEX-AGENT` commit
-`31e088378736a0f622eb51e7da6b3e2ab18ba55b`. The evidence coverage gates,
-projected-goal equations, Poisson clean-sheet probabilities and continuous FDR
-formulas are shared. GK/DEF use defence FDR; MID/FWD use attack FDR. Day 2 no
-longer uses official FPL difficulty or a separate opponent-strength blend for
-its fixture values. Its numbers retain decimals while existing CSS buckets,
-card geometry and scene order remain intact.
-
-The Day 1 and Day 3 legacy goal builders and duplicate FDR function definitions
-are removed from their execution source. Clean-sheet odds are read directly
-from the same WC/FH fixture record, with a strict goal-snapshot identity check.
-Day 2 removes the old FPL-strength normalization as well as its difficulty inputs.
-
-Existing Gameweek windows, graphics, narration structure and workflow schedules
-are preserved. These are forecasts: runs using newer match evidence or different
-Gameweek windows can show different totals. The common input/cache directory is
-`FPL_VORTEX/MODEL_INPUTS/canonical_fixtures`; optional `team_context_raw.csv` and
-`team_news_overrides.csv` must be placed there so every workflow reads the same
-overrides. `VORTEX_FIXTURE_INPUT_ROOT` can override that directory for local tests.
-Weekly Phase 3 retains its uncertainty method and schema while taking all goal
-components from the shared model before downstream Poisson/FDR calculations.
-
-Validation: `python -m unittest discover -s tests -p 'test_*.py' -v`,
-`python -m unittest discover -s day2 -p 'test_*.py' -v`,
-`python -m unittest discover -s day3 -p 'test_*.py' -q`, and
-`python -m unittest discover -s wc_fh -p 'test_*.py' -q`.
-
 ## Day 1 and Day 2 video workflows
 
 Day 1 remains the existing implementation on `main`:
@@ -39,46 +9,6 @@ Day 1 remains the existing implementation on `main`:
 - Media integration: `vortex/day1_media.py`
 - YouTube package/upload: `vortex/youtube_studio_package.py` and `vortex/youtube_private_upload.py`
 - Output root: `My Drive/FPL_VORTEX/FIRST VIDEO`
-
-Day 1 now produces a 4:50 personal decision show through `vortex/day1_show.py`
-and `vortex/day1_show_render.py`. The immutable notebook still supplies one
-final official FPL snapshot. The production adapter replaces the results roll
-call and fifteen-player narration with a cold open, a short personal review,
-three verdicts, an early Gameweek plan and one audience question. Actual picks
-and multipliers determine which points counted; bench-boost and autosub points
-are never presented as an unused bench haul. These are provisional opinions,
-not claims that transfers have already been made.
-
-The blue portrait-card design uses one evidence panel at a time. Editorial
-headlines contain at most five words, visuals change every three to six seconds,
-and word captions are drawn on the 24fps clock from measured Ryan boundaries.
-The original channel logo is reused. The speech-first mix omits the old opening
-video, starts quiet music under the hook, and adds one captain-reveal impact.
-Three sentence-safe 1080x1920 Shorts are exported alongside the 4K master.
-The `day-1-production-brief-*` Actions artifact contains the A–J narration,
-visual directions, five title choices, thumbnail text, poll, pinned comment
-and a manual YouTube Studio analytics/testing plan. No poll/comment is posted
-automatically. The long-form YouTube upload remains Private only.
-
-All seven existing Day 1 sections now use the premium Remotion renderer in
-`remotion-day1/`: navy and gold framing, cleaner player cards, bundled fonts,
-frame-driven transitions and word-timed captions. The data snapshot, decision
-builders, narration, section order and beat times are unchanged. The workflow
-requires the exact `popup.mp4` in the established Day 1 asset folder and plays
-it in the bottom footer at 2:00, 4:00 and each further two-minute boundary.
-The clip keeps its aspect ratio, plays muted below the captions, restarts for
-each occurrence and is trimmed at the program end. It adds no slide or time.
-See [`remotion-day1/README.md`](remotion-day1/README.md) for rendering details.
-
-Ryan narration uses measured word boundaries to correct an inaccurate initial
-word-count pacing estimate. Each section can be synthesized up to three times,
-within the existing -15% to +12% speaking-rate limits. The accepted audio and
-its own word timings pass through the original 0.78–1.22 tempo gate together;
-scripts and scene durations stay fixed. An unfittable or invalid take still
-fails before rendering.
-
-After an upgrade, start a new **Day 1** run on `main`; retrying an old job
-retains its old source commit.
 
 Day 2 is isolated from Day 1:
 
@@ -173,38 +103,11 @@ The YouTube credentials request `youtube.upload` and `youtube.readonly`. `_verif
 
 References: [GitHub workflow token authentication](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token), [Google refresh tokens and offline access](https://developers.google.com/identity/protocols/oauth2/web-server#offline), and [rclone Drive configuration](https://rclone.org/drive/).
 
-### Live FPL squad and Player OUT choices
-
-The five **Player OUT** dropdowns and the OUT players on the transfer-plan slide
-both come from the official public FPL API, not from a stored player list.
-[`day3/fpl_squad.py`](day3/fpl_squad.py) resolves entry `FPL_ENTRY_ID` (currently
-`145784`) from `bootstrap-static`, entry history and the latest published
-`event/<gw>/picks`, walking back past a Free Hit squad to the last permanent 15.
-It uses no FPL login; `/api/my-team/<id>/` requires authentication and is never
-called. An API outage fails the run — there is no stale squad fallback.
-
-Because GitHub dispatch `choice` options are static YAML,
-the **Day 3** workflow regenerates all five OUT lists from the live 15 every
-three hours and commits only when the squad changes. To refresh manually, run
-**Day 3** on `main` with **Refresh Player OUT choices only (no video)** checked.
-Leave that box unchecked for the normal video run.
-Every Day 3 run re-resolves the squad in the `Resolve live FPL squad and verify
-Player OUT picks` step and rejects any OUT that is not in your real team (or any
-IN that already is) before the expensive render starts.
-
-The same resolved squad is passed into the notebook. `FPL_ID` follows
-`FPL_ENTRY_ID`, Phase 11's `current_squad_state` must equal the live 15, and the
-MY PLAN 5B transfer scene may only draw OUT cards from those 15. See
-[`day3/LIVE_SQUAD.md`](day3/LIVE_SQUAD.md) for the full contract, the endpoints
-and the local commands.
-
 ### Completed DEFCON history versus live review
 
 The notebook's canonical FPL snapshot distinguishes `review_gw` (which may be `LIVE/PARTIAL`) from `review_ready_gws` (fully completed events). When the forecast is GW7 and GW6 is still partial, the review can show GW6 while DEFCON's completed history ends at GW5.
 
 The Day 3 runner validates every player's DEFCON cutoff and the complete model-history list against `review_ready_gws`. Player and team cumulative totals use that same history, and the board labels its completed cutoff explicitly. A stale/mixed player cutoff or missing model-history event still stops the run. Once GW6 becomes review-ready, DEFCON must advance to GW6. The patch does not change the model formulas or the live review's gameweek selection.
-
-Live evidence is strict by default: it waits for verified final FPL statistics and fails rather than publishing incomplete data. `DAY3_ACCEPT_PROVISIONAL`, `DAY3_ALLOW_PARTIAL_GAMEWEEK`, and `DAY3_EVIDENCE_MAX_WAIT_MINUTES` are explicit operator overrides for stale FPL fixture flags or an API outage; see [`day3/LIVE_EVIDENCE.md`](day3/LIVE_EVIDENCE.md). Cell 18's DEFCON animation anchors are rebuilt from the same full-word narration used for speech, so the live-evidence narration cannot drift from the exact-sync preflight.
 
 After applying a runner fix, start a new **Day 3** workflow on `main`. Re-running a failed job retains the old run's source commit.
 
@@ -212,7 +115,3 @@ After applying a runner fix, start a new **Day 3** workflow on `main`. Re-runnin
 ### Automatic watcher
 
 `Gameweek State Watcher` checks official FPL state every two days (approximately 48 hours). Day 1 and Day 2 remain separate workflows. When the review state advances, the watcher can trigger each workflow independently; Day 2 remains Private-only on YouTube and keeps its own Drive output root.
-
-### Day 1 pitch-led broadcast review
-
-The Day 1 renderer now keeps the animated football pitch central throughout a 6:40 review: league top/bottom three, score story, full formation reveal, individual XI and bench reviews, and availability watch. The reusable pop-up player card follows the supplied navy/violet reference. Existing data validation, 4K/24 fps output, private upload and the `.github/workflows/day-1.yml` dispatch remain in place. See [the renderer guide](remotion-day1/README.md) for branding, reference assets, sample JSON, Studio preview and local rendering commands.

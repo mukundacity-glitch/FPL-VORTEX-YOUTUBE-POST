@@ -76,30 +76,21 @@ def player_analysis(snapshot: dict[str, Any], player_id: int, rank: int,
              f"work out at {rate:.1f} per ninety, with {player['last_dc']:.0f} in the latest completed Gameweek."]
     reason = projection["reason"]
     if reason == "BLANK_GAMEWEEK":
-        parts.append(f"{name} has no fixture assigned to his club in the next Gameweek. "
-                     f"That explains {name}'s zero; it is not an injury diagnosis. "
-                     f"Plan cover if you already own {name}.")
+        parts.append("There is no fixture assigned to his club in the next Gameweek. That explains the zero; it is not an injury diagnosis. Plan cover if you already own him.")
     elif reason in {"SUSPENDED", "INJURED", "UNAVAILABLE"}:
         status = {"SUSPENDED": "suspended", "INJURED": "injured", "UNAVAILABLE": "unavailable"}[reason]
         news = player["news"].strip().rstrip(".")
-        parts.append(f"The official FPL snapshot lists {name} as {status}" + (f": {news}." if news else "."))
+        parts.append(f"The official FPL snapshot lists him as {status}" + (f": {news}." if news else "."))
         if projection["expected_minutes"] == 0:
-            parts.append(f"{name}'s next-round availability is zero in that snapshot, so the estimate gives "
-                         f"{name} no playing time. Avoid a new transfer in until an official update clears {name}.")
+            parts.append("His next-round availability is zero in that snapshot, so the estimate gives him no playing time. Avoid a new transfer in until an official update clears him.")
         else:
-            parts.append(f"The latest availability estimate still gives {name} a {100 * player['availability']:.0f} percent playing chance. "
-                         f"That is uncertainty for {name}, not a confirmed absence for every fixture; "
-                         f"wait for a clearer update before buying.")
+            parts.append(f"The API still gives him a {100 * player['availability']:.0f} percent playing chance. That is uncertainty, not a confirmed absence for every fixture; wait for a clearer update before buying.")
     elif projection["actions"] is None:
-        parts.append(f"{name}'s next fixture is {fixture_phrase(snapshot, player['team_id'])}, but the forecast "
-                     f"is unavailable because {reason.lower().replace('_', ' ')}. I cannot support a buy or "
-                     f"sell call for {name} from a missing estimate.")
+        parts.append(f"His next fixture is {fixture_phrase(snapshot, player['team_id'])}, but the forecast is unavailable because {reason.lower().replace('_', ' ')}. I cannot support a buy or sell call from a missing estimate.")
     else:
         parts.append(f"{name}'s next schedule is {fixture_phrase(snapshot, player['team_id'])}.")
         if reason == "NO_RECENT_APPEARANCES":
-            parts.append(f"{name} has not appeared in the last {len(player['recent_minutes'])} completed club fixtures. "
-                         f"That drives {name}'s minutes estimate to zero; the data does not establish an injury "
-                         f"or a tactical reason. Monitor {name}'s next team sheet before buying.")
+            parts.append(f"He has not appeared in the last {len(player['recent_minutes'])} completed club fixtures. That drives the minutes estimate to zero; the data does not establish an injury or a tactical reason. Monitor the next team sheet before buying.")
         else:
             parts.append(f"Using {name}'s recent official minutes, the estimate is {projection['expected_minutes']:.0f} minutes "
                          f"and {projection['actions']:.1f} actions across {len(projection['fixtures'])} fixture" + ("s." if len(projection['fixtures']) > 1 else "."))
@@ -108,21 +99,17 @@ def player_analysis(snapshot: dict[str, Any], player_id: int, rank: int,
             parts.append(f"{name} has reached the points threshold in {player['hits']} of {player['appearances']} appearances; "
                          f"his positional target is {threshold} actions in each match, worth a maximum of two points per fixture.")
             if len(projection["fixtures"]) > 1:
-                parts.append(f"{name}'s fixtures are scored separately; two sub-threshold games do not combine "
-                             "into a defensive-contribution award.")
+                parts.append("The fixtures are scored separately; two sub-threshold games do not combine into a defensive-contribution award.")
             if len(player["recent_minutes"]) < 3:
                 parts.append(f"At {player['price']:.1f} million, this is a monitoring option: only {len(player['recent_minutes'])} current-club games support the minutes estimate.")
             elif player["recent_minutes"][-1] < 60:
-                parts.append(f"{name}'s latest appearance was {player['recent_minutes'][-1]:.0f} minutes, below the "
-                             f"clean-sheet minutes threshold. Check {name}'s starting place before spending a "
-                             f"transfer; the recorded data does not tell us why {name}'s minutes fell.")
+                parts.append(f"His latest appearance was {player['recent_minutes'][-1]:.0f} minutes, below the clean-sheet minutes threshold. Check his starting place before spending a transfer; the API does not tell us why those minutes fell.")
             elif hit_rate >= 0.5:
                 parts.append(f"At {player['price']:.1f} million, {name}'s contribution points have arrived in at least half his appearances, supporting a place on a value shortlist for this scoring route rather than a prediction of attacking returns.")
             else:
                 parts.append(f"At {player['price']:.1f} million, {name}'s season action total has produced points in fewer than half his appearances; compare attacking upside and total projected points before using a transfer on him.")
     if player["transferred"]:
-        parts.append(f"{name}'s season total includes his previous club; the playing-time estimate uses only "
-                     f"evidence from {name}'s current club.")
+        parts.append("The season total includes his previous club; the playing-time estimate uses only evidence from his current club.")
     return cue, " ".join(parts)
 
 
@@ -143,10 +130,9 @@ def team_analysis(snapshot: dict[str, Any], team_id: int, rank: int, tier: str,
     clean_label = "clean sheet" if team['clean_sheets'] == 1 else "clean sheets"
     parts = [f"{cue}: ranked {rank}, with {per_match:.1f} actions per match. {team['name']} have conceded {team['conceded']:.0f} goals "
              f"and kept {team['clean_sheets']} {clean_label} in {matches} matches."]
-    parts.append(f"{team['name']}'s next schedule is {fixture_phrase(snapshot, int(team_id))}.")
+    parts.append(f"Their next schedule is {fixture_phrase(snapshot, int(team_id))}.")
     if clean_sheet is not None:
-        parts.append(f"The independent fixture model puts {team['name']}'s chance of at least one clean sheet at "
-                     f"{100 * clean_sheet:.0f} percent.")
+        parts.append(f"The independent fixture model puts the chance of at least one clean sheet at {100 * clean_sheet:.0f} percent.")
     if tier == "high":
         if conceded_rate > 1:
             parts.append(f"That is {conceded_rate:.1f} goals conceded per match for {team['name']} despite the busy defensive workload; individual action points may help, but this ranking does not establish a strong clean-sheet target.")
@@ -185,7 +171,7 @@ def defcon_narration(namespace: dict[str, Any]) -> str:
         individuals.append({"player_id": int(row["player_id"]), "anchor": cue})
         parts.append(text)
     team_intro = "Now let's examine every club on the defensive-workload board."
-    parts += [team_intro, "An action total does not measure chances prevented. The recorded evidence does not provide a tactical explanation for every change, so I will distinguish measured outcomes from possible causes."]
+    parts += [team_intro, "An action total does not measure chances prevented. The API does not provide a tactical explanation for every change, so I will distinguish the recorded outcomes from possible causes."]
     top_cues, bottom_cues = [], []
     bottom_intro = "Now to the clubs with the lowest recorded defensive workload."
     model = namespace.get("PROJECTED_GOALS_PAYLOAD", {}).get("teams", {})
