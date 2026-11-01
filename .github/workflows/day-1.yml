@@ -283,6 +283,10 @@ jobs:
           source_commit="$(git -C "${GITHUB_WORKSPACE}/.day1-fpl-source" rev-parse HEAD)"
           echo "Day 1 FPL source commit: ${source_commit}"
 
+          # Fail early if approved media vanished; recover verified originals
+          # from an independent Drive backup without altering notebook logic.
+          bash scripts/restore_day1_assets.sh
+
           restore_optional "FPL_VORTEX/FIRST VIDEO"
           restore_optional "FPL_VORTEX/MODEL_INPUTS"
           restore_optional "FPL_VORTEX/DECISION_ENGINE"
@@ -295,10 +299,6 @@ jobs:
           restore_optional "FPL_VORTEX_DATA/05_MODEL_HISTORY"
           restore_optional "FPL_VORTEX_DATA/06_SNAPSHOTS"
           restore_optional "FPL_VORTEX_DATA/07_LOGS"
-
-          # Source is an exact Drive folder ID; recover only from independently
-          # validated copies if that folder has been emptied or partially deleted.
-          bash scripts/restore_day1_assets.sh
 
           mkdir -p /content/drive/MyDrive/elements
           rclone backend copyid vortex-drive: \
