@@ -135,6 +135,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ffmpeg rclone
 
+      - name: Test Day 1 asset recovery contract
+        shell: bash
+        run: python -m unittest discover -s tests -p 'test_day1_asset_restore.py' -v
+
       - name: Install Python dependencies
         shell: bash
         run: |
@@ -292,20 +296,9 @@ jobs:
           restore_optional "FPL_VORTEX_DATA/06_SNAPSHOTS"
           restore_optional "FPL_VORTEX_DATA/07_LOGS"
 
-          mkdir -p "${DAY1_ASSET_DIR}"
-          rclone copy "day1-assets:" "${DAY1_ASSET_DIR}" \
-            --filter "+ /opening.mp4" \
-            --filter "+ /Background_music.mp3" \
-            --filter "+ /outro.mp3" \
-            --filter "- **" \
-            --transfers 3 --checkers 6
-          for asset_name in opening.mp4 Background_music.mp3 outro.mp3; do
-            if [[ ! -s "${DAY1_ASSET_DIR}/${asset_name}" ]]; then
-              echo "Required Day 1 asset is missing: ${asset_name}" >&2
-              exit 1
-            fi
-          done
-          echo "Restored opening and audio assets by confirmed Drive folder ID"
+          # Source is an exact Drive folder ID; recover only from independently
+          # validated copies if that folder has been emptied or partially deleted.
+          bash scripts/restore_day1_assets.sh
 
           mkdir -p /content/drive/MyDrive/elements
           rclone backend copyid vortex-drive: \
