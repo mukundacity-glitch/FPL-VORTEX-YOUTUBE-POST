@@ -101,7 +101,7 @@ class Day1PublishContractTests(unittest.TestCase):
             script = Path(tmp) / "gw_review_final_script.txt"
             script.write_text("\n\n".join(s["text"] for s in segments), encoding="utf-8")
             self.assertIsNone(assert_review_script_current(script, segments))
-            script.write_text("Stale script from another Gameweek", encoding="utf-8")
+            script.write_text("Stale script from another Gameweek with a different player roster and earlier review narration.", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Stale/mismatched"):
                 assert_review_script_current(script, segments)
             script.unlink()
