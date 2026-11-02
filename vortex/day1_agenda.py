@@ -29,7 +29,7 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None, review_statu
             raise ValueError("Review agenda references missing editorial sections")
         status = "RESULTS MAY CHANGE" if str(review_status or "").upper() not in {"COMPLETE", "FINAL"} else "OFFICIALLY RECORDED RETURNS"
         cards.extend([
-            _card("review", f"GW{int(review_gw)}: THE REAL STORY", status,
+            _card("review", f"GW{int(review_gw)} • GAMEWEEK REVIEW", status,
                   "Gameweek review", "Gameweek review: the points that count, and what the score might be hiding."),
             _card("squad", "SQUAD PRESSURE", "MINUTES / TEAM NEWS / BENCH COVER",
                   "Squad pressure", "Squad pressure: the minutes and cover issues worth checking before a transfer."),
@@ -44,7 +44,7 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None, review_statu
             cards.extend([
                 _card("routes", "HOLD OR MAKE A MOVE?", "ROLL / ONE TRANSFER / HIT",
                       "Transfer routes", "Transfer routes: when holding makes sense, and when spending a transfer solves something."),
-                _card("verdict", "THE CONDITIONAL VERDICT", "CHECK THE TEAM NEWS FIRST",
+                _card("verdict", "FINAL VERDICT", "CHECK THE TEAM NEWS FIRST",
                       "Final verdict", "Final verdict: what needs confirming before making a decision."),
             ])
     known = {
