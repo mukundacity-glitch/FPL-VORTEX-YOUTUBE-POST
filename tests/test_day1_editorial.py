@@ -76,6 +76,18 @@ class EditorialTests(unittest.TestCase):
                 overall_rank_direction='INVENTED',
             )
 
+    def test_unknown_availability_is_not_called_an_injury(self):
+        segments, roster, ctx = evidence()
+        ctx[1]['status'] = None
+        scripts, meta = build_editorial_review(
+            segments, roster[:11], roster[11:], ctx,
+            review_gw=11, next_gw=12, review_status='FINAL',
+            overall_rank_direction='RED')
+        self.assertEqual(meta['squad_pressure'], 'UNKNOWN')
+        spoken = next(x['text'] for x in scripts if x['id']=='editorial_squad_context')
+        self.assertIn('verified availability',spoken)
+        self.assertNotIn('officially flagged',spoken)
+
     def test_missing_next_fixture_or_projected_number_is_omitted(self):
         segments,roster,ctx=evidence(scarce=True)
         roster[0]['next_fixture']={}
