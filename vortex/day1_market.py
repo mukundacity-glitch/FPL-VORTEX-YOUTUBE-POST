@@ -45,8 +45,11 @@ def choose_market_transfer(payload):
         return _watch('Two comparable market windows and current squad are missing')
     th = payload.get('thresholds') or {}
     thresholds = ('min_owners', 'min_activity', 'min_demand', 'min_momentum')
-    if any(_number(th.get(k)) is None or float(th[k]) < 0 for k in thresholds) or th['min_owners'] < 1 or th['min_activity'] < 1:
+    if any(_number(th.get(k)) is None or float(th[k]) < 0 for k in thresholds):
         return _watch('Documented market thresholds are missing')
+    th = {k: float(th[k]) for k in thresholds}
+    if th['min_owners'] < 1 or th['min_activity'] < 1:
+        return _watch('Market owner/activity safeguards must be positive')
     windows = payload.get('windows')
     if not isinstance(windows, list) or len(windows) != 2:
         return _watch('Exactly two comparable market windows required')
