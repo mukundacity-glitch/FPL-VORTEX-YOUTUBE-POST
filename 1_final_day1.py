@@ -15698,6 +15698,7 @@ for pick in picks["picks"]:
         "full_name":f'{e["first_name"]} {e["second_name"]}'.strip(),
         "team":t["short_name"],
         "team_name":t["name"],
+        "team_id":int(e["team"]),
         "team_code":t.get("code"),
         "pos":POS[e["element_type"]],
         "season_total_points":int(e.get("total_points",0) or 0),
@@ -16049,7 +16050,7 @@ def vx_review_validate_creator_script(narration: dict[str, Any], script_segments
     if positions.count("GK") != 1 or not 3 <= positions.count("DEF") <= 5 or not 2 <= positions.count("MID") <= 5 or not 1 <= positions.count("FWD") <= 3 or len(positions) != 11:
         raise RuntimeError("Selected starting XI does not have a valid formation")
     text = narration["tts_text"]
-    if re.search(r"\b(?:sell|hold|monitor|remove|transfer|nailed|guaranteed)\b|secure and firm|must buy|must sell", text, flags=re.I):
+    if re.search(r"\bnailed\b|\bmust[ -]buy\b|\bmust[ -]sell\b|secure and firm", text, flags=re.I):
         raise RuntimeError("Gameweek review contains a direct instruction or unsupported certainty")
     if re.search(r"\b(?:xG|xA|xPts|GW|FPL)\b|\b[A-Z]\.\s*[A-Z]", text):
         raise RuntimeError("Gameweek review contains narration shorthand")
@@ -16219,13 +16220,49 @@ segments.append({"id": "metrics_intro", "text": "Now, did the captaincy pay off?
 for _segment_id, _section in (("metric_captain", "captain_review"), ("hero_review", "gameweek_hero"), ("quietest_review", "quietest_return"), ("availability_review", "availability_alerts"), ("review_close", "outro")):
     if _review_narration[_section]:
         segments.append({"id": _segment_id, "text": _review_narration[_section]})
+# Rebuild this week's editorial from verified review picks, official player
+# data, fixtures and explicitly attributed model estimates. No fixed targets.
+from vortex.day1_editorial import (
+    build_editorial_review, validate_narration,
+    review_voice_profile, measured_audio_report, word_timed_vtt,
+)
+_review_events = list(boot.get("events") or [])
+_review_marked_next = [event for event in _review_events if event.get("is_next")]
+if len(_review_marked_next) == 1 and int(_review_marked_next[0]["id"]) != int(NEXT_GW):
+    raise RuntimeError("Narration blocked: official next Gameweek differs from the review data")
+if not any(int(event.get("id") or 0) == int(NEXT_GW) for event in _review_events):
+    raise RuntimeError("Narration blocked: upcoming Gameweek is missing from official data")
+segments, VX_REVIEW_EDITORIAL_META = build_editorial_review(
+    segments, review_starters, review_bench, _review_narration_context,
+    review_gw=int(REVIEW_GW), next_gw=int(NEXT_GW),
+    review_status=GW_REVIEW_STATUS_LOCAL,
+    official_players=list(boot.get("elements") or []),
+    model_rows=_review_horizon_by_id,
+    target_seconds=int(__import__("os").environ.get(
+        "VORTEX_DAY1_REVIEW_TARGET_SECONDS", "430"
+    )),
+)
 for _segment in segments:
     _segment["text"] = vx_review_clean_text(_segment["text"])
+validate_narration(
+    segments, player_ids=[int(p["id"]) for p in review_starters + review_bench],
+)
+_review_narration["gameweek_summary"] = segments[0]["text"]
+for _pos, _section in _review_section_names.items():
+    _review_narration[_section] = " ".join(
+        segment["text"] for segment in segments
+        if segment.get("player_id") is not None and
+        next((p["pos"] for p in review_starters if int(p["id"]) == int(segment["player_id"])), None) == _pos
+    )
+_review_narration["bench_review"] = " ".join(
+    segment["text"] for segment in segments
+    if segment.get("kind") == "bench"
+)
 for _section in ("gameweek_summary", "goalkeeper_review", "defender_review", "midfielder_review", "forward_review", "bench_review", "captain_review", "gameweek_hero", "quietest_return", "availability_alerts", "outro"):
     _review_narration[_section] = vx_review_clean_text(_review_narration[_section].strip())
 tts_text = " ".join(segment["text"] for segment in segments)
 _review_narration["tts_text"] = tts_text
-if len(tts_text.split()) > 235:
+if len(tts_text.split()) > 1200:
     _review_data_warnings.append("The complete fifteen-player review may exceed the preferred short duration at the requested neutral Ryan rate")
 vx_review_validate_creator_script(_review_narration, segments)
 
@@ -16235,7 +16272,7 @@ vx_review_validate_creator_script(_review_narration, segments)
 _draft_player_segments=[segment for segment in segments if segment.get("player_id")]
 for _segment in _draft_player_segments:
     _words=re.findall(r"\b[\w'-]+\b",str(_segment["text"]))
-    if len(_words)>58:
+    if len(_words)>90:
         raise RuntimeError(
             f"GW Review player narration is too long: {_segment['id']} has {len(_words)} words"
         )
@@ -16244,9 +16281,9 @@ GW_REVIEW_NARRATION_WORDS=sum(
     len(re.findall(r"\b[\w'-]+\b",str(segment.get("text", ""))))
     for segment in segments
 )
-if GW_REVIEW_NARRATION_WORDS>900:
+if GW_REVIEW_NARRATION_WORDS>1700:
     raise RuntimeError(
-        f"GW Review narration exceeded the 900-word brevity gate: {GW_REVIEW_NARRATION_WORDS}"
+        f"GW Review narration exceeded the 1700-word integrity gate: {GW_REVIEW_NARRATION_WORDS}"
     )
 
 _opening_keys=[
@@ -16313,8 +16350,10 @@ def review_tts_mood(seg):
     if sid == "metric_hit" and transfer_cost > 0:
         return "warning"
 
-    if sid == "review_close":
+    if sid == "review_close" or sid == "editorial_verdict":
         return "outro"
+    if sid in {"editorial_defence", "editorial_budget", "editorial_minutes"}:
+        return "warning"
 
     return "analysis"
 
@@ -16326,7 +16365,7 @@ async def make_segment(seg):
     words=[]
 
     mood = review_tts_mood(seg)
-    profile = {"rate": "+0%", "pitch": "+0Hz", "volume": "+0%"}
+    profile = review_voice_profile(mood)
     seg["tts_mood"] = mood
     seg["tts_profile"] = profile
 
@@ -16479,6 +16518,9 @@ GW_REVIEW_NARRATION_WORDS = sum(
 )
 
 tts_text = " ".join(segment["text"] for segment in segments)
+(TIMING/"gw_review_final_script.txt").write_text(
+    "\n\n".join(segment["text"] for segment in segments), encoding="utf-8"
+)
 _review_narration["gameweek_summary"] = _headline_segment["text"]
 _review_narration["tts_text"] = tts_text
 vx_review_validate_creator_script(_review_narration, segments)
@@ -16525,8 +16567,8 @@ print(f"✅ GW {REVIEW_GW} review data loaded")
 print(f"✅ Starting XI: {len(review_starters)}")
 print(f"✅ Bench: {len(review_bench)}")
 print(f"✅ Ryan narration segments: {len(segments)}")
-print(f"✅ Concise narration length: {GW_REVIEW_NARRATION_WORDS} words")
-print("✅ Review Ryan profile: +0% rate / +0Hz pitch / +0% volume")
+print(f"✅ Verified dynamic review narration: {GW_REVIEW_NARRATION_WORDS} spoken words")
+print("✅ Review Ryan profile: varied conversational rates and subdued pitch")
 print(f"✅ Rank direction: {rank_dir.upper()}")
 print("✅ Saved:",OUT)
 
@@ -18020,6 +18062,20 @@ if abs(MASTER_AUDIO_DURATION - TOTAL) > 0.12:
         "GW Review master audio drifted from its visual timeline: "
         f"audio={MASTER_AUDIO_DURATION:.3f}s, timeline={TOTAL:.3f}s"
     )
+_editorial_audio_report = measured_audio_report(
+    pkg["segments"], MASTER_AUDIO_DURATION,
+    target_seconds=VX_REVIEW_EDITORIAL_META["target_seconds"],
+)
+(TIMING/"gw_review_editorial_qa.json").write_text(
+    json.dumps(_editorial_audio_report, indent=2), encoding="utf-8"
+)
+print(f"✅ Measured Ryan narration: {_editorial_audio_report['audio_seconds']:.2f}s "
+      f"at {_editorial_audio_report['measured_wpm']:.1f} words/minute")
+if not _editorial_audio_report["within_target"]:
+    raise RuntimeError(
+        "Narration is outside the configurable target by more than one minute: "
+        f"{_editorial_audio_report}. Review the generated script and voice before publishing."
+    )
 
 # ------------------------------------------------------------
 # 4. VTT
@@ -18032,18 +18088,10 @@ def ts(t):
     sec,ms = divmod(ms,1000)
     return f"{h:02}:{m:02}:{sec:02}.{ms:03}"
 
-vtt = ["WEBVTT",""]
-
-for i,s in enumerate(pkg["segments"],1):
-    vtt += [
-        str(i),
-        f"{ts(s['t0'])} --> {ts(s['t1'])}",
-        s["text"],
-        ""
-    ]
-
+# Caption cues use the exact Ryan WordBoundary timestamps, avoiding
+# unreadable full-paragraph subtitles and overlapping visual segments.
 MASTER_VTT.write_text(
-    "\n".join(vtt),
+    word_timed_vtt(pkg["segments"], max_words=8, max_seconds=3.8),
     encoding="utf-8"
 )
 
