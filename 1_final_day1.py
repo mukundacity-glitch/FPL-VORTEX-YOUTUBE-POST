@@ -16261,8 +16261,12 @@ segments, VX_REVIEW_EDITORIAL_META = build_editorial_review(
     review_status=GW_REVIEW_STATUS_LOCAL,
     official_players=list(boot.get("elements") or []),
     model_rows=_review_horizon_by_id,
+    overall_rank_direction=(
+        "GREEN" if rank_dir=="up" else "RED" if rank_dir=="down"
+        else "UNCHANGED" if prev_rank and cur_rank else "UNKNOWN"
+    ),
     target_seconds=int(__import__("os").environ.get(
-        "VORTEX_DAY1_REVIEW_TARGET_SECONDS", "430"
+        "VORTEX_DAY1_REVIEW_TARGET_SECONDS", "350"
     )),
 )
 for _segment in segments:
