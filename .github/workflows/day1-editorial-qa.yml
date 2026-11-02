@@ -7,6 +7,7 @@ on:
       - "vortex/day1_editorial.py"
       - "tests/test_day1_editorial*.py"
       - "tests/test_day1_agenda.py"
+      - "tests/test_day1_intro_voice_gate.py"
       - "vortex/day1_agenda.py"
       - ".github/workflows/day-1.yml"
       - ".github/workflows/day1-editorial-qa.yml"
@@ -36,6 +37,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_editorial.py' -v
       - name: Verify dynamic spoken intro agendas
         run: python -m unittest discover -s tests -p 'test_day1_agenda.py' -v
+      - name: Verify production intro TTS full-word contract
+        run: python -m unittest discover -s tests -p 'test_day1_intro_voice_gate.py' -v
       - name: Preserve existing animation and review speech contracts
         run: |
           python -m unittest discover -s tests -p 'test_day1_review_contract.py' -v
