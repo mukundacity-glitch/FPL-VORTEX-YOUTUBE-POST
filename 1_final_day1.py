@@ -15471,6 +15471,18 @@ def vx_full_word_narration(text, context="narration"):
     """Canonical final text transform used immediately before every Ryan TTS call."""
     value = _vx_html.unescape(str(text or ""))
 
+    # The on-screen brand is styled as FPL VORTEX, but Ryan must receive
+    # naturally pronounceable full words. This is a fixed channel name,
+    # not a player/fixture/statistic substitution. Unknown caps still fail.
+    value = _vx_re.sub(
+        r"\bFPL\b", "Fantasy Premier League", value,
+        flags=_vx_re.IGNORECASE,
+    )
+    value = _vx_re.sub(
+        r"\bVORTEX\b", "Vortex", value,
+        flags=_vx_re.IGNORECASE,
+    )
+
     # Resolve player shorthand from official FPL identities to web_name.
     for source, target in VX_NARRATION_PLAYER_TEXT_ALIASES:
         value = _vx_replace_narration_phrase(value, source, target)
@@ -24635,7 +24647,7 @@ scripts = {
 
 f"""
 
-Welcome back to FPL VORTEX. A good score can hide a weak bench, and one blank doesn't make the original pick a bad one. Before Gameweek {NEXT_GW}, let's look at the fixtures on screen and separate the last result from the choices ahead. We want a plan that holds up when the team news changes. No chasing last week's points, and no transfers just for the sake of it.
+Welcome back to Fantasy Premier League Vortex. A good score can hide a weak bench, and one blank doesn't make the original pick a bad one. Before Gameweek {NEXT_GW}, let's look at the fixtures on screen and separate the last result from the choices ahead. We want a plan that holds up when the team news changes. No chasing last week's points, and no transfers just for the sake of it.
 
 {VX_INTRO_AGENDA_SPOKEN}
 
