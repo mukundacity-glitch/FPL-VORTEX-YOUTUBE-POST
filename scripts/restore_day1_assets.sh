@@ -43,34 +43,34 @@ require_stream() {
 # of outro audio and keeps the full opening image/video reveal.
 normalize_approved_assets() {
   local input output temp duration
-  input="\${DAY1_ASSET_DIR}/background.mp3"
-  output="\${DAY1_ASSET_DIR}/Background_music.mp3"
-  if [[ ! -s "\${output}" && -s "\${input}" ]]; then
-    require_stream "\${input}" 'a:0'
-    cp "\${input}" "\${output}"
+  input="${DAY1_ASSET_DIR}/background.mp3"
+  output="${DAY1_ASSET_DIR}/Background_music.mp3"
+  if [[ ! -s "${output}" && -s "${input}" ]]; then
+    require_stream "${input}" 'a:0'
+    cp "${input}" "${output}"
     echo "Day 1 normalized background.mp3 -> Background_music.mp3 (looped by mixer)"
   fi
 
-  input="\${DAY1_ASSET_DIR}/Outro.mp4"
-  output="\${DAY1_ASSET_DIR}/outro.mp3"
-  if [[ ! -s "\${output}" && -s "\${input}" ]]; then
-    require_stream "\${input}" 'v:0'
-    require_stream "\${input}" 'a:0'
-    temp="\${DAY1_ASSET_DIR}/.outro-converted.mp3"
-    rm -f "\${temp}"
-    ffmpeg -hide_banner -loglevel error -y -i "\${input}" -map 0:a:0 \
-      -t 6.0 -vn -c:a libmp3lame -b:a 192k -ar 48000 "\${temp}"
-    mv "\${temp}" "\${output}"
+  input="${DAY1_ASSET_DIR}/Outro.mp4"
+  output="${DAY1_ASSET_DIR}/outro.mp3"
+  if [[ ! -s "${output}" && -s "${input}" ]]; then
+    require_stream "${input}" 'v:0'
+    require_stream "${input}" 'a:0'
+    temp="${DAY1_ASSET_DIR}/.outro-converted.mp3"
+    rm -f "${temp}"
+    ffmpeg -hide_banner -loglevel error -y -i "${input}" -map 0:a:0 \
+      -t 6.0 -vn -c:a libmp3lame -b:a 192k -ar 48000 "${temp}"
+    mv "${temp}" "${output}"
     echo "Day 1 extracted first 6.0 seconds of Outro.mp4 audio -> outro.mp3"
   fi
 
-  input="\${DAY1_ASSET_DIR}/opening.mp4"
-  if [[ -s "\${input}" ]]; then
-    require_stream "\${input}" 'v:0'
-    require_stream "\${input}" 'a:0'
+  input="${DAY1_ASSET_DIR}/opening.mp4"
+  if [[ -s "${input}" ]]; then
+    require_stream "${input}" 'v:0'
+    require_stream "${input}" 'a:0'
     duration="$(ffprobe -v error -show_entries format=duration \
-      -of default=noprint_wrappers=1:nokey=1 "\${input}")"
-    if python - "\${duration}" <<'PY'
+      -of default=noprint_wrappers=1:nokey=1 "${input}")"
+    if python - "${duration}" <<'PY'
 import math
 import sys
 value = float(sys.argv[1])
@@ -79,13 +79,13 @@ if not math.isfinite(value) or value <= 0.5:
 raise SystemExit(0 if value > 8.0 else 1)
 PY
     then
-      temp="\${DAY1_ASSET_DIR}/.opening-trimmed.mp4"
-      rm -f "\${temp}"
+      temp="${DAY1_ASSET_DIR}/.opening-trimmed.mp4"
+      rm -f "${temp}"
       # Preserve the full WELCOME TO FPL VORTEX reveal visible near the end.
-      ffmpeg -hide_banner -loglevel error -y -i "\${input}" -t 8.0 \
+      ffmpeg -hide_banner -loglevel error -y -i "${input}" -t 8.0 \
         -map 0:v:0 -map 0:a:0 -c:v libx264 -preset veryfast -crf 18 \
-        -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "\${temp}"
-      mv "\${temp}" "\${input}"
+        -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "${temp}"
+      mv "${temp}" "${input}"
       echo "Day 1 trimmed opening to 8.0 seconds (full logo reveal preserved)"
     fi
   fi
