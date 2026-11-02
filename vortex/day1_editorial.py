@@ -350,7 +350,7 @@ def build_editorial_review(
         {'id':'editorial_routes','text':routes_text},
         {'id':'editorial_tradeoff','text':(
             "I won't justify a points hit from buying momentum alone. "
-            "Transfer pressure isn't proof of points or a guaranteed price change.")},
+            "Transfer activity can't tell me future points or confirm a price change.")},
         {'id':'editorial_verdict','text':verdict_text},
     ]
     # Review close is followed by extra editorial beats on the same review
