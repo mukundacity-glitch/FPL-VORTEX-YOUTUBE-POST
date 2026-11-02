@@ -95,12 +95,13 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     xpts, xmins = _model(p)
     official_status = str(ctx.get('status') or '').lower()
     lines: list[str] = []
+    pts_word = 'point' if points == 1 else 'points'
     if played and points is not None:
         starts = (
-            f'{name} finished on {points} points.',
-            f'For {name}, the return was {points} points.',
-            f'{name} came away with {points} points.',
-            f'{name}: {points} points from the recorded match.',
+            f'{name} finished on {{pts_word}} points.',
+            f'For {name}, the return was {{pts_word}} points.',
+            f'{name} came away with {{pts_word}} points.',
+            f'{name}: {{pts_word}} points from the recorded match.',
         )
         lines.append(starts[idx % len(starts)])
         if reason:
@@ -120,21 +121,65 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     elif xmins is not None and xmins < 65:
         lines.append(f'The Vortex minutes estimate is {round(xmins)}, so the selection risk needs attention.')
     elif bench:
-        lines.append('For the bench, dependable cover matters more than one surprise return.')
+        lines.append((
+            'For the bench, dependable minutes are more useful than one surprise return.',
+            'If he is needed from the bench, check whether the playing time is dependable.',
+            'A reserve cannot cover an absence if his own place is uncertain.',
+            'Bench depth is the protection here, provided the role is genuinely secure.',
+        )[idx % 4])
     else:
-        lines.append('Recorded minutes help, but they cannot make the next start certain.')
+        lines.append((
+            'Recorded minutes are encouraging; they do not guarantee another start.',
+            'The next decision still depends on team selection, not just the last score.',
+            'There is some playing-time evidence, but the role could still change.',
+            'A good return matters less if the next ninety minutes are uncertain.',
+            'Starting security is the useful question heading into the next fixture.',
+            'A full appearance is evidence, not a promise of the next one.',
+            'Pay attention to who is available around him before trusting the role.',
+            'The next team sheet will tell us more than the previous points.',
+        )[idx % 8])
     if fx:
-        lines.append(f'Next is {fx}.')
+        lines.append((
+            f'Next is {fx}.',
+            f'They face {fx} next.',
+            f'Coming up: {fx}.',
+            f'The scheduled opponent is {fx}.',
+            f'The next fixture brings {fx}.',
+        )[idx % 5])
     else:
-        lines.append('There is no verified next fixture to use in this comparison.')
+        lines.append((
+            'There is no verified next fixture to use in this comparison.',
+            'The next match is not confirmed in this snapshot, so omit fixture claims.',
+            'Without a confirmed next opponent, the minutes question comes first.',
+            'The fixture record is incomplete; do not build a move around it.',
+            'There is no reliable fixture evidence to lean on here yet.',
+        )[idx % 5])
     if xpts is not None and idx % 3 == 1:
-        lines.append(f'Vortex estimates {xpts:.1f} expected points, not a guaranteed return.')
+        lines.append((
+            f'Vortex estimates {xpts:.1f} expected points, not a guaranteed return.',
+            f'The Vortex projection is {xpts:.1f} points, with model uncertainty attached.',
+            f'At {xpts:.1f} expected points from Vortex, the forecast is a guide, not a result.',
+            f'The model gives {xpts:.1f} expected points; the real outcome can differ.',
+            f'A {xpts:.1f}-point Vortex estimate helps the comparison, but proves nothing on its own.',
+        )[idx % 5])
     elif bench:
-        lines.append('If the first eleven is uncertain, that bench reliability becomes crucial.')
+        lines.append((
+            'If the starting eleven is unsettled, that cover becomes important.',
+            'Keep the reserve only if he can realistically enter the team.',
+            'That matters if a starter fails a late fitness check.',
+            'The bench decision depends on your actual available starters.',
+        )[idx % 4])
     elif official_status and official_status != 'a':
         lines.append('That is a reason to wait for an update, not chase the previous points.')
     else:
-        lines.append('Compare this role against the alternatives before spending a move.')
+        lines.append((
+            'Compare the role before spending a transfer.',
+            'That is the context for the next selection call.',
+            'Avoid judging the next match only through the previous points.',
+            'The question is whether he improves the next starting eleven.',
+            'A different player may offer stronger minutes at a similar price.',
+            'Keep the alternatives in view before making the switch.',
+        )[idx % 6])
     return ' '.join(lines)
 
 
@@ -300,6 +345,11 @@ def validate_narration(segments: list[dict[str, Any]], *, player_ids: list[int],
     starts = [' '.join(WORD.findall(text.lower())[:5]) for text in spoken]
     if max(Counter(starts).values()) > 3:
         raise ValueError('Too many identical sentence openings')
+    sentences = [re.sub(r'\s+', ' ', part.lower().strip())
+                 for text in spoken for part in re.split(r'(?<=[.!?])\s+', text)
+                 if len(WORD.findall(part)) >= 7]
+    if sentences and max(Counter(sentences).values()) > 3:
+        raise ValueError('Excessive repeated sentences across player segments')
 
 
 def review_voice_profile(mood: str) -> dict[str, str]:
