@@ -603,10 +603,19 @@ jobs:
                    "-of", "default=noprint_wrappers=1:nokey=1", str(final_mp4s[0])],
                   text=True,
               ).strip())
-              requested_seconds = float(os.getenv("VORTEX_DAY1_VIDEO_TARGET_SECONDS", "480"))
-              if not 240 <= requested_seconds <= 900 or abs(actual_seconds - requested_seconds) > 60:
+              # Absolute broadcast runtime gate includes opening, scene changes, silence
+              # and outro. A passed narration script is not enough.
+              requested_seconds = float(os.getenv("VORTEX_DAY1_VIDEO_TARGET_SECONDS", "410"))
+              if not 400 <= requested_seconds <= 415:
+                  raise SystemExit(f"Day 1 target must be 6:40–6:55: {requested_seconds:.2f}s")
+              if not 400 <= actual_seconds <= 415 or actual_seconds > 420:
                   raise SystemExit(
-                      f"Final video does not meet the eight-minute configurable target: "
+                      f"Final video violates Day 1 seven-minute hard limit / 6:40–6:55 target: "
+                      f"measured={actual_seconds:.2f}s target={requested_seconds:.2f}s"
+                  )
+              if abs(actual_seconds - requested_seconds) > 15:
+                  raise SystemExit(
+                      f"Day 1 measured video drift exceeds 15 seconds: "
                       f"measured={actual_seconds:.2f}s target={requested_seconds:.2f}s"
                   )
               print(f"Day 1 humanized editorial QA: PASS, rendered={actual_seconds:.2f}s, "
