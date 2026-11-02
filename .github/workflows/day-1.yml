@@ -84,6 +84,8 @@ jobs:
 
           python -m unittest discover -s tests -p 'test_day1_narration_sync.py' -v
           python -m unittest discover -s tests -p 'test_day1_review_contract.py' -v
+          python -m unittest discover -s tests -p 'test_day1_editorial.py' -v
+          python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
 
       - name: Verify private YouTube upload configuration
         shell: bash
@@ -513,6 +515,8 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
+          import subprocess
           from pathlib import Path
 
           root = Path("/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO")
@@ -554,6 +558,38 @@ jobs:
                   "Expected exactly one combined final MP4 and MP3; "
                   f"found MP4={len(final_mp4s)}, MP3={len(final_mp3s)}"
               )
+          # Publication gate: actual rendered media, not the script's word count,
+          # must meet this two-section Day 1 review video's configurable target.
+          scene_keys = list(qa.get("scene_keys") or [])
+          if "gw_review" in scene_keys and set(scene_keys) <= {"opening_video", "00_intro", "gw_review"}:
+              qa_editorial = root / "DATA" / "gw_review_editorial_qa.json"
+              script_file = root / "DATA" / "gw_review_final_script.txt"
+              caption_file = root / "DATA" / "gw_review_master.vtt"
+              for required in (qa_editorial, script_file, caption_file):
+                  if not required.is_file() or required.stat().st_size <= 50:
+                      raise SystemExit(f"Final editorial evidence missing: {required}")
+              narration = json.loads(qa_editorial.read_text(encoding="utf-8"))
+              if narration.get("within_target") is not True:
+                  raise SystemExit(f"Actual narration missed the review target: {narration}")
+              if "Expected points are forecasts, not guaranteed returns" not in script_file.read_text(encoding="utf-8"):
+                  raise SystemExit("Review script disclosure was lost during final synthesis")
+              captions = caption_file.read_text(encoding="utf-8")
+              if not captions.startswith("WEBVTT") or captions.count(" --> ") < 20:
+                  raise SystemExit("Measured word-level review captions are missing or incomplete")
+              actual_seconds = float(subprocess.check_output(
+                  ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                   "-of", "default=noprint_wrappers=1:nokey=1", str(final_mp4s[0])],
+                  text=True,
+              ).strip())
+              requested_seconds = float(os.getenv("VORTEX_DAY1_VIDEO_TARGET_SECONDS", "480"))
+              if not 240 <= requested_seconds <= 900 or abs(actual_seconds - requested_seconds) > 60:
+                  raise SystemExit(
+                      f"Final video does not meet the eight-minute configurable target: "
+                      f"measured={actual_seconds:.2f}s target={requested_seconds:.2f}s"
+                  )
+              print(f"Day 1 humanized editorial QA: PASS, rendered={actual_seconds:.2f}s, "
+                    f"narration={narration['audio_seconds']:.2f}s, "
+                    f"captions={captions.count(' --> ')} cues")
           package_path = root / "DATA" / "youtube_video_1_of_3_package.json"
           if not package_path.is_file():
               raise SystemExit(f"YouTube Studio package is missing: {package_path}")
