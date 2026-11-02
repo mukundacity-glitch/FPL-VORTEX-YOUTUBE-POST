@@ -250,6 +250,11 @@ def build_editorial_review(
         insert.append({'id':'editorial_comparison','text':candidate_text,
                        'editorial_source':['current official FPL bootstrap','dated Vortex xPts/xMinutes model']})
     insert.extend([
+        {'id':'editorial_defence','text':("Defensive decisions need four pieces of evidence together: the likelihood of a start, clean-sheet prospects, attacking involvement and recorded defensive actions. "
+                                          "Defensive-contribution action totals are not the same thing as awarded Fantasy Premier League points. Check the official scoring record before treating a high number of actions as extra points. "
+                                          "A good fixture can help, but it won't turn a substitute into a reliable starter.")},
+        {'id':'editorial_budget','text':("Before talking about a specific move, confirm the squad as it stands now. The last published Gameweek picks cannot verify your current bank, free transfers, player selling prices or whether an early transfer has already been made. "
+                                         "Without those details, this is a shortlist for comparison, not an executable personal transfer plan. Also check the three-players-per-club limit before deciding that a tempting target is affordable or legal.")},
         {'id':'editorial_routes','text':("There are three sensible routes. If there are enough likely starters, keeping a free transfer can protect flexibility. "
                                          "If one regular starter looks unavailable, a single move may solve the bigger problem. "
                                          "A points hit needs a stronger case: it should improve the expected line-up over more than one week after its cost. None of that can be priced precisely from last week's picks alone.")},
