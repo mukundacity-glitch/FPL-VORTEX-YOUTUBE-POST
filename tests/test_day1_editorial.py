@@ -85,6 +85,20 @@ class EditorialTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaisesRegex(ValueError,'narration|certainty|phrase|Stage'):
                 validate_narration([{'id':'intro','text':'We have '+bad}],player_ids=[])
 
+    def test_repetitive_sentence_and_singular_points_are_handled(self):
+        repeated = [
+            {'id':str(i),'text':f'Player {i} recorded an individual return. The next decision depends on verified minutes and role.'}
+            for i in range(4)
+        ]
+        with self.assertRaisesRegex(ValueError, 'repeated sentences'):
+            validate_narration(repeated, player_ids=[])
+        segments, roster, ctx = evidence()
+        scripts, _ = build_editorial_review(segments, roster[:11], roster[11:], ctx,
+                                            review_gw=11, next_gw=12, review_status='FINAL')
+        second = next(x for x in scripts if x.get('player_id') == 2)
+        self.assertIn('1 point.', second['text'])
+        self.assertNotIn('1 points', second['text'])
+
     def test_conversational_voice_profiles_use_supported_controls(self):
         p=review_voice_profile('analysis')
         self.assertEqual(set(p),{'rate','pitch','volume'})
