@@ -200,7 +200,9 @@ def build_editorial_review(
     review_gw: int, next_gw: int, review_status: str,
     official_players: list[dict[str, Any]] | None = None,
     model_rows: dict[int, Any] | None = None,
-    target_seconds: int = 480,
+    overall_rank_direction: str = 'UNKNOWN',
+    market_choice: dict[str, Any] | None = None,
+    target_seconds: int = 350,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Generate the complete review afresh from this run's evidence only.
 
@@ -209,8 +211,10 @@ def build_editorial_review(
     """
     if not (1 <= review_gw < next_gw <= 38):
         raise ValueError('Review and upcoming Gameweeks are inconsistent')
-    if not 240 <= target_seconds <= 900:
-        raise ValueError('Review duration target outside supported bounds')
+    if not 240 <= target_seconds <= 420:
+        raise ValueError('Review duration target outside the seven-minute Day 1 format')
+    if overall_rank_direction not in ('GREEN','RED','UNCHANGED','UNKNOWN'):
+        raise ValueError('Rank movement must be independently verified')
     roster = starters + bench
     ids = [int(p['id']) for p in roster]
     if len(roster) != 15 or len(set(ids)) != 15 or set(ids) != set(context):
@@ -227,8 +231,8 @@ def build_editorial_review(
         segment['editorial_source'] = ['official review picks', 'official live player statistics', 'official bootstrap', 'official fixtures']
         if p.get('model_projection'):
             segment['editorial_source'].append('Vortex projected next-GW model, estimate only')
-    opener = (f'Gameweek {review_gw}: the points count, but our next decision needs a closer look. '
-              'Minutes, availability and bench cover matter more than a single result.')
+    opener = (f'Gameweek {review_gw} is in. I want to see what counted, '
+              'where my squad struggled, and whether I actually need a transfer.')
     if provisional:
         opener += ' Some matches or scores are still provisional; they cannot be called final.'
     index['headline']['text'] = opener
@@ -243,74 +247,120 @@ def build_editorial_review(
         )
     # Review-specific narration has a dedicated full-data-board phase after the
     # player card sequence; these scenes never claim a current live editable XI.
-    frame = [p for p in starters if context[int(p['id'])].get('status') not in ('', 'a')]
+    frame = [p for p in starters if str(context[int(p['id'])].get('status') or '').lower() not in ('', 'a')]
+    missing_status = [p for p in starters if not str(context[int(p['id'])].get('status') or '').strip()]
     short_minutes = [p for p in starters if _integer((context[int(p['id'])].get('stats') or {}).get('minutes')) is not None
                      and _integer((context[int(p['id'])].get('stats') or {}).get('minutes')) < 65
                      and str(p.get('review_state')) == 'FINAL']
-    note = ''
-    if frame:
-        note = f"There {'is' if len(frame) == 1 else 'are'} {len(frame)} officially flagged starter{'s' if len(frame) != 1 else ''} in the latest selection. That is the first place to check the team news."
+    # Rank direction describes the RESULT; pressure describes the squad.
+    # Neither classification is inferred from the other.
+    concern_count = len({int(p['id']) for p in frame + short_minutes})
+    pressure = ('UNKNOWN' if missing_status else
+                'HIGH' if concern_count >= 2 else
+                'MODERATE' if concern_count == 1 else 'LOW')
+    arrow_intro = {
+        'GREEN': "I got a green arrow. Good result, but that doesn't mean the squad is perfect.",
+        'RED': "I got a red arrow. Frustrating, but the arrow isn't a transfer instruction.",
+        'UNCHANGED': "My overall rank barely moved. The squad still needs its own check.",
+        'UNKNOWN': "I can't verify my overall-rank movement, so I won't invent an arrow.",
+    }[overall_rank_direction]
+    if missing_status:
+        pressure_note = (
+            "I don't have verified availability for every planned starter. "
+            "I'm leaving the pressure rating unknown until those checks are complete."
+        )
+    elif frame:
+        pressure_note = (
+            f"There {'is' if len(frame)==1 else 'are'} {len(frame)} officially flagged "
+            f"starter{'s' if len(frame)!=1 else ''} to check before the deadline."
+        )
     elif short_minutes:
-        note = f"There {'is' if len(short_minutes) == 1 else 'are'} {len(short_minutes)} starter{'s' if len(short_minutes) != 1 else ''} with fewer than sixty-five recorded minutes. Watch the role before making a change."
+        pressure_note = (
+            f"{len(short_minutes)} starter{'s' if len(short_minutes)!=1 else ''} "
+            "played fewer than sixty-five minutes. I'll look at those roles first."
+        )
     else:
-        note = 'There is no verified reason here to panic about the starting eleven just because of one quiet result. Start with the actual availability and likely minutes.'
+        pressure_note = "I haven't found a verified starting-eleven emergency in this snapshot."
+    # Market verdicts come ONLY from equal-window transfer demand.
+    # Current squad, price, availability and FT are feasibility checks.
+    choice = market_choice if isinstance(market_choice, dict) else {}
+    market_verdict = choice.get('verdict', 'WATCH')
+    market_at = choice.get('updated_at') or 'data unavailable'
+    if market_verdict == 'BUY' and isinstance(choice.get('option'),dict):
+        route = choice['option']
+        if not route.get('outgoing_name') or not route.get('name'):
+            raise ValueError('Verified market transfer requires both player names')
+        comparison_text = (
+            f"Realistic alternatives. I'd consider moving {route['outgoing_name']} "
+            f"for {route['name']}. The first has sustained selling pressure; the "
+            "second has strengthening buying demand across matching windows. "
+            "It's a same-position, affordable move on verified current squad data. "
+            "That doesn't promise points or a price rise."
+        )
+        routes_text = (
+            f"Hold or make a move? My market-led buy is {route['name']}. "
+            f"My sell is {route['outgoing_name']}. It's one legal transfer with "
+            "no points hit. I'd confirm team news before using it."
+        )
+        verdict_text = (
+            f"Final verdict: my move to consider is {route['outgoing_name']} "
+            f"to {route['name']}. It's a market-led view, not a guarantee. "
+            "Expected points are forecasts, not guaranteed returns. "
+            "That's FPL Vortex. I'll check the final team news before the deadline."
+        )
+    elif market_verdict == 'HOLD':
+        comparison_text = (
+            "Realistic alternatives. No buy and sell pair has passed both "
+            "the sustained market test and the full squad checks. "
+            "I won't fill the shortlist with fashionable names just to make a video."
+        )
+        routes_text = (
+            "Hold or make a move? My call is HOLD. There isn't a confirmed "
+            "affordable one-transfer route, and a market trend alone "
+            "isn't a reason to take a points hit."
+        )
+        verdict_text = (
+            "Final verdict: I'd hold and reassess at the deadline. "
+            "Expected points are forecasts, not guaranteed returns. "
+            "Thanks for watching FPL Vortex."
+        )
+    else:
+        comparison_text = (
+            "Realistic alternatives. I'm not going to invent a buy from "
+            "projected points or a popular name. I need two comparable "
+            "historical transfer and ownership windows, and the actual "
+            "current squad and bank. For now the alternatives are on watch."
+        )
+        routes_text = (
+            "Hold or make a move? The BUY and SELL signals aren't verified, "
+            "so I'm not forcing either. My pick is to hold the transfer "
+            "and check again when the required data is complete."
+        )
+        verdict_text = (
+            "Final verdict: HOLD for now. No invented player move, no assumed "
+            "budget, and no market-momentum points hit. "
+            "Expected points are forecasts, not guaranteed returns. "
+            "That's the FPL Vortex decision desk."
+        )
     insert = [
         {'id':'editorial_squad_context',
-         'text':note + ' The squad structure matters more than a surprising bench return.'},
+         'text':"Squad pressure. " + arrow_intro + " " + pressure_note
+             + f" On the evidence available, the pressure is {pressure.lower()}."},
         {'id':'editorial_minutes',
-         'text':('A strong return does not guarantee the next start. Compare recorded minutes, '
-                 'current role and available cover. When selection evidence is incomplete, '
-                 'waiting for team news makes sense.')},
-    ]
-    # One prospective comparison is sufficient for an evidence-led discussion.
-    # It is intentionally NOT a personalized transfer: the current bank/selling
-    # prices and next-GW editable squad are not verified by historical picks.
-    cands = _candidate_data(official_players or [], model_rows or {}, roster)
-    if cands:
-        lead = cands[0]
-        eligible_owned = [p for p in roster if p['pos'] == {1:'GK', 2:'DEF', 3:'MID', 4:'FWD'}[lead['position']]]
-        comparison = None
-        for p in eligible_owned:
-            xp, _ = _model(p)
-            if xp is not None and (comparison is None or xp < comparison[0]):
-                comparison = (xp, p)
-        candidate_text = (
-            f"For a model-backed alternative, {lead['name']} is worth comparing at {lead['price']:.1f} million. "
-            f"Vortex estimates {lead['xpts']:.1f} points and roughly {round(lead['xmins'])} minutes. "
-            'These are estimates, not assurances of selection. '
-        )
-        if comparison:
-            candidate_text += (
-                f"The last confirmed squad has {comparison[1]['name']} at {comparison[0]:.1f} "
-                'projected points. Check affordability and likely minutes before deciding.'
-            )
-        else:
-            candidate_text += 'Without a verified direct comparison, waiting remains an option.'
-        insert.append({'id':'editorial_comparison','text':candidate_text,
-                       'editorial_source':['current official FPL bootstrap','dated Vortex xPts/xMinutes model']})
-    insert.extend([
-        {'id':'editorial_defence','text':(
-            'For defenders, check likely starts, clean-sheet chances, attacking involvement '
-            'and verified defensive contributions. Defensive action totals are not awarded '
-            'FPL points. Rotation can still spoil a good fixture.')},
+         'text':("One return doesn't guarantee the next start. I want reliable minutes "
+                 "and proper bench cover, not a rushed reaction to last week's score.")},
+        {'id':'editorial_comparison', 'text':comparison_text,
+         'editorial_source':['verified comparable market windows or WATCH']},
         {'id':'editorial_budget','text':(
-            'Last Gameweek picks cannot verify the current squad. Confirm the bank, '
-            'selling prices, free transfers, injuries and three-player club limit '
-            'before calling this a personal transfer plan.')},
-        {'id':'editorial_routes','text':(
-            'There are three routes. Hold a transfer if you can field eleven reliable starters. '
-            'Use one move to repair a real weakness. A hit needs to improve several '
-            'upcoming lineups enough to justify its cost.')},
+            "My bank, selling prices and free transfers must come from my "
+            "current editable squad, not last Gameweek's picks. "
+            "Club limits and availability still apply.")},
+        {'id':'editorial_routes','text':routes_text},
         {'id':'editorial_tradeoff','text':(
-            'A friendly fixture alone is not enough if the move weakens your bench. '
-            'Compare minutes and genuine alternatives. Price changes and ownership '
-            'do not guarantee returns.')},
-        {'id':'editorial_verdict','text':(
-            'The verdict depends on current team news and your actual squad. '
-            'Protect reliable starters. If the team works, waiting can be sensible. '
-            'Expected points are forecasts, not guaranteed returns. '
-            'Thanks for watching FPL Vortex; see you next Gameweek.')},
-    ])
+            "I won't justify a points hit from buying momentum alone. "
+            "Transfer activity can't tell me future points or confirm a price change.")},
+        {'id':'editorial_verdict','text':verdict_text},
+    ]
     # Review close is followed by extra editorial beats on the same review
     # scoreboard, never inserted into the 15-player animation sequence.
     scripts.extend(insert)
@@ -318,9 +368,13 @@ def build_editorial_review(
     words = sum(len(WORD.findall(seg.get('text',''))) for seg in scripts)
     return scripts, {'target_seconds':target_seconds,'draft_words':words,
                      'review_gw':review_gw,'next_gw':next_gw,
+                     'overall_rank_direction':overall_rank_direction,
+                     'squad_pressure':pressure,
                      'current_transfer_state_verified':False,
-                     'source':'official review snapshot plus attributed Vortex estimates',
-                     'candidate_comparison':bool(cands)}
+                     'source':'official final review; independently checked two-window market or WATCH',
+                     'market_verdict':market_verdict,
+                     'market_updated_at':market_at,
+                     'candidate_comparison':market_verdict=='BUY'}
 
 
 def validate_narration(segments: list[dict[str, Any]], *, player_ids: list[int], max_words: int = 1700) -> None:

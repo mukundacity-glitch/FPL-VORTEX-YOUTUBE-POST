@@ -15545,6 +15545,12 @@ GW_REVIEW_STATUS_LOCAL = str(
     GW_REVIEW.get("status") or globals().get("GW_REVIEW_STATUS") or "FINAL"
 ).upper()
 GW_REVIEW_PARTIAL = GW_REVIEW_STATUS_LOCAL == "LIVE/PARTIAL"
+# Do not publish a retrospective review while the immediately previous GW is live.
+if GW_REVIEW_STATUS_LOCAL not in {"FINAL", "COMPLETE"}:
+    raise RuntimeError(
+        f"Day 1 is blocked: GW{REVIEW_GW} remains {GW_REVIEW_STATUS_LOCAL}. "
+        "Wait for the official finalized result; never substitute GW-2."
+    )
 
 boot  = GW_REVIEW["bootstrap"]
 picks = GW_REVIEW["picks"]
@@ -16243,6 +16249,21 @@ from vortex.day1_editorial import (
     build_editorial_review, validate_narration,
     review_voice_profile, measured_audio_report, word_timed_vtt,
 )
+from vortex.day1_market import choose_market_transfer
+# Optional verified snapshot from the already-restored MODEL_INPUTS directory.
+# A single cumulative transfer total is NOT a valid rolling market history.
+_market_path = Path(__import__("os").environ.get(
+    "VORTEX_DAY1_MARKET_SNAPSHOT_FILE",
+    "/content/drive/MyDrive/FPL_VORTEX/MODEL_INPUTS/day1_market_two_windows.json",
+))
+if _market_path.is_file():
+    _market_payload = json.loads(_market_path.read_text(encoding="utf-8"))
+    _vx_day1_market_choice = choose_market_transfer(_market_payload)
+else:
+    _vx_day1_market_choice = choose_market_transfer(None)
+print("Day 1 market-led choice:",
+      _vx_day1_market_choice["verdict"],
+      _vx_day1_market_choice.get("reason", "Insufficient data"))
 _review_events = list(boot.get("events") or [])
 _review_marked_next = [event for event in _review_events if event.get("is_next")]
 if len(_review_marked_next) == 1 and int(_review_marked_next[0]["id"]) != int(NEXT_GW):
@@ -16255,8 +16276,13 @@ segments, VX_REVIEW_EDITORIAL_META = build_editorial_review(
     review_status=GW_REVIEW_STATUS_LOCAL,
     official_players=list(boot.get("elements") or []),
     model_rows=_review_horizon_by_id,
+    overall_rank_direction=(
+        "GREEN" if rank_dir=="up" else "RED" if rank_dir=="down"
+        else "UNCHANGED" if prev_rank and cur_rank else "UNKNOWN"
+    ),
+    market_choice=_vx_day1_market_choice,
     target_seconds=int(__import__("os").environ.get(
-        "VORTEX_DAY1_REVIEW_TARGET_SECONDS", "430"
+        "VORTEX_DAY1_REVIEW_TARGET_SECONDS", "350"
     )),
 )
 for _segment in segments:
@@ -18158,9 +18184,35 @@ for sid,key in [
 # Browser animation uses only measured reveal/hero cues. Do not serialize
 # forecast/provenance/narration metadata into retrospective review artwork.
 ANIMATION_SEGMENTS = snapshot_review_animation_segments(pkg["segments"])
+# Strongest positive contribution actually counted, including the multiplier.
+_vx_scoring_candidates = [p for p in (pkg["starters"] + pkg["bench"]) if int(p.get("multiplier") or 0)>0]
+_vx_scoring_hero = max(_vx_scoring_candidates,
+    key=lambda p: int(p.get("points") or 0)*int(p.get("multiplier") or 0),
+    default=None)
+_vx_hero_id = (int(_vx_scoring_hero["id"]) if _vx_scoring_hero is not None
+    and int(_vx_scoring_hero.get("points") or 0)*int(_vx_scoring_hero.get("multiplier") or 0)>0
+    else None)
+from datetime import datetime as _vx_market_datetime
+from zoneinfo import ZoneInfo as _vx_market_ZoneInfo
+def _vx_market_time_label(value):
+    if not value:
+        return None
+    try:
+        timestamp = _vx_market_datetime.fromisoformat(
+            str(value).replace("Z","+00:00"))
+        if timestamp.tzinfo is None:
+            return None
+        return timestamp.astimezone(_vx_market_ZoneInfo(
+            "America/New_York")).strftime("%Y-%m-%d %I:%M %p ET")
+    except (ValueError, TypeError):
+        return None
 
 JS_DATA = {
     "gw":pkg["gw"],
+    "hero_player_id":_vx_hero_id,
+    "market_updated_at":_vx_market_time_label(_vx_day1_market_choice.get("updated_at")),
+    "market_verdict":_vx_day1_market_choice.get("verdict", "WATCH"),
+    "market_option":_vx_day1_market_choice.get("option") or {},
     "starters":pkg["starters"],
     "bench":pkg["bench"],
     "segments":ANIMATION_SEGMENTS,
@@ -18272,6 +18324,46 @@ CSS = r"""
     width:100%;
     height:100%;
 }
+#vxHeroWrap[data-hero="true"]::after{
+    content:"GAMEWEEK HERO";
+    position:absolute;right:32px;top:22px;z-index:115;
+    padding:14px 21px;border-radius:12px;
+    color:#061529;background:linear-gradient(100deg,#F6D88A,#DAAD47);
+    font-size:30px;font-weight:900;letter-spacing:2px;
+    box-shadow:0 0 26px rgba(246,216,138,.44);
+}
+#vxHeroWrap .vx-count-reveal{
+    position:absolute;bottom:30px;right:30px;z-index:115;
+    padding:15px 21px;border-radius:12px;
+    color:#fff;background:rgba(2,18,40,.95);
+    border:2px solid #43CFFD;font-size:27px;font-weight:900;
+    font-variant-numeric:tabular-nums;
+    box-shadow:0 0 24px rgba(67,207,253,.3);
+}
+#vxHeroWrap[data-hero="true"] .vx-count-reveal{
+    border-color:#F6D88A;box-shadow:0 0 24px rgba(246,216,138,.4);
+}
+/* Spoken-word-synchronized editorial headings on the ORIGINAL review stage.
+   These overlay the original HTML panels; they never replace the pitch. */
+#vxChapterBanner{
+    position:absolute;left:16px;right:15px;top:34px;z-index:121;
+    padding:24px 32px;background:rgba(0,15,38,.95);
+    border-left:9px solid #F0CE7A;border-radius:9px;
+    font-size:49px;font-weight:900;letter-spacing:1.8px;
+    color:#FFF;box-shadow:0 0 32px rgba(0,202,255,.30);
+    pointer-events:none;opacity:0;transform:translateY(26px);
+}
+#vxMarketChip{
+    position:absolute;left:27px;right:27px;bottom:68px;z-index:122;
+    padding:18px 27px;background:rgba(2,20,44,.96);
+    border:2px solid #52DAFF;border-radius:12px;
+    color:#FFF;font-size:26px;font-weight:800;
+    box-shadow:0 0 24px rgba(52,218,255,.26);
+    pointer-events:none;opacity:0;transform:translateY(20px);
+}
+#vxMarketChip .vx-market-source{
+    color:#F0CE7A;font-size:20px;font-weight:600;display:block;margin-top:6px;
+}
 
 </style>
 """
@@ -18378,7 +18470,9 @@ function buildReview(){
 
     left.insertAdjacentHTML(
       "beforeend",
-      `<div id="vxHeroWrap"></div>`
+      `<div id="vxHeroWrap"></div>
+       <div id="vxChapterBanner"></div>
+       <div id="vxMarketChip"></div>`
     );
 
     const benchCards=[...document.querySelectorAll(".benchPanel .mini")];
@@ -18503,15 +18597,14 @@ window.__seek=function(t){
 
     /* ---------- TEMP HERO ---------- */
 
+    // Reuse VXPlayerCard for all 15 narrated players, including bench picks.
     const heroSeg = VX.segments
-      .filter(
-        s =>
-          s.player_id &&
-          s.kind==="starter" &&
-          t >= s.hero_on &&
-          t < s.hero_off
-      )
-      .sort((a,b)=>Number(b.hero_on)-Number(a.hero_on))[0];
+      .filter(s=>s.player_id && (
+        (s.kind==="starter" && t>=s.hero_on && t<s.hero_off) ||
+        (s.kind==="bench" && t>=s.reveal_at &&
+          t<Math.min(s.t1,Number(s.speech_end_at??s.t1)+.25))
+      ))
+      .sort((a,b)=>Number(b.reveal_at)-Number(a.reveal_at))[0];
 
     const hw=$v("#vxHeroWrap");
 
@@ -18531,29 +18624,78 @@ window.__seek=function(t){
                 }
                 window.VXPlayerCard.mount(hw, p.card || p);
                 hw.dataset.pid=String(p.id);
+                const count=document.createElement("div");
+                count.className="vx-count-reveal";
+                count.setAttribute("aria-label","Verified counted points");
+                hw.appendChild(count);
             }
 
-            const ein=ease(
-              (t-heroSeg.hero_on)/Number(timing.hero_fade_in||.32)
-            );
-
-            const eout=t < heroSeg.hero_exit_at
-              ? 1
-              : 1-ease(
-                  (t-heroSeg.hero_exit_at) /
-                  Math.max(.01,heroSeg.hero_off-heroSeg.hero_exit_at)
-                );
-
-            const vis=Math.min(ein,eout);
-
+            const on=heroSeg.kind==="starter"?heroSeg.hero_on:heroSeg.reveal_at;
+            const exitAt=heroSeg.kind==="starter"?heroSeg.hero_exit_at
+              :Math.min(heroSeg.t1,Number(heroSeg.speech_end_at??heroSeg.t1)+.08);
+            const off=heroSeg.kind==="starter"?heroSeg.hero_off
+              :Math.min(heroSeg.t1,exitAt+.22);
+            const enter=ease((t-on)/Number(timing.hero_fade_in||.32));
+            const leave=t<exitAt?1:1-ease((t-exitAt)/Math.max(.01,off-exitAt));
+            const vis=Math.min(enter,leave);
+            const points=Number(p.points||0)*Number(p.multiplier||0);
+            const progress=ease((t-heroSeg.reveal_at-.1)/.62);
+            const overlay=hw.querySelector(".vx-count-reveal");
+            if(overlay)overlay.textContent=`COUNTED ${Math.round(points*progress)} PTS`;
+            const isHero=Number(VX.hero_player_id)===Number(p.id);
+            hw.dataset.hero=String(isHero);
             hw.style.opacity=vis;
-
-            hw.style.transform=
-              `translateY(${(1-vis)*34}px)`;
+            hw.style.transform=`translateY(${(1-vis)*34}px) scale(${isHero?1.035:1})`;
         }
     }
     else{
         hw.style.opacity=0;
+    }
+
+    /* ---------- FIVE STORY CHAPTERS • SHOWN ONLY AT SPOKEN CUES ---------- */
+    const editorialTitles={
+      editorial_squad_context:"SQUAD PRESSURE",
+      editorial_comparison:"REALISTIC ALTERNATIVES",
+      editorial_routes:"HOLD OR MAKE A MOVE?",
+      editorial_verdict:"FINAL VERDICT"
+    };
+    const spokenChapter=VX.segments.find(s=>editorialTitles[s.id] &&
+      t>=s.t0 && t<Math.min(s.t1,s.t0+5.2));
+    const banner=$v("#vxChapterBanner");
+    if(banner){
+      if(spokenChapter){
+        const progress=t-spokenChapter.t0;
+        const fadeIn=ease(progress/.45);
+        const fadeOut=1-ease((progress-4.55)/.55);
+        const v=Math.min(fadeIn,fadeOut);
+        banner.textContent=editorialTitles[spokenChapter.id];
+        banner.style.opacity=v;
+        banner.style.transform=`translateY(${(1-v)*26}px)`;
+      }else banner.style.opacity=0;
+    }
+    const marketChip=$v("#vxMarketChip");
+    if(marketChip){
+      const marketWindow=VX.segments.find(s=>
+        (s.id==="editorial_routes" || s.id==="editorial_verdict") &&
+        t>=s.t0 && t<Math.min(s.t1,s.t0+6));
+      if(marketWindow){
+        const option=VX.market_option||{};
+        const decision=VX.market_verdict==="BUY" &&
+          option.outgoing_name && option.name
+            ? `MY SELL: ${option.outgoing_name}   →   MY BUY: ${option.name}`
+            : VX.market_verdict==="HOLD"?"MY HOLD • NO LEGAL MARKET-LED MOVE"
+            :"WATCH • INSUFFICIENT COMPARABLE MARKET DATA";
+        const source=VX.market_updated_at
+          ?`Market-led view • updated ${VX.market_updated_at}`
+          :"Market-led view • timestamp unavailable";
+        marketChip.innerHTML=`<div></div><span class="vx-market-source"></span>`;
+        marketChip.firstElementChild.textContent=decision;
+        marketChip.lastElementChild.textContent=source;
+        const v=Math.min(ease((t-marketWindow.t0)/.45),
+          1-ease((t-marketWindow.t0-5.25)/.55));
+        marketChip.style.opacity=v;
+        marketChip.style.transform=`translateY(${(1-v)*20}px)`;
+      }else marketChip.style.opacity=0;
     }
 
     /* ---------- APPROVED LEFT PANELS + NARRATED TABLE EMPHASIS ---------- */

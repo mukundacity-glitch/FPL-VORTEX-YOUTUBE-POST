@@ -5,6 +5,8 @@ on:
     paths:
       - "1_final_day1.py"
       - "vortex/day1_editorial.py"
+      - "vortex/day1_market.py"
+      - "tests/test_day1_market.py"
       - "tests/test_day1_editorial*.py"
       - "tests/test_day1_agenda.py"
       - "tests/test_day1_intro_voice_gate.py"
@@ -38,6 +40,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
       - name: Verify dynamic narratives, missing-data handling and exact captions
         run: python -m unittest discover -s tests -p 'test_day1_editorial.py' -v
+      - name: Verify market-only BUY SELL HOLD and hard data gates
+        run: python -m unittest discover -s tests -p 'test_day1_market.py' -v
       - name: Verify dynamic spoken intro agendas
         run: python -m unittest discover -s tests -p 'test_day1_agenda.py' -v
       - name: Verify production intro TTS full-word contract
