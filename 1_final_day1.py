@@ -16535,6 +16535,8 @@ GW_REVIEW_NARRATION_WORDS = sum(
 )
 
 tts_text = " ".join(segment["text"] for segment in segments)
+# Machine-readable companion from current main; keep the required human-
+# readable transcript for the existing publication contract as well.
 (TIMING/"gw_review_final_script.json").write_text(
     json.dumps(
         {"script": [segment["text"] for segment in segments]},
@@ -16542,7 +16544,9 @@ tts_text = " ".join(segment["text"] for segment in segments)
     ),
     encoding="utf-8",
 )
-(TIMING/"gw_review_final_script.txt").unlink(missing_ok=True)
+(TIMING/"gw_review_final_script.txt").write_text(
+    "\n\n".join(segment["text"] for segment in segments), encoding="utf-8"
+)
 _review_narration["gameweek_summary"] = _headline_segment["text"]
 _review_narration["tts_text"] = tts_text
 vx_review_validate_creator_script(_review_narration, segments)
@@ -17402,6 +17406,10 @@ print("✅ PLAYER CARD ONLY — pitch / formation / footer / narration untouched
 from pathlib import Path
 import json, math, re, subprocess
 import pandas as pd
+from vortex.day1_publish_contract import (
+    snapshot_review_animation_segments,
+    assert_review_animation_manifest_current,
+)
 
 ROOT   = Path(globals().get("PROJECT_ROOT", "/content/drive/MyDrive/FPL_VORTEX"))
 HTML   = Path(globals().get("HTML_WORK_DIR", "/content/FPL_VORTEX_FIRST_DAY_WORK/html"))
@@ -18147,12 +18155,15 @@ for sid,key in [
 # ------------------------------------------------------------
 # 6. REVIEW DATA FOR JAVASCRIPT
 # ------------------------------------------------------------
+# Browser animation uses only measured reveal/hero cues. Do not serialize
+# forecast/provenance/narration metadata into retrospective review artwork.
+ANIMATION_SEGMENTS = snapshot_review_animation_segments(pkg["segments"])
 
 JS_DATA = {
     "gw":pkg["gw"],
     "starters":pkg["starters"],
     "bench":pkg["bench"],
-    "segments":pkg["segments"],
+    "segments":ANIMATION_SEGMENTS,
     "total":TOTAL,
     "narration_end":NARRATION_END,
     "timeline":GW_REVIEW_ANIMATION_TIMING,
@@ -18807,8 +18818,10 @@ manifest = {
     "timeline":GW_REVIEW_ANIMATION_TIMING,
     "metric_times":metric_map,
     "motion_windows":_review_motion_windows,
-    "segments":pkg["segments"]
+    "segments":ANIMATION_SEGMENTS
 }
+# Source package is the in-memory current-run authority, not a Drive cache.
+assert_review_animation_manifest_current(manifest, pkg["segments"], pkg["gw"])
 
 (TIMING/"gw_review_animation_manifest.json").write_text(
     json.dumps(manifest,indent=2),
@@ -23718,6 +23731,15 @@ else:
         )
 
     _vx17_manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    from vortex.day1_publish_contract import assert_review_animation_manifest_current
+    _vx17_current_review = globals().get("GW_REVIEW_PACKAGE")
+    if not isinstance(_vx17_current_review, dict):
+        raise RuntimeError("Cell 17 requires current Cell 15 review package; refusing a stale Drive manifest")
+    assert_review_animation_manifest_current(
+        _vx17_manifest,
+        _vx17_current_review["segments"],
+        _vx17_current_review["gw"],
+    )
     ANIM_HTML = Path(str(_vx17_manifest.get("html") or ""))
     AUDIO = Path(str(_vx17_manifest.get("audio") or ""))
     if not ANIM_HTML.is_file() or ANIM_HTML.stat().st_size < 100_000:
@@ -26844,6 +26866,10 @@ ASSEMBLY_FINGERPRINT = hashlib.sha256(
 # ------------------------------------------------------------
 # PHASE-0 OUTPUT CONTRACT — BEFORE PUBLISH
 # ------------------------------------------------------------
+from vortex.day1_publish_contract import (
+    assert_review_script_current,
+    assert_review_animation_manifest_current,
+)
 
 _ALLOWED_OUTPUT_DIRS = {
     "MP4": VIDEO,
@@ -26864,8 +26890,48 @@ def _vx21_output_contract_violations():
 
     if DATA.exists():
         for path in DATA.rglob("*"):
-            if path.is_file() and path.suffix.lower() not in {".json", ".vtt"}:
-                violations.append(f"invalid_data_artifact:{path.name}")
+            if not path.is_file():
+                continue
+            if path.suffix.lower() in {".json", ".vtt"}:
+                continue
+            # This specific transcript is intentionally produced by Cell 15
+            # and required again by the GitHub publication QA. Never reject it
+            # merely because it is .txt, and never admit unrelated text files.
+            if (
+                path.parent == DATA
+                and path.name == "gw_review_final_script.txt"
+                and _selection.get("gw_review", False)
+            ):
+                continue
+            violations.append(f"invalid_data_artifact:{path.name}")
+
+    if _selection.get("gw_review", False):
+        current_review = globals().get("GW_REVIEW_PACKAGE")
+        if not isinstance(current_review, dict):
+            violations.append("missing_current_run_review_package")
+        else:
+            # Guard against stale or altered artifacts without deleting files
+            # or relaxing the existing clean-room scanner.
+            script_path = DATA / "gw_review_final_script.txt"
+            try:
+                assert_review_script_current(
+                    script_path, current_review["segments"]
+                )
+            except Exception as exc:
+                violations.append(f"invalid_current_run_review_script:{exc}")
+
+            manifest_path = DATA / "gw_review_animation_manifest.json"
+            try:
+                current_manifest = json.loads(
+                    manifest_path.read_text(encoding="utf-8")
+                )
+                assert_review_animation_manifest_current(
+                    current_manifest,
+                    current_review["segments"],
+                    current_review["gw"],
+                )
+            except Exception as exc:
+                violations.append(f"invalid_current_run_review_manifest:{exc}")
 
     for path in VIDEO.rglob("*") if VIDEO.exists() else []:
         if path.is_file() and path.suffix.lower() != ".mp4":
