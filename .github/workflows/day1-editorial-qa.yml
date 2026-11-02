@@ -9,6 +9,8 @@ on:
       - "tests/test_day1_agenda.py"
       - "tests/test_day1_intro_voice_gate.py"
       - "tests/test_day1_runner_diagnostics.py"
+      - "tests/test_day1_publish_contract.py"
+      - "vortex/day1_publish_contract.py"
       - "vortex/day1_agenda.py"
       - ".github/workflows/day-1.yml"
       - ".github/workflows/day1-editorial-qa.yml"
@@ -42,6 +44,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_intro_voice_gate.py' -v
       - name: Prove original Day 1 cell exceptions surface clearly
         run: python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
+      - name: Validate retrospective review manifest and legitimate script file
+        run: python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
       - name: Preserve existing animation and review speech contracts
         run: |
           python -m unittest discover -s tests -p 'test_day1_review_contract.py' -v
