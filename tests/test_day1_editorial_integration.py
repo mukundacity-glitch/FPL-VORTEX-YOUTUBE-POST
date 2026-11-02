@@ -14,7 +14,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "day-1.yml"
 class Day1EditorialIntegrationTests(unittest.TestCase):
     def test_original_33_cells_still_compile(self):
         text = SOURCE.read_text(encoding="utf-8")
-        marker = re.compile(r"(?m)(?=^# ={20,}\n# [^\n]*\\bCELL\\s+\\d+[A-Za-z]?\\b[^\n]*\n)")
+        marker = re.compile(r"(?m)(?=^# ={20,}\n# [^\n]*\bCELL\s+\d+[A-Za-z]?\b[^\n]*\n)")
         cells = [piece for piece in marker.split(text) if piece.strip()]
         self.assertEqual(len(cells), 33)
         for i, cell in enumerate(cells, 1):
