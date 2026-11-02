@@ -16249,6 +16249,21 @@ from vortex.day1_editorial import (
     build_editorial_review, validate_narration,
     review_voice_profile, measured_audio_report, word_timed_vtt,
 )
+from vortex.day1_market import choose_market_transfer
+# Optional verified snapshot from the already-restored MODEL_INPUTS directory.
+# A single cumulative transfer total is NOT a valid rolling market history.
+_market_path = Path(__import__("os").environ.get(
+    "VORTEX_DAY1_MARKET_SNAPSHOT_FILE",
+    "/content/drive/MyDrive/FPL_VORTEX/MODEL_INPUTS/day1_market_two_windows.json",
+))
+if _market_path.is_file():
+    _market_payload = json.loads(_market_path.read_text(encoding="utf-8"))
+    _vx_day1_market_choice = choose_market_transfer(_market_payload)
+else:
+    _vx_day1_market_choice = choose_market_transfer(None)
+print("Day 1 market-led choice:",
+      _vx_day1_market_choice["verdict"],
+      _vx_day1_market_choice.get("reason", "Insufficient data"))
 _review_events = list(boot.get("events") or [])
 _review_marked_next = [event for event in _review_events if event.get("is_next")]
 if len(_review_marked_next) == 1 and int(_review_marked_next[0]["id"]) != int(NEXT_GW):
@@ -16265,6 +16280,7 @@ segments, VX_REVIEW_EDITORIAL_META = build_editorial_review(
         "GREEN" if rank_dir=="up" else "RED" if rank_dir=="down"
         else "UNCHANGED" if prev_rank and cur_rank else "UNKNOWN"
     ),
+    market_choice=_vx_day1_market_choice,
     target_seconds=int(__import__("os").environ.get(
         "VORTEX_DAY1_REVIEW_TARGET_SECONDS", "350"
     )),
