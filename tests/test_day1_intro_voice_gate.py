@@ -26,7 +26,11 @@ def _production_intro_and_validator():
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict):
             for key, value in zip(node.value.keys, node.value.values):
-                if isinstance(key, ast.Constant) and key.value == "00_intro":
+                if (isinstance(key, ast.Constant) and key.value == "00_intro"
+                        and any(
+                            isinstance(expr, ast.Name) and expr.id == "VX_INTRO_AGENDA_SPOKEN"
+                            for expr in ast.walk(value)
+                        )):
                     intros.append(value)
     if len(intros) != 1:
         raise AssertionError(f"Expected exactly one source intro f-string, got {len(intros)}")
