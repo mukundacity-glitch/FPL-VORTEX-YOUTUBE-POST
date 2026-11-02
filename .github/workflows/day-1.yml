@@ -88,6 +88,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_agenda.py' -v
           python -m unittest discover -s tests -p 'test_day1_intro_voice_gate.py' -v
           python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
+          python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
 
       - name: Verify private YouTube upload configuration
         shell: bash
@@ -484,6 +485,9 @@ jobs:
           shell.autoawait = True
           shell.user_ns["__name__"] = "__main__"
 
+          import sys
+          import traceback
+
           for index, cell in enumerate(cells, 1):
               label = next(
                   (
@@ -496,10 +500,25 @@ jobs:
               print(f"::group::Day 1 block {index:02d}/33 — {label}", flush=True)
               try:
                   result = shell.run_cell(cell, store_history=False, silent=False)
-                  if not result.success:
-                      raise RuntimeError(f"Day 1 block {index} failed: {label}")
-              finally:
+              except Exception as err:
+                  # A shell-level exception must also close the group before
+                  # printing the complete traceback at top-level log visibility.
                   print("::endgroup::", flush=True)
+                  print(f"::error::Block {index} ({label}): {type(err).__name__}: {err}", flush=True)
+                  traceback.print_exception(type(err), err, err.__traceback__, file=sys.stdout)
+                  sys.stdout.flush()
+                  raise RuntimeError(f"Day 1 block {index} failed: {label}") from err
+              print("::endgroup::", flush=True)
+
+              err = result.error_before_exec or result.error_in_exec
+              if err is not None or not result.success:
+                  if err is not None:
+                      print(f"::error::Block {index} ({label}): {type(err).__name__}: {err}", flush=True)
+                      traceback.print_exception(type(err), err, err.__traceback__, file=sys.stdout)
+                      sys.stdout.flush()
+                  else:
+                      print(f"::error::Block {index} ({label}): cell execution unsuccessful without an exception", flush=True)
+                  raise RuntimeError(f"Day 1 block {index} failed: {label}") from err
 
           print("Day 1 execution: PASS")
           PY
