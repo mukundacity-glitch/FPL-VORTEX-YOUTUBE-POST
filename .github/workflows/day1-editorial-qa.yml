@@ -26,6 +26,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install existing source-loader test dependencies
+        run: python -m pip install "pandas>=2.2,<3" "numpy>=2.0,<3"
       - name: Compile the 33 untouched notebook-cell boundaries and check editorial binding
         run: python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
       - name: Verify dynamic narratives, missing-data handling and exact captions
