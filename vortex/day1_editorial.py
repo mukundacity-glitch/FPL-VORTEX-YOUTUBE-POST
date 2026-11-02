@@ -98,10 +98,10 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     pts_word = 'point' if points == 1 else 'points'
     if played and points is not None:
         starts = (
-            f'{name} finished on {{pts_word}} points.',
-            f'For {name}, the return was {{pts_word}} points.',
-            f'{name} came away with {{pts_word}} points.',
-            f'{name}: {{pts_word}} points from the recorded match.',
+            f'{name} finished on {points} {pts_word}.',
+            f'For {name}, the return was {points} {pts_word}.',
+            f'{name} came away with {points} {pts_word}.',
+            f'{name}: {points} {pts_word} from the recorded match.',
         )
         lines.append(starts[idx % len(starts)])
         if reason:
