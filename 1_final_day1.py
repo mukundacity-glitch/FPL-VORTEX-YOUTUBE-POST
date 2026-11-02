@@ -19069,6 +19069,17 @@ SOCIAL = r'''
 <span class="socialPair"><span class="xIcon">𝕏</span><span>@FPLVORTEXM</span></span>
 '''
 
+from vortex.day1_agenda import build_intro_agenda, spoken_intro_agenda, render_intro_agenda
+VX_INTRO_AGENDA = build_intro_agenda(
+    SELECTED_SCENES,
+    next_gw=int(NEXT_GW),
+    review_gw=int(REVIEW_GW) if SLIDE_SELECTION.get("gw_review") else None,
+    review_status=str(GW_REVIEW_STATUS_LOCAL) if SLIDE_SELECTION.get("gw_review") else None,
+    review_segments=segments if SLIDE_SELECTION.get("gw_review") else None,
+)
+VX_INTRO_AGENDA_SPOKEN = spoken_intro_agenda(VX_INTRO_AGENDA)
+VX_INTRO_AGENDA_HTML = render_intro_agenda(VX_INTRO_AGENDA)
+
 STYLE = r'''
 *{box-sizing:border-box}
 html,body{margin:0;width:3840px;height:2160px;overflow:hidden;background:#020711;color:#fff;font-family:Inter,Arial,Helvetica,sans-serif}
@@ -19089,12 +19100,15 @@ linear-gradient(145deg,#020713 0%,#07182b 52%,#020711 100%)}
 .mainHeading{position:absolute;left:300px;right:300px;top:345px;text-align:center;font-size:92px;line-height:1;font-weight:1000;letter-spacing:3px;color:#fff;text-shadow:0 8px 28px rgba(0,0,0,.52)}
 .mainHeading span{color:#35e6ff}
 .headingRule{position:absolute;left:1180px;right:1180px;top:465px;height:5px;border-radius:5px;background:linear-gradient(90deg,transparent,#ffd447 20%,#35e6ff 80%,transparent)}
-.agendaWrap{position:absolute;left:665px;right:665px;top:540px;height:1335px;z-index:14;display:flex;flex-direction:column;justify-content:center;gap:42px}
-.agenda-card{height:245px;border-radius:30px;display:grid;grid-template-columns:230px 1fr;align-items:center;padding:26px 55px;background:linear-gradient(110deg,rgba(10,32,54,.985),rgba(4,17,31,.99));border:2px solid rgba(255,212,71,.38);box-shadow:0 22px 55px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.08);overflow:hidden}
-.agenda-card:nth-child(even){border-color:rgba(53,230,255,.42)}
-.agendaNum{font-size:96px;font-weight:1000;color:#ffd447;opacity:.96;letter-spacing:-3px}
-.agenda-title{min-height:76px;font-size:58px;line-height:1.05;font-weight:1000;letter-spacing:2px;color:#fff;white-space:nowrap}
-.agenda-sub{margin-top:14px;font-size:29px;line-height:1.18;font-weight:900;letter-spacing:2px;color:#9fc2d5}
+.agendaWrap{position:absolute;left:610px;right:610px;top:510px;height:1350px;z-index:14;display:flex;flex-direction:column;justify-content:center;gap:18px}
+.agenda-card{position:relative;flex:1;max-height:230px;min-height:0;border-radius:28px;display:grid;grid-template-columns:160px minmax(0,1fr);align-items:center;padding:20px 58px 20px 44px;background:linear-gradient(110deg,rgba(10,32,54,.985),rgba(4,16,31,.99));border:2px solid rgba(255,212,71,.42);box-shadow:0 18px 48px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08);overflow:hidden}
+.agenda-card:nth-child(even){border-color:rgba(53,230,255,.5);background:linear-gradient(110deg,rgba(6,32,55,.985),rgba(3,18,32,.99))}
+.agendaNum{font-size:84px;line-height:1;font-weight:1000;color:#ffd447;letter-spacing:-2px}
+.agenda-card:nth-child(even) .agendaNum{color:#35e6ff}
+.agendaCopy{min-width:0}
+.agenda-title{font-size:52px;line-height:1.06;font-weight:1000;letter-spacing:1.3px;color:#fff;white-space:normal}
+.agenda-sub{margin-top:12px;font-size:27px;line-height:1.2;font-weight:850;letter-spacing:1.5px;color:#a9cadc;white-space:normal}
+.agendaAccent{position:absolute;right:0;top:15%;height:70%;width:8px;border-radius:9px 0 0 9px;background:linear-gradient(180deg,#35e6ff,#52f28c);box-shadow:0 0 20px rgba(53,230,255,.4)}
 .fxGrid{position:absolute;left:260px;right:260px;top:525px;bottom:305px;z-index:16;padding:28px 34px 34px;border-radius:38px;overflow:hidden;opacity:0;pointer-events:none;background:linear-gradient(145deg,rgba(7,27,48,.985),rgba(2,12,24,.995));border:3px solid rgba(53,230,255,.42);box-shadow:0 30px 90px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.09)}
 .fxGrid:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 0,rgba(53,230,255,.12),transparent 37%),linear-gradient(115deg,rgba(255,255,255,.035),transparent 30%,rgba(255,212,71,.025) 75%,transparent)}
 .fxGridHeader{position:relative;height:128px;display:flex;align-items:center;justify-content:space-between;gap:42px;padding:0 16px;border-bottom:2px solid rgba(255,255,255,.11)}
@@ -19280,9 +19294,7 @@ linear-gradient(140deg,#04111e 0%,#091b2d 45%,#020711 100%)}
 INTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$style</style></head><body><div class="scene introScene">
 <header class="topHeader"><div class="brandLock"><div class="logoBox">$logo</div><div class="brandWords"><div class="channelName">FPL VORTEX</div><div class="channelSub">GAMEWEEK DATA • MODEL • DECISIONS</div></div></div><div class="gwPill">GAMEWEEK $gw</div></header>
 <div class="mainHeading">GAMEWEEK $gw <span>• VORTEX AGENDA</span></div><div class="headingRule"></div>
-<main class="agendaWrap">
-<div class="agenda-card agenda-1"><div class="agendaNum">01</div><div><div class="agenda-title" data-vx-type="MY GAMEWEEK REVIEW">MY GAMEWEEK REVIEW</div><div class="agenda-sub">MY PREVIOUS GAMEWEEK SQUAD • PLAYER BY PLAYER</div></div></div>
-</main>$fixture_grid$results_strip<footer class="footer"><div class="footerLeft"><strong>FPL VORTEX</strong> &nbsp;|&nbsp; GAMEWEEK $gw</div><div class="footerSocial">$social</div><div class="footerRight"><span class="updated">UPDATED: $updated</span><span class="season">2026/27 SEASON</span></div></footer></div></body></html>''').substitute(style=STYLE,logo=vortex_logo_html,gw=int(NEXT_GW),social=SOCIAL,updated=str(VX_FOOTER_UPDATED_DATE),results_strip=LATEST_GW_REVIEW_STRIP,fixture_grid=NEXT_FIXTURE_GRID_HTML)
+<main class="agendaWrap">$agenda_cards</main>$fixture_grid$results_strip<footer class="footer"><div class="footerLeft"><strong>FPL VORTEX</strong> &nbsp;|&nbsp; GAMEWEEK $gw</div><div class="footerSocial">$social</div><div class="footerRight"><span class="updated">UPDATED: $updated</span><span class="season">2026/27 SEASON</span></div></footer></div></body></html>''').substitute(style=STYLE,logo=vortex_logo_html,gw=int(NEXT_GW),social=SOCIAL,updated=str(VX_FOOTER_UPDATED_DATE),results_strip=LATEST_GW_REVIEW_STRIP,fixture_grid=NEXT_FIXTURE_GRID_HTML,agenda_cards=VX_INTRO_AGENDA_HTML)
 
 OUTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$style</style></head><body><div class="scene outroScene">
 <div class="bgFade" id="bgFade"></div>
@@ -19313,7 +19325,7 @@ else:
 INTRO_HTML.write_text(INTRO,encoding="utf-8")
 OUTRO_HTML.write_text(OUTRO,encoding="utf-8")
 print("✅ INTRO HTML:",INTRO_HTML)
-print("✅ Intro layout: blank centre → centered 5×2 fixture board → agenda cards")
+print(f"✅ Intro layout: fixtures → {len(VX_INTRO_AGENDA)} narration-synced agenda cards")
 print("✅ OUTRO HTML:",OUTRO_HTML)
 
 # Guard against export_4k_png ever screenshotting a stale/partial file left over
@@ -24623,15 +24635,11 @@ scripts = {
 
 f"""
 
-Welcome back to Fantasy Premier League Vortex.
+Welcome back to FPL VORTEX. A good score can hide a weak bench, and one blank doesn't make the original pick a bad one. Before Gameweek {NEXT_GW}, let's look at the fixtures on screen and separate the last result from the choices ahead. We want a plan that holds up when the team news changes. No chasing last week's points, and no transfers just for the sake of it.
 
-Today, it's My Gameweek Review. We'll go through my squad player by player and look at what happened in the previous Gameweek.
+{VX_INTRO_AGENDA_SPOKEN}
 
-The points tell part of the story. We'll also check the minutes, roles, captaincy and bench to understand each player's return.
-
-Where matches are still in progress or points are provisional, we'll keep that status clear. A player who has not played yet should never be treated as a confirmed zero.
-
-Let's start with my Gameweek review.
+Let's get into it.
 
 """.strip(),
 
@@ -25071,32 +25079,35 @@ def events_for(key, info):
         return round(float(start_time),3), max(float(min_duration),float(spoken_span))
 
     if key=="00_intro":
-
-        welcome_at,_=_sync("Welcome",0.35)
-        # Agenda cards appear at fixed times, independent of narration wording.
-        agenda_1_dur = 0.45
-
-        # Intro visual order is clock-locked: fixtures remain visible through
-        # 18.000s, disappear, then the agenda cards pop in from 18.000s.
-        fixture_at=0.0
-        agenda_1_at=18.0
-        if fixture_at != 0.0 or agenda_1_at != 18.0:
-            raise RuntimeError(
-                f"00_intro visual order drifted: "
-                f"fixture={fixture_at:.3f}, agenda01={agenda_1_at:.3f}"
+        welcome_at,_ = _sync("Welcome", 0.35)
+        if not VX_INTRO_AGENDA:
+            raise RuntimeError("Intro has no verified agenda sections")
+        agenda_events = []
+        last_cue = -1.0
+        for _agenda_index, _agenda in enumerate(VX_INTRO_AGENDA, 1):
+            cue = vx_phrase_span(
+                words, _agenda["anchor"], required=True,
+                context=f"00_intro agenda {_agenda_index}",
             )
-
+            cue_at = round(float(cue[0]), 3)
+            if cue_at < 18.0:
+                raise RuntimeError(f"Intro agenda starts before the fixture board phase: {cue_at:.2f}s")
+            if last_cue >= 0 and cue_at <= last_cue + 0.4:
+                raise RuntimeError("Intro agenda word boundaries overlap or are out of order")
+            last_cue = cue_at
+            agenda_events.append({
+                "sel":f".agenda-{_agenda_index}","at":cue_at,
+                "dur":0.46,"stagger":0,"fx":"rise",
+            })
         return [
-            # The central stage begins blank. Persistent broadcast furniture
-            # enters with Ryan's welcome and remains visible throughout.
             {"sel":".topHeader,.brandLock,.logoBox,.brandWords,.gwPill","at":welcome_at,"dur":0.65,"stagger":0.05,"fx":"left"},
             {"sel":".mainHeading,.headingRule","at":welcome_at,"dur":0.70,"stagger":0.08,"fx":"zoom"},
             {"sel":".prevResultsStrip","at":welcome_at,"dur":0.48,"stagger":0,"fx":"rise"},
             {"sel":".footer","at":welcome_at,"dur":0.45,"stagger":0,"fx":"fade"},
-            {"sel":".fxGrid","at":fixture_at,"dur":0.55,"stagger":0,"fx":"rise"},
-            # One card at a time. Each whole card rises as a single unit, so
-            # its agenda title and short description always appear together.
-            {"sel":".agenda-1","at":agenda_1_at,"dur":agenda_1_dur,"stagger":0,"fx":"rise"},
+            {"sel":".fxGrid","at":0.0,"dur":0.55,"stagger":0,"fx":"rise"},
+            # Fixture grid disappears at the first spoken agenda cue.
+            # Every card then follows its own measured Ryan WordBoundary.
+            *agenda_events,
         ]
 
     if key=="02_fdr":
@@ -25817,7 +25828,8 @@ for key,(src_name,out_name) in SCENES.items():
         "highlights":highlights,
         "events":events,
         "teasers":teasers,
-        "fixture_grid_window":fixture_grid_window
+        "fixture_grid_window":fixture_grid_window,
+        "agenda":VX_INTRO_AGENDA if key=="00_intro" else []
     }
 
     print(
@@ -25852,7 +25864,7 @@ print("✅ Spoken-team highlighting")
 print("✅ Outro footer matches Intro")
 print("✅ Subscribe + follow CTA")
 print("✅ Original-logo growl finale")
-print("✅ Intro sequence: blank centre → centered fixtures → My Gameweek Review agenda")
+print(f"✅ Intro sequence: centered fixtures → {len(VX_INTRO_AGENDA)} evidence-led agenda beats")
 print("✅ Each agenda title and short description reveal together as one card")
 print("✅ Intro fixture board is fully removed before agenda 01")
 print("✅ Outro finale has a protected visible tail hold")
