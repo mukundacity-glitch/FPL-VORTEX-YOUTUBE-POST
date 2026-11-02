@@ -118,7 +118,7 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     elif played and minutes is not None and minutes < 65:
         lines.append('Short playing time could make the next start risky, even with a good fixture.')
     elif xmins is not None and xmins < 65:
-        lines.append(f'The VORTEX minutes estimate is {round(xmins)}, so the selection risk needs attention.')
+        lines.append(f'The Vortex minutes estimate is {round(xmins)}, so the selection risk needs attention.')
     elif bench:
         lines.append('For the bench, dependable cover matters more than one surprise return.')
     else:
@@ -128,7 +128,7 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     else:
         lines.append('There is no verified next fixture to use in this comparison.')
     if xpts is not None and idx % 3 == 1:
-        lines.append(f'VORTEX estimates {xpts:.1f} expected points, not a guaranteed return.')
+        lines.append(f'Vortex estimates {xpts:.1f} expected points, not a guaranteed return.')
     elif bench:
         lines.append('If the first eleven is uncertain, that bench reliability becomes crucial.')
     elif official_status and official_status != 'a':
@@ -197,7 +197,7 @@ def build_editorial_review(
         segment['text'] = _player_script(p, context[int(p['id'])], i, bench=i >= len(starters), next_gw=next_gw)
         segment['editorial_source'] = ['official review picks', 'official live player statistics', 'official bootstrap', 'official fixtures']
         if p.get('model_projection'):
-            segment['editorial_source'].append('VORTEX projected next-GW model, estimate only')
+            segment['editorial_source'].append('Vortex projected next-GW model, estimate only')
     opener = f'Gameweek {review_gw}: before we look at the next set of decisions, separate what happened from what the result suggests.'
     if provisional:
         opener += " Some matches or scores are still provisional, so they won't be treated as final."
@@ -240,7 +240,7 @@ def build_editorial_review(
             if xp is not None and (comparison is None or xp < comparison[0]):
                 comparison = (xp, p)
         candidate_text = (f"Among available, model-covered alternatives, {lead['name']} is worth comparing. "
-                          f"The current FPL price is {lead['price']:.1f} million, with a VORTEX estimate of {lead['xpts']:.1f} expected points and roughly {round(lead['xmins'])} minutes. "
+                          f"The current FPL price is {lead['price']:.1f} million, with a Vortex estimate of {lead['xpts']:.1f} expected points and roughly {round(lead['xmins'])} minutes. "
                           "Those are model estimates, not official predictions or assurances of selection. ")
         if comparison:
             candidate_text += (f"The model has {comparison[1]['name']} at {comparison[0]:.1f} expected points in the most recently confirmed squad. "
@@ -248,7 +248,7 @@ def build_editorial_review(
         else:
             candidate_text += 'There is no verified player-for-player model comparison here, so the right move is still conditional.'
         insert.append({'id':'editorial_comparison','text':candidate_text,
-                       'editorial_source':['current official FPL bootstrap','dated VORTEX xPts/xMinutes model']})
+                       'editorial_source':['current official FPL bootstrap','dated Vortex xPts/xMinutes model']})
     insert.extend([
         {'id':'editorial_routes','text':("There are three sensible routes. If there are enough likely starters, keeping a free transfer can protect flexibility. "
                                          "If one regular starter looks unavailable, a single move may solve the bigger problem. "
@@ -259,7 +259,7 @@ def build_editorial_review(
         {'id':'editorial_verdict','text':("So the verdict is conditional: check the verified squad, then decide what actually needs fixing. "
                                           "Prioritise reliable minutes and a playable starting eleven. Compare future fixtures rather than buying last week's points. "
                                           "Where the team is already functional, there's nothing wrong with waiting. "
-                                          "Expected points are forecasts, not guaranteed returns. Thanks for watching FPL VORTEX, and good luck for the next Gameweek.")},
+                                          "Expected points are forecasts, not guaranteed returns. Thanks for watching FPL Vortex, and good luck for the next Gameweek.")},
     ])
     # Review close is followed by extra editorial beats on the same review
     # scoreboard, never inserted into the 15-player animation sequence.
@@ -269,7 +269,7 @@ def build_editorial_review(
     return scripts, {'target_seconds':target_seconds,'draft_words':words,
                      'review_gw':review_gw,'next_gw':next_gw,
                      'current_transfer_state_verified':False,
-                     'source':'official review snapshot plus attributed VORTEX estimates',
+                     'source':'official review snapshot plus attributed Vortex estimates',
                      'candidate_comparison':bool(cands)}
 
 
