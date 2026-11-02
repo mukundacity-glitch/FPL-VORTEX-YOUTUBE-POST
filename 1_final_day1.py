@@ -18196,6 +18196,9 @@ _vx_hero_id = (int(_vx_scoring_hero["id"]) if _vx_scoring_hero is not None
 JS_DATA = {
     "gw":pkg["gw"],
     "hero_player_id":_vx_hero_id,
+    "market_updated_at":_vx_day1_market_choice.get("updated_at"),
+    "market_verdict":_vx_day1_market_choice.get("verdict", "WATCH"),
+    "market_option":_vx_day1_market_choice.get("option") or {},
     "starters":pkg["starters"],
     "bench":pkg["bench"],
     "segments":ANIMATION_SEGMENTS,
@@ -18326,6 +18329,27 @@ CSS = r"""
 #vxHeroWrap[data-hero="true"] .vx-count-reveal{
     border-color:#F6D88A;box-shadow:0 0 24px rgba(246,216,138,.4);
 }
+/* Spoken-word-synchronized editorial headings on the ORIGINAL review stage.
+   These overlay the original HTML panels; they never replace the pitch. */
+#vxChapterBanner{
+    position:absolute;left:16px;right:15px;top:34px;z-index:121;
+    padding:24px 32px;background:rgba(0,15,38,.95);
+    border-left:9px solid #F0CE7A;border-radius:9px;
+    font-size:49px;font-weight:900;letter-spacing:1.8px;
+    color:#FFF;box-shadow:0 0 32px rgba(0,202,255,.30);
+    pointer-events:none;opacity:0;transform:translateY(26px);
+}
+#vxMarketChip{
+    position:absolute;left:27px;right:27px;bottom:68px;z-index:122;
+    padding:18px 27px;background:rgba(2,20,44,.96);
+    border:2px solid #52DAFF;border-radius:12px;
+    color:#FFF;font-size:26px;font-weight:800;
+    box-shadow:0 0 24px rgba(52,218,255,.26);
+    pointer-events:none;opacity:0;transform:translateY(20px);
+}
+#vxMarketChip .vx-market-source{
+    color:#F0CE7A;font-size:20px;font-weight:600;display:block;margin-top:6px;
+}
 
 </style>
 """
@@ -18432,7 +18456,9 @@ function buildReview(){
 
     left.insertAdjacentHTML(
       "beforeend",
-      `<div id="vxHeroWrap"></div>`
+      `<div id="vxHeroWrap"></div>
+       <div id="vxChapterBanner"></div>
+       <div id="vxMarketChip"></div>`
     );
 
     const benchCards=[...document.querySelectorAll(".benchPanel .mini")];
@@ -18610,6 +18636,52 @@ window.__seek=function(t){
     }
     else{
         hw.style.opacity=0;
+    }
+
+    /* ---------- FIVE STORY CHAPTERS • SHOWN ONLY AT SPOKEN CUES ---------- */
+    const editorialTitles={
+      editorial_squad_context:"SQUAD PRESSURE",
+      editorial_comparison:"REALISTIC ALTERNATIVES",
+      editorial_routes:"HOLD OR MAKE A MOVE?",
+      editorial_verdict:"FINAL VERDICT"
+    };
+    const spokenChapter=VX.segments.find(s=>editorialTitles[s.id] &&
+      t>=s.t0 && t<Math.min(s.t1,s.t0+5.2));
+    const banner=$v("#vxChapterBanner");
+    if(banner){
+      if(spokenChapter){
+        const progress=t-spokenChapter.t0;
+        const fadeIn=ease(progress/.45);
+        const fadeOut=1-ease((progress-4.55)/.55);
+        const v=Math.min(fadeIn,fadeOut);
+        banner.textContent=editorialTitles[spokenChapter.id];
+        banner.style.opacity=v;
+        banner.style.transform=`translateY(${(1-v)*26}px)`;
+      }else banner.style.opacity=0;
+    }
+    const marketChip=$v("#vxMarketChip");
+    if(marketChip){
+      const marketWindow=VX.segments.find(s=>
+        (s.id==="editorial_routes" || s.id==="editorial_verdict") &&
+        t>=s.t0 && t<Math.min(s.t1,s.t0+6));
+      if(marketWindow){
+        const option=VX.market_option||{};
+        const decision=VX.market_verdict==="BUY" &&
+          option.outgoing_name && option.name
+            ? `MY SELL: ${option.outgoing_name}   →   MY BUY: ${option.name}`
+            : VX.market_verdict==="HOLD"?"MY HOLD • NO LEGAL MARKET-LED MOVE"
+            :"WATCH • INSUFFICIENT COMPARABLE MARKET DATA";
+        const source=VX.market_updated_at
+          ?`Market-led view • updated ${VX.market_updated_at}`
+          :"Market-led view • timestamp unavailable";
+        marketChip.innerHTML=`<div></div><span class="vx-market-source"></span>`;
+        marketChip.firstElementChild.textContent=decision;
+        marketChip.lastElementChild.textContent=source;
+        const v=Math.min(ease((t-marketWindow.t0)/.45),
+          1-ease((t-marketWindow.t0-5.25)/.55));
+        marketChip.style.opacity=v;
+        marketChip.style.transform=`translateY(${(1-v)*20}px)`;
+      }else marketChip.style.opacity=0;
     }
 
     /* ---------- APPROVED LEFT PANELS + NARRATED TABLE EMPHASIS ---------- */
