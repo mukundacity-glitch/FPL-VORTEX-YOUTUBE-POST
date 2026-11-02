@@ -6,11 +6,11 @@ from vortex.day1_market import choose_market_transfer
 
 def market_example():
     old = {'start':'2026-10-30T00:00:00Z','end':'2026-10-31T00:00:00Z',
-           'source':'Recorded FPL snapshots',
+           'source':'Recorded FPL snapshots', 'measure':'window_delta',
            'players':{'1':{'in':10,'out':25,'owners_at_start':1000},
                       '2':{'in':30,'out':10,'owners_at_start':1000}}}
     new = {'start':'2026-10-31T00:00:00Z','end':'2026-11-01T00:00:00Z',
-           'source':'Recorded FPL snapshots',
+           'source':'Recorded FPL snapshots', 'measure':'window_delta',
            'players':{'1':{'in':10,'out':50,'owners_at_start':1000},
                       '2':{'in':60,'out':10,'owners_at_start':1000}}}
     picks = [{'id':1,'name':'Owned Example','position':2,
@@ -19,6 +19,8 @@ def market_example():
                'club_id':(i%17)+3,'selling_value':5.0}
               for i in range(14)]
     return {'windows':[old,new],
+            'pool_source':'Official FPL bootstrap', 
+            'pool_verified_at':'2026-11-01T18:00:00Z',
             'thresholds':{'min_owners':100,'min_activity':10,
                           'min_demand':.001,'min_momentum':.001},
             'current_squad':{'picks':picks,'bank':1.0,'free_transfers':1,
