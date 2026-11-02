@@ -15545,6 +15545,12 @@ GW_REVIEW_STATUS_LOCAL = str(
     GW_REVIEW.get("status") or globals().get("GW_REVIEW_STATUS") or "FINAL"
 ).upper()
 GW_REVIEW_PARTIAL = GW_REVIEW_STATUS_LOCAL == "LIVE/PARTIAL"
+# Do not publish a retrospective review while the immediately previous GW is live.
+if GW_REVIEW_STATUS_LOCAL not in {"FINAL", "COMPLETE"}:
+    raise RuntimeError(
+        f"Day 1 is blocked: GW{REVIEW_GW} remains {GW_REVIEW_STATUS_LOCAL}. "
+        "Wait for the official finalized result; never substitute GW-2."
+    )
 
 boot  = GW_REVIEW["bootstrap"]
 picks = GW_REVIEW["picks"]
@@ -18158,9 +18164,18 @@ for sid,key in [
 # Browser animation uses only measured reveal/hero cues. Do not serialize
 # forecast/provenance/narration metadata into retrospective review artwork.
 ANIMATION_SEGMENTS = snapshot_review_animation_segments(pkg["segments"])
+# Strongest positive contribution actually counted, including the multiplier.
+_vx_scoring_candidates = [p for p in (pkg["starters"] + pkg["bench"]) if int(p.get("multiplier") or 0)>0]
+_vx_scoring_hero = max(_vx_scoring_candidates,
+    key=lambda p: int(p.get("points") or 0)*int(p.get("multiplier") or 0),
+    default=None)
+_vx_hero_id = (int(_vx_scoring_hero["id"]) if _vx_scoring_hero is not None
+    and int(_vx_scoring_hero.get("points") or 0)*int(_vx_scoring_hero.get("multiplier") or 0)>0
+    else None)
 
 JS_DATA = {
     "gw":pkg["gw"],
+    "hero_player_id":_vx_hero_id,
     "starters":pkg["starters"],
     "bench":pkg["bench"],
     "segments":ANIMATION_SEGMENTS,
@@ -18271,6 +18286,25 @@ CSS = r"""
     flex:1 1 auto;
     width:100%;
     height:100%;
+}
+#vxHeroWrap[data-hero="true"]::after{
+    content:"GAMEWEEK HERO";
+    position:absolute;right:32px;top:22px;z-index:115;
+    padding:14px 21px;border-radius:12px;
+    color:#061529;background:linear-gradient(100deg,#F6D88A,#DAAD47);
+    font-size:30px;font-weight:900;letter-spacing:2px;
+    box-shadow:0 0 26px rgba(246,216,138,.44);
+}
+#vxHeroWrap .vx-count-reveal{
+    position:absolute;bottom:30px;right:30px;z-index:115;
+    padding:15px 21px;border-radius:12px;
+    color:#fff;background:rgba(2,18,40,.95);
+    border:2px solid #43CFFD;font-size:27px;font-weight:900;
+    font-variant-numeric:tabular-nums;
+    box-shadow:0 0 24px rgba(67,207,253,.3);
+}
+#vxHeroWrap[data-hero="true"] .vx-count-reveal{
+    border-color:#F6D88A;box-shadow:0 0 24px rgba(246,216,138,.4);
 }
 
 </style>
@@ -18503,15 +18537,14 @@ window.__seek=function(t){
 
     /* ---------- TEMP HERO ---------- */
 
+    // Reuse VXPlayerCard for all 15 narrated players, including bench picks.
     const heroSeg = VX.segments
-      .filter(
-        s =>
-          s.player_id &&
-          s.kind==="starter" &&
-          t >= s.hero_on &&
-          t < s.hero_off
-      )
-      .sort((a,b)=>Number(b.hero_on)-Number(a.hero_on))[0];
+      .filter(s=>s.player_id && (
+        (s.kind==="starter" && t>=s.hero_on && t<s.hero_off) ||
+        (s.kind==="bench" && t>=s.reveal_at &&
+          t<Math.min(s.t1,Number(s.speech_end_at??s.t1)+.25))
+      ))
+      .sort((a,b)=>Number(b.reveal_at)-Number(a.reveal_at))[0];
 
     const hw=$v("#vxHeroWrap");
 
@@ -18531,25 +18564,28 @@ window.__seek=function(t){
                 }
                 window.VXPlayerCard.mount(hw, p.card || p);
                 hw.dataset.pid=String(p.id);
+                const count=document.createElement("div");
+                count.className="vx-count-reveal";
+                count.setAttribute("aria-label","Verified counted points");
+                hw.appendChild(count);
             }
 
-            const ein=ease(
-              (t-heroSeg.hero_on)/Number(timing.hero_fade_in||.32)
-            );
-
-            const eout=t < heroSeg.hero_exit_at
-              ? 1
-              : 1-ease(
-                  (t-heroSeg.hero_exit_at) /
-                  Math.max(.01,heroSeg.hero_off-heroSeg.hero_exit_at)
-                );
-
-            const vis=Math.min(ein,eout);
-
+            const on=heroSeg.kind==="starter"?heroSeg.hero_on:heroSeg.reveal_at;
+            const exitAt=heroSeg.kind==="starter"?heroSeg.hero_exit_at
+              :Math.min(heroSeg.t1,Number(heroSeg.speech_end_at??heroSeg.t1)+.08);
+            const off=heroSeg.kind==="starter"?heroSeg.hero_off
+              :Math.min(heroSeg.t1,exitAt+.22);
+            const enter=ease((t-on)/Number(timing.hero_fade_in||.32));
+            const leave=t<exitAt?1:1-ease((t-exitAt)/Math.max(.01,off-exitAt));
+            const vis=Math.min(enter,leave);
+            const points=Number(p.points||0)*Number(p.multiplier||0);
+            const progress=ease((t-heroSeg.reveal_at-.1)/.62);
+            const overlay=hw.querySelector(".vx-count-reveal");
+            if(overlay)overlay.textContent=`COUNTED ${Math.round(points*progress)} PTS`;
+            const isHero=Number(VX.hero_player_id)===Number(p.id);
+            hw.dataset.hero=String(isHero);
             hw.style.opacity=vis;
-
-            hw.style.transform=
-              `translateY(${(1-vis)*34}px)`;
+            hw.style.transform=`translateY(${(1-vis)*34}px) scale(${isHero?1.035:1})`;
         }
     }
     else{
