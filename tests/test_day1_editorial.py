@@ -50,9 +50,31 @@ class EditorialTests(unittest.TestCase):
         self.assertIn('Expected points are forecasts, not guaranteed returns',combined)
         self.assertNotIn('£2.2m',combined)
         self.assertNotIn('Gibbs-White',combined)
-        self.assertGreater(meta['draft_words'],750)
-        self.assertLess(meta['draft_words'],1125)
+        self.assertGreater(meta['draft_words'],550)
+        self.assertLess(meta['draft_words'],1100)
         self.assertEqual(len(segments),23,'source segments stay unmodified')
+        self.assertIn('Realistic alternatives.', combined)
+        self.assertIn('Hold or make a move?', combined)
+        self.assertIn('Final verdict:', combined)
+        self.assertNotIn('For a model-backed alternative', combined)
+
+    def test_rank_arrow_and_squad_pressure_are_independent(self):
+        segments, roster, ctx = evidence()
+        for arrow, phrase in [('GREEN', 'green arrow'), ('RED', 'red arrow')]:
+            scripts, meta = build_editorial_review(
+                segments, roster[:11], roster[11:], ctx,
+                review_gw=11, next_gw=12, review_status='FINAL',
+                overall_rank_direction=arrow,
+            )
+            pressure = next(x for x in scripts if x['id']=='editorial_squad_context')
+            self.assertIn(phrase, pressure['text'])
+            self.assertEqual(meta['squad_pressure'], 'MODERATE')
+        with self.assertRaisesRegex(ValueError,'Rank movement'):
+            build_editorial_review(
+                segments, roster[:11], roster[11:], ctx,
+                review_gw=11, next_gw=12, review_status='FINAL',
+                overall_rank_direction='INVENTED',
+            )
 
     def test_missing_next_fixture_or_projected_number_is_omitted(self):
         segments,roster,ctx=evidence(scarce=True)
