@@ -201,6 +201,7 @@ def build_editorial_review(
     official_players: list[dict[str, Any]] | None = None,
     model_rows: dict[int, Any] | None = None,
     overall_rank_direction: str = 'UNKNOWN',
+    market_choice: dict[str, Any] | None = None,
     target_seconds: int = 350,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Generate the complete review afresh from this run's evidence only.
@@ -272,6 +273,67 @@ def build_editorial_review(
         )
     else:
         pressure_note = "I haven't found a verified starting-eleven emergency in this snapshot."
+    # Market verdicts come ONLY from equal-window transfer demand.
+    # Current squad, price, availability and FT are feasibility checks.
+    choice = market_choice if isinstance(market_choice, dict) else {}
+    market_verdict = choice.get('verdict', 'WATCH')
+    market_at = choice.get('updated_at') or 'data unavailable'
+    if market_verdict == 'BUY' and isinstance(choice.get('option'),dict):
+        route = choice['option']
+        if not route.get('outgoing_name') or not route.get('name'):
+            raise ValueError('Verified market transfer requires both player names')
+        comparison_text = (
+            f"Realistic alternatives. I'd consider moving {route['outgoing_name']} "
+            f"for {route['name']}. The first has sustained selling pressure; the "
+            "second has strengthening buying demand across matching windows. "
+            "It's a same-position, affordable move on verified current squad data. "
+            "That doesn't promise points or a price rise."
+        )
+        routes_text = (
+            f"Hold or make a move? My market-led buy is {route['name']}. "
+            f"My sell is {route['outgoing_name']}. It's one legal transfer with "
+            "no points hit. I'd confirm team news before using it."
+        )
+        verdict_text = (
+            f"Final verdict: my move to consider is {route['outgoing_name']} "
+            f"to {route['name']}. It's a market-led view, not a guarantee. "
+            "Expected points are forecasts, not guaranteed returns. "
+            "That's FPL Vortex. I'll check the final team news before the deadline."
+        )
+    elif market_verdict == 'HOLD':
+        comparison_text = (
+            "Realistic alternatives. No buy and sell pair has passed both "
+            "the sustained market test and the full squad checks. "
+            "I won't fill the shortlist with fashionable names just to make a video."
+        )
+        routes_text = (
+            "Hold or make a move? My call is HOLD. There isn't a confirmed "
+            "affordable one-transfer route, and a market trend alone "
+            "isn't a reason to take a points hit."
+        )
+        verdict_text = (
+            "Final verdict: I'd hold and reassess at the deadline. "
+            "Expected points are forecasts, not guaranteed returns. "
+            "Thanks for watching FPL Vortex."
+        )
+    else:
+        comparison_text = (
+            "Realistic alternatives. I'm not going to invent a buy from "
+            "projected points or a popular name. I need two comparable "
+            "historical transfer and ownership windows, and the actual "
+            "current squad and bank. For now the alternatives are on watch."
+        )
+        routes_text = (
+            "Hold or make a move? The BUY and SELL signals aren't verified, "
+            "so I'm not forcing either. My pick is to hold the transfer "
+            "and check again when the required data is complete."
+        )
+        verdict_text = (
+            "Final verdict: HOLD for now. No invented player move, no assumed "
+            "budget, and no market-momentum points hit. "
+            "Expected points are forecasts, not guaranteed returns. "
+            "That's the FPL Vortex decision desk."
+        )
     insert = [
         {'id':'editorial_squad_context',
          'text':"Squad pressure. " + arrow_intro + " " + pressure_note
@@ -279,33 +341,18 @@ def build_editorial_review(
         {'id':'editorial_minutes',
          'text':("One return doesn't guarantee the next start. I want reliable minutes "
                  "and proper bench cover, not a rushed reaction to last week's score.")},
-        # Historical review picks are NOT a current transfer wallet or squad;
-        # model xPts is NOT a market buying/selling signal.
-        {'id':'editorial_comparison',
-         'text':("Realistic alternatives. I'd compare no more than three players, but "
-                 "I won't manufacture a buy from projected points or popular names. "
-                 "I need two matching transfer-and-ownership windows, the actual selling "
-                 "value and bank, and the right squad position. Without that evidence, "
-                 "my shortlist stays on watch.") ,
-         'editorial_source':['official review snapshot','market history not yet verified']},
+        {'id':'editorial_comparison', 'text':comparison_text,
+         'editorial_source':['verified comparable market windows or WATCH']},
         {'id':'editorial_budget','text':(
-            "The Gameweek picks don't prove my current bank, free transfers or selling "
-            "prices. That means any proposed replacement is conditional until those "
-            "checks confirm it's legal and affordable.")},
-        {'id':'editorial_routes','text':(
-            "Hold or make a move? My buy needs sustained positive demand and "
-            "strengthening momentum. My sell needs sustained worsening selling pressure "
-            "on someone I actually own. Without both verified windows, neither verdict "
-            "is ready. I'd hold instead of guessing.")},
+            "My bank, selling prices and free transfers must come from my "
+            "current editable squad, not last Gameweek's picks. "
+            "Club limits and availability still apply.")},
+        {'id':'editorial_routes','text':routes_text},
         {'id':'editorial_tradeoff','text':(
-            "I won't take a points hit just because transfers are trending. "
-            "A market signal isn't a promise of points or a price change.")},
-        {'id':'editorial_verdict','text':(
-            "Final verdict: my move is on hold until the market, team news and budget "
-            "all line up. If they don't, I keep the transfer. "
-            "Expected points are forecasts, not guaranteed returns. "
-            "That's the FPL Vortex decision desk.")},
-    ])
+            "I won't justify a points hit from buying momentum alone. "
+            "Transfer pressure isn't proof of points or a guaranteed price change.")},
+        {'id':'editorial_verdict','text':verdict_text},
+    ]
     # Review close is followed by extra editorial beats on the same review
     # scoreboard, never inserted into the 15-player animation sequence.
     scripts.extend(insert)
@@ -316,8 +363,10 @@ def build_editorial_review(
                      'overall_rank_direction':overall_rank_direction,
                      'squad_pressure':pressure,
                      'current_transfer_state_verified':False,
-                     'source':'official final review; market decision WATCH until independently verified',
-                     'candidate_comparison':False}
+                     'source':'official final review; independently checked two-window market or WATCH',
+                     'market_verdict':market_verdict,
+                     'market_updated_at':market_at,
+                     'candidate_comparison':market_verdict=='BUY'}
 
 
 def validate_narration(segments: list[dict[str, Any]], *, player_ids: list[int], max_words: int = 1700) -> None:
