@@ -135,9 +135,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ffmpeg rclone
 
-      - name: Test Day 1 asset recovery contract
+      - name: Test Day 1 asset and logo recovery contracts
         shell: bash
-        run: python -m unittest discover -s tests -p 'test_day1_asset_restore.py' -v
+        run: |
+          python -m unittest discover -s tests -p 'test_day1_asset_restore.py' -v
+          python -m unittest discover -s tests -p 'test_day1_logo_restore.py' -v
 
       - name: Install Python dependencies
         shell: bash
@@ -300,10 +302,10 @@ jobs:
           restore_optional "FPL_VORTEX_DATA/06_SNAPSHOTS"
           restore_optional "FPL_VORTEX_DATA/07_LOGS"
 
-          mkdir -p /content/drive/MyDrive/elements
-          rclone backend copyid vortex-drive: \
-            1Lxt7hDn5VAVj3njo9n6H2ymXY_gd2vP8 \
-            /content/drive/MyDrive/elements/logo.png
+          # Google Drive's previous hard-coded logo file ID was deleted (404).
+          # Preserve an existing logo, otherwise crop the original crest from
+          # the approved opening.mp4. Never invent a brand image.
+          bash scripts/restore_day1_logo.sh
 
       - name: Reset previous Day 1 outputs locally
         shell: bash
