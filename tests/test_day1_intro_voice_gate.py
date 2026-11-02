@@ -72,7 +72,9 @@ def _review_beats():
 class IntroSpeechContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.expression, cls.full_word = _production_intro_and_validator()
+        expression, full_word = _production_intro_and_validator()
+        cls.expression = expression
+        cls.full_word = staticmethod(full_word)
 
     def _actual_intro(self, next_gw, cards):
         return eval(
