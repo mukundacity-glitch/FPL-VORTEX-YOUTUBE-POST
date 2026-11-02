@@ -19293,7 +19293,7 @@ linear-gradient(140deg,#04111e 0%,#091b2d 45%,#020711 100%)}
 
 INTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$style</style></head><body><div class="scene introScene">
 <header class="topHeader"><div class="brandLock"><div class="logoBox">$logo</div><div class="brandWords"><div class="channelName">FPL VORTEX</div><div class="channelSub">GAMEWEEK DATA • MODEL • DECISIONS</div></div></div><div class="gwPill">GAMEWEEK $gw</div></header>
-<div class="mainHeading">GAMEWEEK $gw <span>• VORTEX AGENDA</span></div><div class="headingRule"></div>
+<div class="mainHeading">GAMEWEEK $gw <span>• THE DECISION DESK</span></div><div class="headingRule"></div>
 <main class="agendaWrap">$agenda_cards</main>$fixture_grid$results_strip<footer class="footer"><div class="footerLeft"><strong>FPL VORTEX</strong> &nbsp;|&nbsp; GAMEWEEK $gw</div><div class="footerSocial">$social</div><div class="footerRight"><span class="updated">UPDATED: $updated</span><span class="season">2026/27 SEASON</span></div></footer></div></body></html>''').substitute(style=STYLE,logo=vortex_logo_html,gw=int(NEXT_GW),social=SOCIAL,updated=str(VX_FOOTER_UPDATED_DATE),results_strip=LATEST_GW_REVIEW_STRIP,fixture_grid=NEXT_FIXTURE_GRID_HTML,agenda_cards=VX_INTRO_AGENDA_HTML)
 
 OUTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$style</style></head><body><div class="scene outroScene">
