@@ -594,7 +594,12 @@ def _vx_phase0_scan_files(roots):
                         else:
                             found = phrase in low
                         if found:
-                            violations.append(f"gw_review_forward_output:{path}:{phrase}")
+                            _m = re.search(rf"\b{re.escape(phrase)}\b", low)
+                            _i = _m.start() if _m else low.find(phrase)
+                            _ctx = low[max(0, _i - 80):_i + 80].replace("\n", " ")
+                            violations.append(
+                                f"gw_review_forward_output:{path}:{phrase} | context: ...{_ctx}..."
+                            )
     return violations
 
 
@@ -16530,9 +16535,14 @@ GW_REVIEW_NARRATION_WORDS = sum(
 )
 
 tts_text = " ".join(segment["text"] for segment in segments)
-(TIMING/"gw_review_final_script.txt").write_text(
-    "\n\n".join(segment["text"] for segment in segments), encoding="utf-8"
+(TIMING/"gw_review_final_script.json").write_text(
+    json.dumps(
+        {"script": [segment["text"] for segment in segments]},
+        ensure_ascii=False, indent=2,
+    ),
+    encoding="utf-8",
 )
+(TIMING/"gw_review_final_script.txt").unlink(missing_ok=True)
 _review_narration["gameweek_summary"] = _headline_segment["text"]
 _review_narration["tts_text"] = tts_text
 vx_review_validate_creator_script(_review_narration, segments)
