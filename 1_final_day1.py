@@ -18192,11 +18192,25 @@ _vx_scoring_hero = max(_vx_scoring_candidates,
 _vx_hero_id = (int(_vx_scoring_hero["id"]) if _vx_scoring_hero is not None
     and int(_vx_scoring_hero.get("points") or 0)*int(_vx_scoring_hero.get("multiplier") or 0)>0
     else None)
+from datetime import datetime as _vx_market_datetime
+from zoneinfo import ZoneInfo as _vx_market_ZoneInfo
+def _vx_market_time_label(value):
+    if not value:
+        return None
+    try:
+        timestamp = _vx_market_datetime.fromisoformat(
+            str(value).replace("Z","+00:00"))
+        if timestamp.tzinfo is None:
+            return None
+        return timestamp.astimezone(_vx_market_ZoneInfo(
+            "America/New_York")).strftime("%Y-%m-%d %I:%M %p ET")
+    except (ValueError, TypeError):
+        return None
 
 JS_DATA = {
     "gw":pkg["gw"],
     "hero_player_id":_vx_hero_id,
-    "market_updated_at":_vx_day1_market_choice.get("updated_at"),
+    "market_updated_at":_vx_market_time_label(_vx_day1_market_choice.get("updated_at")),
     "market_verdict":_vx_day1_market_choice.get("verdict", "WATCH"),
     "market_option":_vx_day1_market_choice.get("option") or {},
     "starters":pkg["starters"],
