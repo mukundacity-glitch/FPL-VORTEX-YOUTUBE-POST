@@ -45,7 +45,7 @@ def choose_market_transfer(payload):
         return _watch('Two comparable market windows and current squad are missing')
     th = payload.get('thresholds') or {}
     thresholds = ('min_owners', 'min_activity', 'min_demand', 'min_momentum')
-    if any(_number(th.get(k)) is None or float(th[k]) < 0 for k in thresholds):
+    if any(_number(th.get(k)) is None or float(th[k]) < 0 for k in thresholds) or th['min_owners'] < 1 or th['min_activity'] < 1:
         return _watch('Documented market thresholds are missing')
     windows = payload.get('windows')
     if not isinstance(windows, list) or len(windows) != 2:
@@ -60,6 +60,8 @@ def choose_market_transfer(payload):
         return _watch('Unequal, overlapping or nonconsecutive market windows')
     if not older.get('source') or older.get('source') != recent.get('source'):
         return _watch('Market windows must come from the same data source')
+    if any(w.get('measure') != 'window_delta' for w in windows):
+        return _watch('Explicit window-delta inputs required; cumulative FPL event totals are invalid')
     if not isinstance(older.get('players'), dict) or not isinstance(recent.get('players'), dict):
         return _watch('Per-player transfer and ownership windows are missing')
     signals = []
@@ -73,7 +75,7 @@ def choose_market_transfer(payload):
             if any(v is None or v < 0 or v != int(v) for v in values):
                 break
             inn, out, owners = (int(v) for v in values)
-            if owners < th['min_owners'] or inn+out < th['min_activity']:
+            if owners <= 0 or owners < th['min_owners'] or inn+out < th['min_activity']:
                 break
             rows.append((inn, out, owners))
         if len(rows) != 2:
@@ -103,6 +105,12 @@ def choose_market_transfer(payload):
         return _watch('Current squad has duplicate or invalid IDs')
     if not _ts(squad.get('verified_at')) or not squad.get('source'):
         return _watch('Current editable squad source/timestamp is unverified')
+    if _ts(squad['verified_at']) < d:
+        return _watch('Current squad snapshot predates market observation window')
+    if not _ts(payload.get('pool_verified_at')) or not payload.get('pool_source'):
+        return _watch('Official candidate price and availability source/timestamp missing')
+    if _ts(payload['pool_verified_at']) < d:
+        return _watch('Candidate price and availability snapshot is stale')
     bank, ft = _number(squad.get('bank')), _number(squad.get('free_transfers'))
     if bank is None or bank < 0 or ft is None or ft < 0 or ft != int(ft):
         return _watch('Current bank or free-transfer allowance is unverified')
