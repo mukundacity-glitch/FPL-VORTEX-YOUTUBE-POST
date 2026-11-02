@@ -247,21 +247,29 @@ def build_editorial_review(
         )
     # Review-specific narration has a dedicated full-data-board phase after the
     # player card sequence; these scenes never claim a current live editable XI.
-    frame = [p for p in starters if context[int(p['id'])].get('status') not in ('', 'a')]
+    frame = [p for p in starters if str(context[int(p['id'])].get('status') or '').lower() not in ('', 'a')]
+    missing_status = [p for p in starters if not str(context[int(p['id'])].get('status') or '').strip()]
     short_minutes = [p for p in starters if _integer((context[int(p['id'])].get('stats') or {}).get('minutes')) is not None
                      and _integer((context[int(p['id'])].get('stats') or {}).get('minutes')) < 65
                      and str(p.get('review_state')) == 'FINAL']
     # Rank direction describes the RESULT; pressure describes the squad.
     # Neither classification is inferred from the other.
     concern_count = len({int(p['id']) for p in frame + short_minutes})
-    pressure = 'HIGH' if concern_count >= 2 else 'MODERATE' if concern_count == 1 else 'LOW'
+    pressure = ('UNKNOWN' if missing_status else
+                'HIGH' if concern_count >= 2 else
+                'MODERATE' if concern_count == 1 else 'LOW')
     arrow_intro = {
         'GREEN': "I got a green arrow. Good result, but that doesn't mean the squad is perfect.",
         'RED': "I got a red arrow. Frustrating, but the arrow isn't a transfer instruction.",
         'UNCHANGED': "My overall rank barely moved. The squad still needs its own check.",
         'UNKNOWN': "I can't verify my overall-rank movement, so I won't invent an arrow.",
     }[overall_rank_direction]
-    if frame:
+    if missing_status:
+        pressure_note = (
+            "I don't have verified availability for every planned starter. "
+            "I'm leaving the pressure rating unknown until those checks are complete."
+        )
+    elif frame:
         pressure_note = (
             f"There {'is' if len(frame)==1 else 'are'} {len(frame)} officially flagged "
             f"starter{'s' if len(frame)!=1 else ''} to check before the deadline."
