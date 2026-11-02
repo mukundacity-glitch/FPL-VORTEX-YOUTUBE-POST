@@ -51,7 +51,7 @@ class EditorialTests(unittest.TestCase):
         self.assertNotIn('£2.2m',combined)
         self.assertNotIn('Gibbs-White',combined)
         self.assertGreater(meta['draft_words'],750)
-        self.assertLess(meta['draft_words'],1350)
+        self.assertLess(meta['draft_words'],1125)
         self.assertEqual(len(segments),23,'source segments stay unmodified')
 
     def test_missing_next_fixture_or_projected_number_is_omitted(self):

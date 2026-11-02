@@ -138,48 +138,32 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
             'Pay attention to who is available around him before trusting the role.',
             'The next team sheet will tell us more than the previous points.',
         )[idx % 8])
+    # A reviewed return, one selection risk, and the upcoming fixture make a
+    # clear player story. Avoid re-stating the same conclusion four ways.
     if fx:
         lines.append((
             f'Next is {fx}.',
             f'They face {fx} next.',
-            f'Coming up: {fx}.',
-            f'The scheduled opponent is {fx}.',
-            f'The next fixture brings {fx}.',
+            f'The next fixture is {fx}.',
+            f'Coming up, {fx}.',
+            f'The schedule sends them {fx}.',
         )[idx % 5])
     else:
         lines.append((
-            'There is no verified next fixture to use in this comparison.',
-            'The next match is not confirmed in this snapshot, so omit fixture claims.',
-            'Without a confirmed next opponent, the minutes question comes first.',
-            'The fixture record is incomplete; do not build a move around it.',
-            'There is no reliable fixture evidence to lean on here yet.',
+            'There is no verified next fixture to plan around.',
+            'The next opponent is unconfirmed in the available data.',
+            'The schedule is not verified, so leave that comparison open.',
+            'We cannot use a fixture that is missing from the current snapshot.',
+            'Without a confirmed next fixture, the selection risk comes first.',
         )[idx % 5])
     if xpts is not None and idx % 3 == 1:
         lines.append((
-            f'Vortex estimates {xpts:.1f} expected points, not a guaranteed return.',
-            f'The Vortex projection is {xpts:.1f} points, with model uncertainty attached.',
-            f'At {xpts:.1f} expected points from Vortex, the forecast is a guide, not a result.',
-            f'The model gives {xpts:.1f} expected points; the real outcome can differ.',
-            f'A {xpts:.1f}-point Vortex estimate helps the comparison, but proves nothing on its own.',
+            f'Vortex estimates {xpts:.1f} expected points, not a guaranteed result.',
+            f'The Vortex forecast is {xpts:.1f} points, with uncertainty.',
+            f'At {xpts:.1f} projected points, the model only suggests a possibility.',
+            f'Vortex has {xpts:.1f} expected points; the actual return can differ.',
+            f'That {xpts:.1f}-point forecast depends on the minutes assumption.',
         )[idx % 5])
-    elif bench:
-        lines.append((
-            'If the starting eleven is unsettled, that cover becomes important.',
-            'Keep the reserve only if he can realistically enter the team.',
-            'That matters if a starter fails a late fitness check.',
-            'The bench decision depends on your actual available starters.',
-        )[idx % 4])
-    elif official_status and official_status != 'a':
-        lines.append('That is a reason to wait for an update, not chase the previous points.')
-    else:
-        lines.append((
-            'Compare the role before spending a transfer.',
-            'That is the context for the next selection call.',
-            'Avoid judging the next match only through the previous points.',
-            'The question is whether he improves the next starting eleven.',
-            'A different player may offer stronger minutes at a similar price.',
-            'Keep the alternatives in view before making the switch.',
-        )[idx % 6])
     return ' '.join(lines)
 
 
@@ -243,18 +227,20 @@ def build_editorial_review(
         segment['editorial_source'] = ['official review picks', 'official live player statistics', 'official bootstrap', 'official fixtures']
         if p.get('model_projection'):
             segment['editorial_source'].append('Vortex projected next-GW model, estimate only')
-    opener = f'Gameweek {review_gw}: before we look at the next set of decisions, separate what happened from what the result suggests.'
+    opener = (f'Gameweek {review_gw}: the points count, but our next decision needs a closer look. '
+              'Minutes, availability and bench cover matter more than a single result.')
     if provisional:
-        opener += " Some matches or scores are still provisional, so they won't be treated as final."
-    opener += " The useful questions are about minutes, availability and whether the squad has enough cover. Let's go through the actual selections first."
+        opener += ' Some matches or scores are still provisional; they cannot be called final.'
     index['headline']['text'] = opener
     if 'bench_intro' in index:
-        index['bench_intro']['text'] = "The starting eleven is only half the decision. Let's look at the players available as cover, and whether the bench gives us enough room to wait for team news."
+        index['bench_intro']['text'] = 'Now the bench. Can these players really cover an absence?'
     if 'metrics_intro' in index:
-        index['metrics_intro']['text'] = 'Now step away from the individual scores. What do the captaincy, the bench and the available players tell us about the next decision?'
+        index['metrics_intro']['text'] = 'Beyond the points, what did captaincy and bench cover actually tell us?'
     if 'review_close' in index:
-        index['review_close']['text'] = ("That brings the review together. The players and points are from the latest completed selection, not a confirmed future squad. "
-                                      "Any transfer decision still needs an updated bank, selling prices, free transfers and final availability information.")
+        index['review_close']['text'] = (
+            'These are review picks, not a verified future squad. '
+            'A personal transfer still needs current bank, selling prices, free transfers and availability.'
+        )
     # Review-specific narration has a dedicated full-data-board phase after the
     # player card sequence; these scenes never claim a current live editable XI.
     frame = [p for p in starters if context[int(p['id'])].get('status') not in ('', 'a')]
@@ -269,8 +255,12 @@ def build_editorial_review(
     else:
         note = 'There is no verified reason here to panic about the starting eleven just because of one quiet result. Start with the actual availability and likely minutes.'
     insert = [
-        {'id':'editorial_squad_context', 'text':note + " This is why reviewing the squad's structure is more useful than reacting to the biggest score on the bench."},
-        {'id':'editorial_minutes', 'text':"A player returning points is good news; it doesn't tell us how likely the next start is. Look at actual minutes, how the role has changed and the alternatives available. If that evidence is incomplete, waiting for the deadline information is a valid decision."},
+        {'id':'editorial_squad_context',
+         'text':note + ' The squad structure matters more than a surprising bench return.'},
+        {'id':'editorial_minutes',
+         'text':('A strong return does not guarantee the next start. Compare recorded minutes, '
+                 'current role and available cover. When selection evidence is incomplete, '
+                 'waiting for team news makes sense.')},
     ]
     # One prospective comparison is sufficient for an evidence-led discussion.
     # It is intentionally NOT a personalized transfer: the current bank/selling
@@ -284,32 +274,42 @@ def build_editorial_review(
             xp, _ = _model(p)
             if xp is not None and (comparison is None or xp < comparison[0]):
                 comparison = (xp, p)
-        candidate_text = (f"Among available, model-covered alternatives, {lead['name']} is worth comparing. "
-                          f"The current FPL price is {lead['price']:.1f} million, with a Vortex estimate of {lead['xpts']:.1f} expected points and roughly {round(lead['xmins'])} minutes. "
-                          "Those are model estimates, not official predictions or assurances of selection. ")
+        candidate_text = (
+            f"For a model-backed alternative, {lead['name']} is worth comparing at {lead['price']:.1f} million. "
+            f"Vortex estimates {lead['xpts']:.1f} points and roughly {round(lead['xmins'])} minutes. "
+            'These are estimates, not assurances of selection. '
+        )
         if comparison:
-            candidate_text += (f"The model has {comparison[1]['name']} at {comparison[0]:.1f} expected points in the most recently confirmed squad. "
-                               "That difference gives us a reason to investigate, not permission to ignore transfer costs.")
+            candidate_text += (
+                f"The last confirmed squad has {comparison[1]['name']} at {comparison[0]:.1f} "
+                'projected points. Check affordability and likely minutes before deciding.'
+            )
         else:
-            candidate_text += 'There is no verified player-for-player model comparison here, so the right move is still conditional.'
+            candidate_text += 'Without a verified direct comparison, waiting remains an option.'
         insert.append({'id':'editorial_comparison','text':candidate_text,
                        'editorial_source':['current official FPL bootstrap','dated Vortex xPts/xMinutes model']})
     insert.extend([
-        {'id':'editorial_defence','text':("Defensive decisions need four pieces of evidence together: the likelihood of a start, clean-sheet prospects, attacking involvement and recorded defensive actions. "
-                                          "Defensive-contribution action totals are not the same thing as awarded Fantasy Premier League points. Check the official scoring record before treating a high number of actions as extra points. "
-                                          "A good fixture can help, but it won't turn a substitute into a reliable starter.")},
-        {'id':'editorial_budget','text':("Before talking about a specific move, confirm the squad as it stands now. The last published Gameweek picks cannot verify your current bank, free transfers, player selling prices or whether an early transfer has already been made. "
-                                         "Without those details, this is a shortlist for comparison, not an executable personal transfer plan. Also check the three-players-per-club limit before deciding that a tempting target is affordable or legal.")},
-        {'id':'editorial_routes','text':("There are three sensible routes. If there are enough likely starters, keeping a free transfer can protect flexibility. "
-                                         "If one regular starter looks unavailable, a single move may solve the bigger problem. "
-                                         "A points hit needs a stronger case: it should improve the expected line-up over more than one week after its cost. None of that can be priced precisely from last week's picks alone.")},
-        {'id':'editorial_tradeoff','text':("Think about the players you're leaving behind as well as the ones you might buy. "
-                                           "The best headline fixture isn't automatically the best transfer if it leaves the bench exposed. "
-                                           "Ownership and rising prices are useful context, but not evidence of a return. And a forecast only helps if the underlying minutes and availability assumptions are plausible.")},
-        {'id':'editorial_verdict','text':("So the verdict is conditional: check the verified squad, then decide what actually needs fixing. "
-                                          "Prioritise reliable minutes and a playable starting eleven. Compare future fixtures rather than buying last week's points. "
-                                          "Where the team is already functional, there's nothing wrong with waiting. "
-                                          "Expected points are forecasts, not guaranteed returns. Thanks for watching FPL Vortex, and good luck for the next Gameweek.")},
+        {'id':'editorial_defence','text':(
+            'For defenders, check likely starts, clean-sheet chances, attacking involvement '
+            'and verified defensive contributions. Defensive action totals are not awarded '
+            'FPL points. Rotation can still spoil a good fixture.')},
+        {'id':'editorial_budget','text':(
+            'Last Gameweek picks cannot verify the current squad. Confirm the bank, '
+            'selling prices, free transfers, injuries and three-player club limit '
+            'before calling this a personal transfer plan.')},
+        {'id':'editorial_routes','text':(
+            'There are three routes. Hold a transfer if you can field eleven reliable starters. '
+            'Use one move to repair a real weakness. A hit needs to improve several '
+            'upcoming lineups enough to justify its cost.')},
+        {'id':'editorial_tradeoff','text':(
+            'A friendly fixture alone is not enough if the move weakens your bench. '
+            'Compare minutes and genuine alternatives. Price changes and ownership '
+            'do not guarantee returns.')},
+        {'id':'editorial_verdict','text':(
+            'The verdict depends on current team news and your actual squad. '
+            'Protect reliable starters. If the team works, waiting can be sensible. '
+            'Expected points are forecasts, not guaranteed returns. '
+            'Thanks for watching FPL Vortex; see you next Gameweek.')},
     ])
     # Review close is followed by extra editorial beats on the same review
     # scoreboard, never inserted into the 15-player animation sequence.
