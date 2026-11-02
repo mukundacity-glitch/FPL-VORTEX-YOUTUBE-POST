@@ -141,11 +141,29 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     # A reviewed return, one selection risk, and the upcoming fixture make a
     # clear player story. Avoid re-stating the same conclusion four ways.
     if fx:
-        lines.append(f'Next is {fx}.' if idx % 2 else f'They face {fx} next.')
+        lines.append((
+            f'Next is {fx}.',
+            f'They face {fx} next.',
+            f'The next fixture is {fx}.',
+            f'Coming up, {fx}.',
+            f'The schedule sends them {fx}.',
+        )[idx % 5])
     else:
-        lines.append('There is no verified next fixture to plan around.')
+        lines.append((
+            'There is no verified next fixture to plan around.',
+            'The next opponent is unconfirmed in the available data.',
+            'The schedule is not verified, so leave that comparison open.',
+            'We cannot use a fixture that is missing from the current snapshot.',
+            'Without a confirmed next fixture, the selection risk comes first.',
+        )[idx % 5])
     if xpts is not None and idx % 3 == 1:
-        lines.append(f'Vortex estimates {xpts:.1f} expected points, not a guaranteed result.')
+        lines.append((
+            f'Vortex estimates {xpts:.1f} expected points, not a guaranteed result.',
+            f'The Vortex forecast is {xpts:.1f} points, with uncertainty.',
+            f'At {xpts:.1f} projected points, the model only suggests a possibility.',
+            f'Vortex has {xpts:.1f} expected points; the actual return can differ.',
+            f'That {xpts:.1f}-point forecast depends on the minutes assumption.',
+        )[idx % 5])
     return ' '.join(lines)
 
 
