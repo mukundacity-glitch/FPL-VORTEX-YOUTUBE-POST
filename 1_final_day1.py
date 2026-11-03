@@ -16167,7 +16167,7 @@ if captain_player:
             if _vice_raw is not None:
                 _captain_text += f" The armband passed to {vx_review_full_name(_vice_player)}, contributing {int(_vice_raw) * int(_vice_player['multiplier'])} points."
     elif _captain_state == "PROVISIONAL" and _captain_raw is not None:
-        _captain_text = f"Captain {_captain_name} has {int(_captain_raw)} points so far; the captaincy outcome remains provisional."
+        _captain_text = f"Captain {_captain_name} has {int(_captain_raw)} points so far, with the match still to finish."
     elif _captain_raw is not None:
         captain_return = int(_captain_raw) * _captain_multiplier
         _other_returns = [vx_review_number(_review_narration_context[int(player["id"])]["stats"].get("total_points")) for player in _review_final_players if int(player["id"]) != int(captain_player["id"]) and vx_review_player_result_state(player) == "COMPLETE"]
@@ -16193,7 +16193,7 @@ if _review_known_active:
     if vx_review_player_result_state(highest_player) == "COMPLETE":
         _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} leads the verified returns with {highest_player['points']} points" + (f", including {_hero_reason}." if _hero_reason else ".")
     else:
-        _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} currently leads with {highest_player['points']} points, pending the remaining football."
+        _review_narration["gameweek_hero"] = f"{vx_review_full_name(highest_player)} leads with {highest_player['points']} points so far."
 
     # Select the lowest completed return before considering an unfinished match.
     _completed_players = [player for player in _review_known_active if vx_review_player_result_state(player) == "COMPLETE"]
@@ -16230,7 +16230,7 @@ if _review_price_pressure:
 _clean_availability = all(context["status"] == "a" and not context["news"] for context in _review_narration_context.values())
 _review_narration["outro"] = (
     ("There are no official availability flags in this squad. " if _clean_availability else "")
-    + ("This is still a provisional review. " if GW_REVIEW_PARTIAL else "")
+    + ("One match is still to finish. " if GW_REVIEW_PARTIAL else "")
     + "So that's where the squad stands. One quiet week isn't the whole story; minutes and upcoming fixtures matter much more."
 )
 segments.append({"id": "metrics_intro", "text": "Now, did the captaincy pay off?"})
@@ -16369,7 +16369,7 @@ def review_tts_mood(seg):
 
     if sid == "review_close" or sid == "editorial_verdict":
         return "outro"
-    if sid in {"editorial_defence", "editorial_budget", "editorial_minutes"}:
+    if sid == "editorial_defence":
         return "warning"
 
     return "analysis"
@@ -16382,7 +16382,7 @@ async def make_segment(seg):
     words=[]
 
     mood = review_tts_mood(seg)
-    profile = review_voice_profile(mood)
+    profile = review_voice_profile(mood, variation=int(seg.get("player_id") or 0))
     seg["tts_mood"] = mood
     seg["tts_profile"] = profile
 

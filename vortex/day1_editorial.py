@@ -81,7 +81,38 @@ def _model(p: dict[str, Any]) -> tuple[float | None, float | None]:
             xmins if xmins is not None and 0 < xmins <= 90 else None)
 
 
-def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: bool, next_gw: int) -> str:
+class _Variety:
+    """Choose the least-used wording so no stock sentence is spoken more than twice.
+
+    Options that embed a player's name or number are naturally unique; the
+    counter matters for the shared, name-free sentences. Selection is
+    deterministic (rotated by ``seed``), so a rerun with the same data is stable.
+    """
+
+    def __init__(self) -> None:
+        self.used: Counter[str] = Counter()
+
+    def __call__(self, options: list[str], seed: int = 0) -> str:
+        options = [o for o in options if o]
+        best = min(range(len(options)),
+                   key=lambda i: (self.used[options[i]], (i - seed) % len(options)))
+        self.used[options[best]] += 1
+        return options[best]
+
+
+def _fixture_run(ctx: dict[str, Any]) -> str:
+    """easy / mixed / demanding from three verified official FDR values, else ''."""
+    runs = ctx.get('next_three') or []
+    values = [_num(r.get('fdr')) for r in runs[:3]]
+    if len(values) != 3 or any(v is None for v in values):
+        return ''
+    average = sum(values) / 3
+    return 'encouraging' if average <= 2.5 else 'demanding' if average >= 3.5 else 'mixed'
+
+
+def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: bool,
+                   next_gw: int, pick: _Variety | None = None) -> str:
+    pick = pick or _Variety()
     name = str(ctx.get('full_name') or p.get('name') or '').strip()
     if not name:
         raise ValueError('A reviewed player has no verified spoken identity')
@@ -89,7 +120,7 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     s = ctx.get('stats') or {}
     points, minutes = _integer(s.get('total_points')), _integer(s.get('minutes'))
     played = state == 'FINAL' and minutes is not None and minutes > 0
-    provisional = state in ('LIVE', 'PARTIAL') and minutes is not None and minutes > 0
+    live = state in ('LIVE', 'PARTIAL') and minutes is not None and minutes > 0
     reason = _return(p, ctx) if played else ''
     fx = _fixture(p, next_gw)
     xpts, xmins = _model(p)
@@ -97,74 +128,181 @@ def _player_script(p: dict[str, Any], ctx: dict[str, Any], idx: int, *, bench: b
     lines: list[str] = []
     pts_word = 'point' if points == 1 else 'points'
     if played and points is not None:
-        starts = (
+        lines.append(pick([
             f'{name} finished on {points} {pts_word}.',
             f'For {name}, the return was {points} {pts_word}.',
             f'{name} came away with {points} {pts_word}.',
             f'{name}: {points} {pts_word} from the recorded match.',
-        )
-        lines.append(starts[idx % len(starts)])
+            f'{name} ended the week on {points} {pts_word}.',
+            f'The week brought {name} {points} {pts_word}.',
+            f'{name} collected {points} {pts_word}.',
+            f'That left {name} with {points} {pts_word}.',
+        ], idx))
         if reason:
-            lines.append(('That included ' if idx % 2 else 'The difference was ') + reason + '.')
+            lines.append(pick([
+                f'That included {reason}.', f'The difference was {reason}.',
+                f'The points came from {reason}.', f'Most of it came from {reason}.',
+            ], idx))
         elif minutes is not None and minutes < 65:
-            lines.append(f'Only {minutes} minutes were recorded; the role matters more than this score.')
-    elif provisional:
-        lines.append(f'{name} has a provisional return; the match or points are not final yet.')
+            lines.append(pick([
+                f'Only {minutes} minutes were recorded; the role matters more than this score.',
+                f'With {minutes} minutes on the pitch, the score says little about the role.',
+                f'{minutes} minutes is a small sample, so read the score carefully.',
+            ], idx))
+        bonus = _integer(s.get('bonus'))
+        if bonus and bonus > 0:
+            lines.append(pick(
+                ['A bonus point helped.', 'One bonus point added to it.',
+                 'There was a bonus point on top.', 'A single bonus point was part of it.',
+                 'Bonus supplied one more point.'] if bonus == 1 else
+                [f'Bonus added {bonus} points on top.', f'{bonus} bonus points helped.',
+                 f'There were {bonus} bonus points on top.'], idx))
+    elif live:
+        got = f'{points} {pts_word} so far' if points is not None else 'a return so far'
+        lines.append(pick([
+            f'{name} has {got}, with the match still to finish.',
+            f'{name} is on {got}; the match is still going.',
+            f'For {name}, it is {got} and the match is not over.',
+        ], idx))
     elif state == 'FINAL' and minutes == 0:
-        lines.append(f'{name} did not feature in the completed match.')
+        lines.append(pick([
+            f'{name} did not feature in the completed match.',
+            f'{name} stayed out of the completed match.',
+            f'There were no minutes for {name} in the completed match.',
+        ], idx))
     else:
         lines.append(f"For {name}, the result is not verified yet. Don't count a missing score as a blank.")
+
+    recent = ctx.get('last_three') or {}
+    total3 = _integer(recent.get('total_points')) if recent.get('complete') else None
+    role: str = ''
     if official_status and official_status != 'a':
-        lines.append('An official availability flag is active; check the latest team news first.')
+        role = pick([
+            'An official availability flag is active; check the latest team news first.',
+            'The official status is flagged, so team news comes first.',
+            'There is an official availability flag here; confirm the latest update before relying on the role.',
+            'Availability is flagged officially, which makes the next team news important.',
+        ], idx)
     elif played and minutes is not None and minutes < 65:
-        lines.append('Short playing time could make the next start risky, even with a good fixture.')
+        role = pick([
+            'Short playing time could make the next start risky, even with a good fixture.',
+            'A short appearance makes the next selection harder to trust.',
+            'Limited minutes leave the next start in question.',
+            'Check the team sheet before counting on a repeat of this role.',
+            'The minutes were limited, which keeps the role uncertain.',
+            'A short shift is a reason for caution, whatever the fixture.',
+        ], idx)
     elif xmins is not None and xmins < 65:
-        lines.append(f'The Vortex minutes estimate is {round(xmins)}, so the selection risk needs attention.')
+        role = pick([
+            f'The Vortex minutes estimate is {round(xmins)}, so the selection risk needs attention.',
+            f'Vortex expects around {round(xmins)} minutes, which keeps selection in doubt.',
+            f'A {round(xmins)}-minute estimate from Vortex makes the role the main question.',
+        ], idx)
     elif bench:
-        lines.append((
+        role = pick([
             'For the bench, dependable minutes are more useful than one surprise return.',
-            'If he is needed from the bench, check whether the playing time is dependable.',
-            'A reserve cannot cover an absence if his own place is uncertain.',
+            'A reserve is only useful cover if the starting place behind him is secure.',
             'Bench depth is the protection here, provided the role is genuinely secure.',
-        )[idx % 4])
-    else:
-        lines.append((
+            'Cover from the bench matters most in the week an absence appears.',
+            'A bench place earns its value through likely minutes, not one good score.',
+            'The question for a reserve is how quickly he would be needed.',
+        ], idx)
+    elif idx % 2 == 0 or total3 is None:
+        role = pick([
             'Recorded minutes are encouraging; they do not guarantee another start.',
             'The next decision still depends on team selection, not just the last score.',
             'There is some playing-time evidence, but the role could still change.',
             'A good return matters less if the next ninety minutes are uncertain.',
             'Starting security is the useful question heading into the next fixture.',
             'A full appearance is evidence, not a promise of the next one.',
-            'Pay attention to who is available around him before trusting the role.',
             'The next team sheet will tell us more than the previous points.',
-        )[idx % 8])
-    # A reviewed return, one selection risk, and the upcoming fixture make a
-    # clear player story. Avoid re-stating the same conclusion four ways.
+            'Selection, more than the last score, drives the next decision.',
+            'A run of starts matters more than any single match.',
+            'The role is the thing to protect, and the score is only part of it.',
+        ], idx)
+    if role:
+        lines.append(role)
+    if total3 is not None and (idx % 2 == 1 or not role):
+        pw3 = 'point' if total3 == 1 else 'points'
+        lines.append(pick([
+            f'Across the last three Gameweeks, that makes {total3} {pw3}.',
+            f'The last three Gameweeks add up to {total3} {pw3}.',
+            f'That is {total3} {pw3} over three Gameweeks.',
+            f'Over the last three Gameweeks, the total is {total3} {pw3}.',
+            f'The three-week return stands at {total3} {pw3}.',
+            f'The three-week total is {total3} {pw3}.',
+        ], idx))
+
     if fx:
-        lines.append((
-            f'Next is {fx}.',
-            f'They face {fx} next.',
-            f'The next fixture is {fx}.',
-            f'Coming up, {fx}.',
-            f'The schedule sends them {fx}.',
-        )[idx % 5])
+        lines.append(pick([
+            f'Next is {fx}.', f'They face {fx} next.', f'The next fixture is {fx}.',
+            f'Coming up, {fx}.', f'The schedule sends them {fx}.',
+        ], idx))
+        run = _fixture_run(ctx)
+        if run and idx % 3 != 1:
+            lines.append(pick([
+                f'The run of three fixtures looks {run}.',
+                f'After that, the fixture run looks {run}.',
+                f'The three-match outlook is {run}.',
+                f'Looking a little further, the schedule reads as {run}.',
+                f'Beyond that fixture, the next three games look {run}.',
+                f'The upcoming three-game stretch looks {run} on paper.',
+                f'On paper, the next three fixtures are {run}.',
+                f'The short-term schedule is {run}, according to the official ratings.',
+            ], idx))
     else:
-        lines.append((
+        lines.append(pick([
             'There is no verified next fixture to plan around.',
             'The next opponent is unconfirmed in the available data.',
             'The schedule is not verified, so leave that comparison open.',
             'We cannot use a fixture that is missing from the current snapshot.',
             'Without a confirmed next fixture, the selection risk comes first.',
-        )[idx % 5])
+        ], idx))
+    price, owned = _num(ctx.get('current_price')), _num(p.get('ownership'))
+    if idx % 3 == 2 and price and price > 0 and owned is not None and owned > 0:
+        lines.append(pick([
+            f'{name} costs {price:.1f} million and is owned by {owned:.1f} percent of managers.',
+            f'{owned:.1f} percent of managers own {name}, who costs {price:.1f} million.',
+            f'At {price:.1f} million, {name} sits in {owned:.1f} percent of squads.',
+            f'{name} is priced at {price:.1f} million, with {owned:.1f} percent ownership.',
+        ], idx))
     if xpts is not None and idx % 3 == 1:
-        lines.append((
+        lines.append(pick([
             f'Vortex estimates {xpts:.1f} expected points, not a guaranteed result.',
             f'The Vortex forecast is {xpts:.1f} points, with uncertainty.',
             f'At {xpts:.1f} projected points, the model only suggests a possibility.',
             f'Vortex has {xpts:.1f} expected points; the actual return can differ.',
             f'That {xpts:.1f}-point forecast depends on the minutes assumption.',
-        )[idx % 5])
+        ], idx))
     return ' '.join(lines)
+
+
+_NUMBER_WORDS = {2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six'}
+
+
+def _squad_data_note(roster: list[dict[str, Any]], context: dict[int, dict[str, Any]]) -> str:
+    """Squad-level facts from verified fields only; each sentence is omitted when its data is missing."""
+    parts: list[str] = []
+    owned = [(float(o), str(context[int(p['id'])].get('full_name') or p.get('name') or ''))
+             for p in roster if (o := _num(p.get('ownership'))) is not None and o > 0]
+    if len(owned) >= 10:
+        hi, lo = max(owned), min(owned)
+        if hi[1] and lo[1] and hi[1] != lo[1] and hi[0] - lo[0] >= 5:
+            parts.append(f'{hi[1]} is the most widely owned player here at {hi[0]:.1f} percent, '
+                         f'while {lo[1]} is the sharpest differential at {lo[0]:.1f} percent.')
+    clubs = Counter(str(context[int(p['id'])].get('club') or '') for p in roster)
+    clubs.pop('', None)
+    if clubs:
+        club, count = max(clubs.items(), key=lambda kv: (kv[1], kv[0]))
+        if count >= 2 and count in _NUMBER_WORDS:
+            parts.append(f'{_NUMBER_WORDS[count]} of the fifteen come from {club}, '
+                         'so one result can move several returns at once.')
+    priced = [(float(c), str(context[int(p['id'])].get('full_name') or ''))
+              for p in roster if (c := _num(context[int(p['id'])].get('current_price'))) is not None and c > 0]
+    if priced and max(priced)[1]:
+        top = max(priced)
+        parts.append(f'The most expensive pick is {top[1]} at {top[0]:.1f} million, so that place carries the most weight.')
+    return ' '.join(parts)
 
 
 def _candidate_data(official_players: list[dict[str, Any]], model_rows: dict[int, Any], roster: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -221,16 +359,21 @@ def build_editorial_review(
     if [int(s['player_id']) for s in expected] != ids:
         raise ValueError('Narration/visual player ordering differs from the verified review')
     provisional = review_status.upper() not in ('FINAL', 'COMPLETE')
+    pick = _Variety()
     for i, p in enumerate(roster):
         segment = index[f"player_{p['id']}"]
-        segment['text'] = _player_script(p, context[int(p['id'])], i, bench=i >= len(starters), next_gw=next_gw)
+        segment['text'] = _player_script(p, context[int(p['id'])], i, bench=i >= len(starters),
+                                         next_gw=next_gw, pick=pick)
         segment['editorial_source'] = ['official review picks', 'official live player statistics', 'official bootstrap', 'official fixtures']
         if p.get('model_projection'):
             segment['editorial_source'].append('Vortex projected next-GW model, estimate only')
-    opener = (f'Gameweek {review_gw}: the points count, but our next decision needs a closer look. '
-              'Minutes, availability and bench cover matter more than a single result.')
-    if provisional:
-        opener += ' Some matches or scores are still provisional; they cannot be called final.'
+    # Reuse the verified formation/points line the review already built, when present.
+    lead = str(index['headline'].get('text') or '').strip()
+    if not re.match(r"(?i)(?:let's review )?gameweek \d+", lead):
+        lead = ''
+    opener = ((lead + ' The points count, but our next decision needs a closer look. ') if lead else
+              f'Gameweek {review_gw}: the points count, but our next decision needs a closer look. ')
+    opener += 'Minutes, availability and bench cover matter more than a single result.'
     index['headline']['text'] = opener
     if 'bench_intro' in index:
         index['bench_intro']['text'] = 'Now the bench. Can these players really cover an absence?'
@@ -240,6 +383,8 @@ def build_editorial_review(
         index['review_close']['text'] = (
             'These are review picks, not a verified future squad. '
             'A personal transfer still needs current bank, selling prices, free transfers and availability.'
+            + (' One match was still unfinished when this was recorded, so a few returns may still move.'
+               if provisional else '')
         )
     # Review-specific narration has a dedicated full-data-board phase after the
     # player card sequence; these scenes never claim a current live editable XI.
@@ -257,11 +402,11 @@ def build_editorial_review(
     insert = [
         {'id':'editorial_squad_context',
          'text':note + ' The squad structure matters more than a surprising bench return.'},
-        {'id':'editorial_minutes',
-         'text':('A strong return does not guarantee the next start. Compare recorded minutes, '
-                 'current role and available cover. When selection evidence is incomplete, '
-                 'waiting for team news makes sense.')},
     ]
+    squad_data = _squad_data_note(roster, context)
+    if squad_data:
+        insert.append({'id':'editorial_squad_data','text':squad_data,
+                       'editorial_source':['official ownership','official prices','official team data']})
     # One prospective comparison is sufficient for an evidence-led discussion.
     # It is intentionally NOT a personalized transfer: the current bank/selling
     # prices and next-GW editable squad are not verified by historical picks.
@@ -293,10 +438,6 @@ def build_editorial_review(
             'For defenders, check likely starts, clean-sheet chances, attacking involvement '
             'and verified defensive contributions. Defensive action totals are not awarded '
             'FPL points. Rotation can still spoil a good fixture.')},
-        {'id':'editorial_budget','text':(
-            'Last Gameweek picks cannot verify the current squad. Confirm the bank, '
-            'selling prices, free transfers, injuries and three-player club limit '
-            'before calling this a personal transfer plan.')},
         {'id':'editorial_routes','text':(
             'There are three routes. Hold a transfer if you can field eleven reliable starters. '
             'Use one move to repair a real weakness. A hit needs to improve several '
@@ -352,7 +493,7 @@ def validate_narration(segments: list[dict[str, Any]], *, player_ids: list[int],
         raise ValueError('Excessive repeated sentences across player segments')
 
 
-def review_voice_profile(mood: str) -> dict[str, str]:
+def review_voice_profile(mood: str, variation: int = 0) -> dict[str, str]:
     # Edge Ryan supports rate, pitch and volume; not arbitrary SSML acting.
     # Subtle changes between segments, not an exaggerated presenter voice.
     profiles = {
@@ -363,6 +504,12 @@ def review_voice_profile(mood: str) -> dict[str, str]:
         'outro': ('+0%', '-2Hz'),
     }
     rate,pitch = profiles.get(mood,profiles['analysis'])
+    if variation and mood == 'analysis':
+        # Small, repeatable changes so consecutive players do not share one
+        # flat delivery. Stays within Edge's supported rate/pitch controls.
+        r = int(rate.rstrip('%')) + (0, 2, -1, 3, -2)[variation % 5]
+        h = int(pitch.removesuffix('Hz')) + (0, 1, -1)[variation % 3]
+        rate, pitch = f'{r:+d}%', f'{h:+d}Hz'
     return {'rate':rate,'pitch':pitch,'volume':'+0%'}
 
 
