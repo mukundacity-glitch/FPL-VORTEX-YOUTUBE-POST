@@ -34,7 +34,7 @@ class Day1EditorialIntegrationTests(unittest.TestCase):
 
     def test_measured_voice_and_subtitles_replace_short_report(self):
         source = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("profile = review_voice_profile(mood)", source)
+        self.assertIn("review_voice_profile(mood, variation=", source)
         self.assertIn('word_timed_vtt(pkg["segments"], max_words=8, max_seconds=3.8)', source)
         self.assertIn("measured_audio_report(", source)
         self.assertIn("gw_review_editorial_qa.json", source)

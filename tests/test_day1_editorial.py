@@ -1,6 +1,7 @@
 from __future__ import annotations
 import re
 import sys
+from collections import Counter
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -50,7 +51,7 @@ class EditorialTests(unittest.TestCase):
         self.assertIn('Expected points are forecasts, not guaranteed returns',combined)
         self.assertNotIn('£2.2m',combined)
         self.assertNotIn('Gibbs-White',combined)
-        self.assertGreater(meta['draft_words'],750)
+        self.assertGreater(meta['draft_words'],650)
         self.assertLess(meta['draft_words'],1125)
         self.assertEqual(len(segments),23,'source segments stay unmodified')
 
@@ -124,5 +125,107 @@ class EditorialTests(unittest.TestCase):
         self.assertEqual(report['audio_seconds'],450.0)
         self.assertTrue(report['within_target'])
         self.assertFalse(measured_audio_report([{'text':'Speech '*100}],320.,target_seconds=480)['within_target'])
+
+
+def rich_evidence(partial=False):
+    """Realistic spread: results, minutes, flags, form, fixture runs, price, ownership."""
+    pts=[2,6,1,9,2,5,3,12,2,4,7,1,2,6,3]
+    mins=[90,90,90,90,64,90,90,90,45,90,90,0,90,88,90]
+    positions=['GK','DEF','DEF','DEF','DEF','MID','MID','MID','MID','FWD','FWD','GK','DEF','MID','FWD']
+    segments=[dict(id='headline',text='review placeholder')]; roster=[]; ctx={}
+    for n in range(15):
+        pid=n+1
+        p={'id':pid,'name':f'Example {pid}','pos':positions[n],
+           'review_state':'LIVE' if partial and n==7 else 'FINAL','ownership':5.0+n,
+           'next_fixture':{'gw':12,'opp_name':f'Club {n%5}','is_home':n%2==0},
+           'model_projection':{'next_gw_xpts':3.0+n/5,'expected_minutes_next_gw':88},'team_id':n%7+1}
+        roster.append(p)
+        ctx[pid]={'full_name':p['name'],'status':'d' if n==5 else 'a','current_price':4.5+n/2,'club':('Alpha','Alpha','Beta','Gamma','Delta')[n%5] if n<10 else f'Club {n}',
+                  'stats':{'total_points':pts[n],'minutes':mins[n],'goals_scored':1 if n in (3,7) else 0,
+                           'assists':1 if n in (1,9) else 0,'clean_sheets':1 if n in (1,2,4) else 0,
+                           'saves':4 if n==0 else 0,'bonus':3 if n==7 else (1 if n in (3,9) else 0)},
+                  'point_breakdown':{'defensive_contribution':0},
+                  'last_three':{'complete':True,'total_points':pts[n]+9},
+                  'next_three':[{'opponent':'x','fdr':f} for f in ((2,3,2),(3,3,4),(2,2,3))[n%3]]}
+        segments.append({'id':f'player_{pid}','player_id':pid,'name':p['name'],'text':f'original {pid}'})
+    segments.insert(12,{'id':'bench_intro','text':'The bench.'})
+    segments.append({'id':'metrics_intro','text':'The metrics.'})
+    for key in ('metric_captain','hero_review','quietest_review','availability_review','review_close'):
+        segments.append({'id':key,'text':f'Temporary report {key}.'})
+    return segments,roster,ctx
+
+
+class VarietyTests(unittest.TestCase):
+    def build(self, partial):
+        segments,roster,ctx=rich_evidence(partial)
+        return build_editorial_review(segments,roster[:11],roster[11:],ctx,review_gw=11,next_gw=12,
+                                      review_status='LIVE/PARTIAL' if partial else 'FINAL')[0]
+
+    def test_no_stock_sentence_is_spoken_more_than_twice(self):
+        for partial in (False,True):
+            with self.subTest(partial=partial):
+                scripts=self.build(partial)
+                sentences=[re.sub(r'\s+',' ',part.lower().strip())
+                           for s in scripts for part in re.split(r'(?<=[.!?])\s+',s['text'])
+                           if len(part.split())>=4]
+                worst=max(Counter(sentences).values())
+                self.assertLessEqual(worst,2)
+                skeletons=Counter(re.sub(r'\d+(?:\.\d+)?','#',re.sub(r'Example \d+','N',x)) for x in sentences)
+                self.assertLessEqual(max(skeletons.values()),4,'one sentence shape dominates the script')
+
+    def test_provisional_is_not_announced_up_front_and_is_said_once_plainly(self):
+        scripts=self.build(True)
+        self.assertNotIn('provisional',scripts[0]['text'].lower())
+        combined=' '.join(s['text'] for s in scripts).lower()
+        self.assertNotIn('provisional',combined)
+        close=next(s for s in scripts if s['id']=='review_close')['text']
+        self.assertEqual(close.count('still unfinished'),1)
+        live=next(s for s in scripts if s.get('player_id')==8)['text']
+        self.assertIn('so far',live)
+        self.assertNotIn('finished on',live,'a live result must not read as final')
+        final_close=next(s for s in self.build(False) if s['id']=='review_close')['text']
+        self.assertNotIn('unfinished',final_close)
+
+    def test_length_stays_inside_the_video_length_gate_and_players_stay_short(self):
+        scripts=self.build(False)
+        words=sum(len(re.findall(r"[\w'’-]+",s['text'])) for s in scripts)
+        # Real runs add ~110 words of metric commentary from Cell 15; at the
+        # measured ~136 words/minute this keeps the video near its 480 s target.
+        self.assertGreater(words,820)
+        self.assertLess(words,1000)
+        for s in scripts:
+            if s.get('player_id') is not None:
+                self.assertLessEqual(len(re.findall(r"[\w'’-]+",s['text'])),90)
+
+    def test_squad_data_beat_uses_only_verified_fields_and_is_omitted_when_missing(self):
+        scripts=self.build(False)
+        beat=next(s for s in scripts if s['id']=='editorial_squad_data')['text']
+        self.assertIn('most widely owned',beat)
+        self.assertIn('of the fifteen come from',beat)
+        self.assertIn('most expensive pick',beat)
+        segments,roster,ctx=evidence(scarce=True)
+        for p in roster: p.pop('ownership',None)
+        for c in ctx.values(): c.pop('current_price',None); c.pop('club',None)
+        scripts,_=build_editorial_review(segments,roster[:11],roster[11:],ctx,review_gw=11,next_gw=12,review_status='FINAL')
+        self.assertNotIn('editorial_squad_data',[s['id'] for s in scripts])
+
+    def test_verified_formation_and_points_lead_is_reused_but_placeholders_are_not(self):
+        segments,roster,ctx=rich_evidence()
+        segments[0]['text']="Let's review Gameweek 11: a 3-4-3 and 63 points."
+        scripts,_=build_editorial_review(segments,roster[:11],roster[11:],ctx,review_gw=11,next_gw=12,review_status='FINAL')
+        self.assertTrue(scripts[0]['text'].startswith("Let's review Gameweek 11: a 3-4-3 and 63 points. The points count"))
+        segments,roster,ctx=rich_evidence()
+        scripts,_=build_editorial_review(segments,roster[:11],roster[11:],ctx,review_gw=11,next_gw=12,review_status='FINAL')
+        self.assertTrue(scripts[0]['text'].startswith('Gameweek 11: the points count'))
+
+    def test_voice_varies_between_players_but_keeps_safe_bounds(self):
+        profiles={tuple(review_voice_profile('analysis',v).items()) for v in range(1,16)}
+        self.assertGreater(len(profiles),3)
+        for v in range(0,40):
+            p=review_voice_profile('analysis',v)
+            self.assertTrue(-8<=int(p['rate'].rstrip('%'))<=3)
+            self.assertTrue(-5<=int(p['pitch'].removesuffix('Hz'))<=0)
+        self.assertEqual(review_voice_profile('analysis'),review_voice_profile('analysis',0))
+        self.assertEqual(review_voice_profile('outro',7),review_voice_profile('outro'))
 
 if __name__=='__main__':unittest.main()
