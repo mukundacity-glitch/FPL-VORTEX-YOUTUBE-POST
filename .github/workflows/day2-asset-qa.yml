@@ -1,0 +1,26 @@
+name: Day 2 asset recovery QA
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/day-2.yml"
+      - ".github/workflows/day2-asset-qa.yml"
+      - "day2/**"
+      - "scripts/restore_day1_logo.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  asset-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+      - name: Verify isolated logo recovery without Drive or upload credentials
+        run: python -m unittest discover -s day2 -p 'test_asset_recovery.py' -v

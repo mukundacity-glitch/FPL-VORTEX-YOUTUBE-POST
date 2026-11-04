@@ -43,7 +43,7 @@ jobs:
             baseline="$(git rev-parse HEAD)"
           fi
           changed="$(git diff --name-only "${baseline}...HEAD")"
-          unexpected="$(printf '%s\n' "${changed}" | grep -Ev '^(\.github/workflows/day-2\.yml|day2/.*|README\.md)?$' || true)"
+          unexpected="$(printf '%s\n' "${changed}" | grep -Ev '^(\.github/workflows/day-2\.yml|\.github/workflows/day2-asset-qa\.yml|day2/.*|README\.md)?$' || true)"
           if [[ -n "${unexpected}" ]]; then
             echo "Unexpected non-Day-2 changes:" >&2
             echo "${unexpected}" >&2
@@ -74,6 +74,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ffmpeg rclone
 
+      - name: Test isolated Day 2 logo recovery
+        shell: bash
+        run: python -m unittest discover -s day2 -p 'test_asset_recovery.py' -v
+
       - name: Configure private Google Drive connection
         shell: bash
         run: python -m day2.drive_io configure
@@ -84,9 +88,7 @@ jobs:
           sudo mkdir -p /content/drive/MyDrive
           sudo chown -R "$(id -u):$(id -g)" /content
           python -m day2.drive_io restore
-          rclone backend copyid day2-shared-assets: \
-            1Lxt7hDn5VAVj3njo9n6H2ymXY_gd2vP8 \
-            "${DAY2_ASSET_DIR}/logo1.png"
+          bash day2/restore_logo.sh
 
       - name: Install fresh Day 2 render dependencies
         shell: bash
