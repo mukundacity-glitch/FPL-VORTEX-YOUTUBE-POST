@@ -55,7 +55,9 @@ class Day1EditorialIntegrationTests(unittest.TestCase):
         self.assertIn("test_day1_editorial_integration.py", workflow)
         self.assertIn("VORTEX_DAY1_VIDEO_TARGET_SECONDS", workflow)
         self.assertIn("word-level review captions", workflow)
-        self.assertLess(workflow.index("Final video does not meet the eight-minute"),
+        self.assertIn('VORTEX_DAY1_COMPACT: "1"', workflow)
+        self.assertIn('VORTEX_DAY1_VIDEO_TARGET_SECONDS: "240"', workflow)
+        self.assertLess(workflow.index("Final video does not meet the configured four-minute"),
                         workflow.index("Upload final 4K video privately to YouTube"))
 
 
