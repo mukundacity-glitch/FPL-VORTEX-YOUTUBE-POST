@@ -12,7 +12,7 @@ concurrency:
 
 env:
   PYTHONUNBUFFERED: "1"
-  VORTEX_DAY1_VIDEO_TARGET_SECONDS: "240"
+  VORTEX_DAY1_VIDEO_TARGET_SECONDS: "330"
   SOURCE_FILE: 1_final_day1.py
   DAY1_ASSET_FOLDER_ID: 1h3Loznr5RnsMyh-kUd-zMxEgOf98uFSt
   DAY1_ASSET_DIR: /content/drive/MyDrive/FPL_VORTEX/Assets
@@ -587,8 +587,19 @@ jobs:
                   "Expected exactly one combined final MP4 and MP3; "
                   f"found MP4={len(final_mp4s)}, MP3={len(final_mp3s)}"
               )
-          # Publication gate: actual rendered media, not the script's word count,
-          # must meet this two-section Day 1 review video's configurable target.
+          # GLOBAL fail-closed duration gate for the single original Day 1 MP4.
+          # Covers intro, footage, original six-second outro and every scene,
+          # even when the editorial-only narration check is not applicable.
+          actual_seconds = float(subprocess.check_output(
+              ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+               "-of", "default=noprint_wrappers=1:nokey=1", str(final_mp4s[0])],
+              text=True,
+          ).strip())
+          if not 0 < actual_seconds <= 420.0:
+              raise SystemExit(f"Day 1 exceeds strict 7-minute MP4 limit: {actual_seconds:.2f}s")
+          print(f"Day 1 full output (including opening/outro): {actual_seconds:.2f}s / 420.00s maximum")
+
+          # Editorial QA uses measured TTS boundaries and real video runtime.
           scene_keys = list(qa.get("scene_keys") or [])
           if "gw_review" in scene_keys and set(scene_keys) <= {"opening_video", "00_intro", "gw_review"}:
               qa_editorial = root / "DATA" / "gw_review_editorial_qa.json"
@@ -605,17 +616,16 @@ jobs:
               captions = caption_file.read_text(encoding="utf-8")
               if not captions.startswith("WEBVTT") or captions.count(" --> ") < 20:
                   raise SystemExit("Measured word-level review captions are missing or incomplete")
-              actual_seconds = float(subprocess.check_output(
-                  ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                   "-of", "default=noprint_wrappers=1:nokey=1", str(final_mp4s[0])],
-                  text=True,
-              ).strip())
-              requested_seconds = float(os.getenv("VORTEX_DAY1_VIDEO_TARGET_SECONDS", "480"))
-              if not 240 <= requested_seconds <= 900 or abs(actual_seconds - requested_seconds) > 60:
+              requested_seconds = float(os.getenv("VORTEX_DAY1_VIDEO_TARGET_SECONDS", "330"))
+              if not 180 <= requested_seconds <= 390:
                   raise SystemExit(
-                      f"Final video does not meet the configured four-minute target: "
-                      f"measured={actual_seconds:.2f}s target={requested_seconds:.2f}s"
+                      f"Day 1 narration target outside safe seven-minute envelope: "
+                      f"target={requested_seconds:.2f}s"
                   )
+              # The narration target is a pacing target, NOT the MP4 length:
+              # the opening and final outro are included in the 420s global cap.
+              if actual_seconds < 180:
+                  raise SystemExit("Day 1 full video is unexpectedly shorter than three minutes")
               print(f"Day 1 humanized editorial QA: PASS, rendered={actual_seconds:.2f}s, "
                     f"narration={narration['audio_seconds']:.2f}s, "
                     f"captions={captions.count(' --> ')} cues")
