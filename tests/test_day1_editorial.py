@@ -1,6 +1,8 @@
 from __future__ import annotations
 import re
 import sys
+import os
+from unittest.mock import patch
 from collections import Counter
 import unittest
 from pathlib import Path
@@ -39,6 +41,23 @@ def evidence(*, partial=False, scarce=False):
     return segments,roster,ctx
 
 class EditorialTests(unittest.TestCase):
+    def test_compact_profile_preserves_15_players_and_provenance(self):
+        segments, roster, ctx = evidence()
+        with patch.dict(os.environ, {"VORTEX_DAY1_COMPACT": "1"}):
+            scripts, meta = build_editorial_review(
+                segments, roster[:11], roster[11:], ctx,
+                review_gw=11, next_gw=12, review_status='FINAL',
+            )
+        self.assertEqual(meta['target_seconds'], 240)
+        player_segments = [item for item in scripts if item.get('player_id') is not None]
+        self.assertEqual(len(player_segments), 15)
+        self.assertTrue(all(len(item['text'].split()) <= 44 for item in player_segments))
+        joined = ' '.join(item['text'] for item in scripts)
+        self.assertIn('Expected points are forecasts, not guaranteed returns', joined)
+        self.assertIn('Gameweek 11 review', joined)
+        self.assertIn('An Example Team', joined)
+        self.assertEqual(len(segments), 23)
+
     def test_builds_dynamic_review_and_preserves_player_order(self):
         segments,roster,ctx=evidence()
         scripts,meta=build_editorial_review(segments,roster[:11],roster[11:],ctx,
