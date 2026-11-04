@@ -21,6 +21,15 @@ Day 2 is isolated from Day 1:
 
 The Day 2 workflow reads shared model inputs and the existing Day 1 media assets, but it never publishes to the Day 1 output path and never edits the Day 1 workflow or scripts. The Day 1 opening/music contract is reproduced in `day2/media.py`: opening first with its original audio, background music beginning at the Day 2 `slide_00` program start at the same `12/255` gain, and `outro.mp3` for the final 6 seconds. The Day 2 notebook keeps the canonical VORTEX logo/lion-head treatment and its Scene 7 subscribe CTA.
 
+### Day 1 compact video — 4-minute target (November 2026)
+
+The manual **Day 1** workflow now enables a compact, evidence-backed narration profile. It keeps all 15 verified review player identities, the same 33-cell source, dynamic FPL Gameweek, music, branding and **Private-only** YouTube upload contract. The render aims for **240 seconds** rather than the former 480-second review target; its actual duration still depends on narration and visuals. It is a normal 16:9 episode, not a vertical YouTube Short.
+
+- Implementation: `vortex/day1_editorial.py` reads `VORTEX_DAY1_COMPACT=1` during rendering and shortens repeated player commentary and editorial beats.
+- Workflow: `.github/workflows/day-1.yml` sets `VORTEX_DAY1_VIDEO_TARGET_SECONDS=240` and activates the compact profile only for the render/validation steps, not the baseline tests.
+- Check before publishing: Review the new **Private** YouTube upload and final video QA before manually making it public. Manual reruns create a new Private draft; they do **not** replace an existing published YouTube video.
+- The reference-to-video skill is at `.claude/skills/fpl-vortex-video-watch-short/SKILL.md`. Its referenced FPL Harry video still requires a real timed transcript and sampled frames before scene-level lessons can be claimed.
+
 ### Run Day 1 manually
 
 1. Open the repository **Actions** tab.
