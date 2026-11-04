@@ -28,28 +28,50 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None, review_statu
         if not necessary <= available:
             raise ValueError("Review agenda references missing editorial sections")
         status = "RESULTS MAY CHANGE" if str(review_status or "").upper() not in {"COMPLETE", "FINAL"} else "OFFICIALLY RECORDED RETURNS"
-        cards.extend([
-            _card("review", f"GW{int(review_gw)}: THE REAL STORY", status,
-                  "Gameweek review", "Gameweek review: the points that count, and what the score might be hiding."),
-            _card("squad", "SQUAD PRESSURE", "MINUTES / TEAM NEWS / BENCH COVER",
-                  "Squad pressure", "Squad pressure: the minutes and cover issues worth checking before a transfer."),
-        ])
-        if not others:
-            if "market_intro" in available:
-                cards.append(_card("market", "BUY / HOLD / SELL", "CURRENT EVENT / PLAYER WATCHLISTS",
-                    "Market watchlists", "Market watchlists: buy, hold and sell names, with player cards and the evidence behind them."))
-            elif "editorial_comparison" in available:
-                cards.append(_card("alternatives", "REALISTIC ALTERNATIVES", "MODEL EVIDENCE / MINUTES / RISK",
-                    "Realistic alternatives", "Realistic alternatives: one supported comparison, with the risks still in view."))
-            elif "editorial_tradeoff" in available:
-                cards.append(_card("tradeoffs", "THE TRADE-OFFS", "FIXTURES / MINUTES / FLEXIBILITY",
-                    "The trade-offs", "The trade-offs: a friendly fixture isn't enough if the player might not start."))
-            cards.extend([
-                _card("routes", "HOLD OR MAKE A MOVE?", "ROLL / ONE TRANSFER / HIT",
-                      "Transfer routes", "Transfer routes: when holding makes sense, and when spending a transfer solves something."),
-                _card("verdict", "THE CONDITIONAL VERDICT", "CHECK THE TEAM NEWS FIRST",
-                      "Final verdict", "Final verdict: what needs confirming before making a decision."),
-            ])
+        # Preserve exactly the same FIVE original Day 1 agenda card slots.
+        # These are topic labels (not invented player or transfer claims), and
+        # their narration anchors are verified against the spoken intro.
+        has_market = "market_intro" in available
+        has_comparison = "editorial_comparison" in available
+        target_key = "market" if has_market else "alternatives" if has_comparison else "tradeoffs"
+        if has_market:
+            targets_sub = "OFFICIAL MARKET MOVEMENT / VERIFY FIXTURES & MINUTES"
+            targets_speech = (
+                "Transfer targets: buy, hold and sell are watchlists, "
+                "not a personalized transfer without verified bank and team news."
+            )
+        elif has_comparison:
+            targets_sub = "VORTEX MODEL / CURRENT PRICE / EXPECTED MINUTES"
+            targets_speech = (
+                "Transfer targets: compare a model-backed alternative "
+                "against the existing squad before deciding to buy, hold or sell."
+            )
+        else:
+            targets_sub = "NO VERIFIED BUY / HOLD IS A REAL OPTION"
+            targets_speech = (
+                "Transfer targets: no supported replacement is confirmed, "
+                "so buy, hold and sell remain conditional on new evidence."
+            )
+        return [
+            _card("review", "GAMEWEEK REVIEW — THE REAL STORY",
+                  f"GW{int(review_gw)} / {status}",
+                  "Gameweek review",
+                  "Gameweek review: the real story is what the verified returns say about our next decision."),
+            _card("squad", "SQUAD PRESSURE — WHAT NEEDS FIXING?",
+                  "OFFICIAL FLAGS / MINUTES / BENCH COVER",
+                  "Squad pressure",
+                  "Squad pressure: which genuine availability or minutes issues need fixing first?"),
+            _card(target_key, "TRANSFER TARGETS — BUY / HOLD / SELL",
+                  targets_sub, "Transfer targets", targets_speech),
+            _card("routes", "TRANSFER PLANS — ROLL, MOVE OR TAKE A HIT?",
+                  "BANK IF SAFE / FIX A WEAKNESS / HITS NEED EVIDENCE",
+                  "Transfer plans",
+                  "Transfer plans: roll, move or take a hit? Compare the routes against actual minutes, budget and risk."),
+            _card("verdict", "THE FINAL VORTEX VERDICT",
+                  "CONDITIONAL / FACT-CHECKED / ONE DECISION",
+                  "Final Vortex verdict",
+                  "Final Vortex verdict: one conditional decision, with the team-news trigger that could change it."),
+        ]
     known = {
         "02_fdr": ("fixtures", "FIXTURE SWINGS", "THE NEXT RUN OF OPPONENTS", "Fixture swings",
                    "Fixture swings: which schedules genuinely improve, and which ones look tougher."),
