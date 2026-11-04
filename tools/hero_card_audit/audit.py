@@ -1,4 +1,4 @@
-import sys, json, asyncio
+import sys, json, asyncio, os
 from playwright.async_api import async_playwright
 
 """Overlap audit: the hero card must never cover scene text, nor leave the screen.
@@ -6,7 +6,7 @@ from playwright.async_api import async_playwright
 Usage: python audit.py <output_dir>   (run build_harness.py with the same dir first)
 """
 import pathlib
-S = str(pathlib.Path(sys.argv[1]))
+S = str(pathlib.Path(sys.argv[1]).resolve())
 html = S + "/harness.html"
 tag = "audit"
 vx = json.load(open(S + '/vx.json'))
@@ -107,7 +107,7 @@ def variant(**kw):
 async def main():
     ok = True
     async with async_playwright() as p:
-        b = await p.chromium.launch()
+        b = await p.chromium.launch(executable_path=os.environ.get("CHROMIUM_EXECUTABLE"))
         pg = await b.new_page(viewport={'width': 1920, 'height': 1080})
         errs = []
         pg.on('pageerror', lambda e: errs.append(str(e)))
@@ -132,6 +132,22 @@ async def main():
             res = await pg.evaluate(COLLECT)
             ok &= check(label, res)
 
+        # Market cards remain readable after metrics and restore the review on rewind.
+        for item in vx.get('market_cards', []):
+            seg = next(s for s in vx['segments'] if s['id'] == item['segment_id'])
+            for offset in (.13, 3, 11.84):
+                await pg.evaluate('t=>window.__auditLayout(t)', seg['t0'] + offset)
+                await pg.wait_for_timeout(150)
+                res = await pg.evaluate(COLLECT)
+                ok &= check('market ' + item['action'] + ' ' + str(offset), res)
+                actual = await pg.evaluate("document.querySelector('#vxHeroWrap .vx-player-card')?.dataset.playerId")
+                ok &= actual == str(item['card']['id'])
+            if item['action'] == 'BUY':
+                await pg.evaluate('t=>window.__seek(t)', seg['t0'] + 3)
+                await pg.screenshot(path=S + '/market_buy.png')
+        state = await pg.evaluate('t=>window.__auditLayout(t)', vx['metrics_t'] + 2)
+        ok &= state['hero'] == 0 and state['table'] > .99
+
         # 3) stress payloads mounted into the live hero slot
         await pg.evaluate('t=>window.__auditLayout(t)', vx['segments'][2]['hero_on'] + 3.0)
         stress = {
@@ -154,6 +170,7 @@ async def main():
             ok &= check('stress: ' + label, res)
             await pg.screenshot(path=f"{S}/{tag}_stress_{label.split(' ')[0].replace('+','')}.png")
         print('page errors:', errs[:3])
+        ok &= not errs
         await b.close()
     print('ALL PASS' if ok else 'FAILURES PRESENT')
     sys.exit(0 if ok else 1)

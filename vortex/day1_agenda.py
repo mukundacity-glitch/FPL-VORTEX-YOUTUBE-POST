@@ -35,7 +35,10 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None, review_statu
                   "Squad pressure", "Squad pressure: the minutes and cover issues worth checking before a transfer."),
         ])
         if not others:
-            if "editorial_comparison" in available:
+            if "market_intro" in available:
+                cards.append(_card("market", "BUY / HOLD / SELL", "CURRENT EVENT / PLAYER WATCHLISTS",
+                    "Market watchlists", "Market watchlists: buy, hold and sell names, with player cards and the evidence behind them."))
+            elif "editorial_comparison" in available:
                 cards.append(_card("alternatives", "REALISTIC ALTERNATIVES", "MODEL EVIDENCE / MINUTES / RISK",
                     "Realistic alternatives", "Realistic alternatives: one supported comparison, with the risks still in view."))
             elif "editorial_tradeoff" in available:

@@ -66,6 +66,22 @@ for j in range(4):
     t+=12
 metrics_t=t+4
 VX={'gw':9,'starters':starters,'bench':bench,'segments':segs,'total':metrics_t+60,'narration_end':metrics_t+55,'timeline':{},'bench_t':bench_t,'metrics_t':metrics_t,'metric_times':{}}
+# Post-review market cards reuse the same measured scene and side slot.
+VX['market_cards'] = []
+for index, action in enumerate(('BUY', 'HOLD', 'SELL')):
+    sid = 'market_' + action.lower()
+    payload = card(100 + index, 'Market Player ' + str(index + 1), 'MID')
+    payload['verdict_sub'] = action + ' WATCHLIST • EVENT MARKET'
+    payload['display_stats'] = [
+      {'icon':'people','label':'TRANSFERS IN','value':'1,234,567'},
+      {'icon':'people','label':'TRANSFERS OUT','value':'987,654'},
+      {'icon':'star','label':'RECENT FORM','value':'3.4'},
+      {'icon':'clock','label':'SEASON MINUTES','value':'1,020'},
+      {'icon':'star','label':'SEASON POINTS','value':'64'},
+      {'icon':'star','label':'POINTS PER MATCH','value':'5.8'}]
+    start = metrics_t + 12 + index * 12
+    segs.append({'id':sid,'t0':start,'t1':start+12,'speech_end_at':start+11.5})
+    VX['market_cards'].append({'segment_id':sid,'action':action,'card':payload})
 html=html.replace('</head>',PCSS+'\n'+CSS+'\n</head>')
 html=html.replace('</body>',PJS+'\n'+JS.replace('__VX_DATA__',json.dumps(VX))+'\n</body>')
 pathlib.Path(out).write_text(html,encoding='utf-8')
