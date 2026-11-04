@@ -16259,6 +16259,9 @@ segments, VX_REVIEW_EDITORIAL_META = build_editorial_review(
         "VORTEX_DAY1_REVIEW_TARGET_SECONDS", "430"
     )),
 )
+from vortex.day1_market_desk import build_market_desk, insert_market_segments, market_card
+VX_DAY1_MARKET_DESK = build_market_desk(boot)
+segments = insert_market_segments(segments, VX_DAY1_MARKET_DESK)
 for _segment in segments:
     _segment["text"] = vx_review_clean_text(_segment["text"])
 validate_narration(
@@ -18169,7 +18172,15 @@ for sid,key in [
 # forecast/provenance/narration metadata into retrospective review artwork.
 ANIMATION_SEGMENTS = snapshot_review_animation_segments(pkg["segments"])
 
+_desk_teams = {int(team["id"]): team for team in boot["teams"]}
+_market_cards = [
+    {"segment_id": row["segment_id"], "action": row["action"],
+     "card": market_card(row, _desk_teams, _pc_fixture_pack)}
+    for row in VX_DAY1_MARKET_DESK
+]
+
 JS_DATA = {
+    "market_cards": _market_cards,
     "gw":pkg["gw"],
     "starters":pkg["starters"],
     "bench":pkg["bench"],
@@ -18526,6 +18537,9 @@ window.__seek=function(t){
       )
       .sort((a,b)=>Number(b.hero_on)-Number(a.hero_on))[0];
 
+    const desk = (VX.market_cards || []).find(item => VX.segments.some(
+      s => s.id === item.segment_id && t >= s.t0 && t < s.t1));
+    const deskSeg = desk && VX.segments.find(s => s.id === desk.segment_id);
     const hw=$v("#vxHeroWrap");
 
     if(heroSeg && t < VX.metrics_t){
@@ -18565,9 +18579,23 @@ window.__seek=function(t){
               `translateX(${-(1-vis)*10}px) scale(${.94+.06*vis})`;
         }
     }
+    else if(desk && desk.card){
+        const cacheKey=`market_${desk.action}_${desk.card.id}`;
+        if(hw.dataset.pid !== cacheKey){
+            window.VXPlayerCard.mount(hw, desk.card);
+            hw.dataset.pid=cacheKey;
+        }
+        const vis=Math.min(ease((t-deskSeg.t0)/.32),
+            1-ease((t-Math.max(deskSeg.t0,deskSeg.t1-.32))/.32));
+        hw.style.opacity=vis;
+        hw.style.transform=`translateX(${-(1-vis)*10}px) scale(${.94+.06*vis})`;
+    }
     else{
         hw.style.opacity=0;
     }
+    $v("#pitchGW").textContent=desk
+      ? `NEXT GAMEWEEK • ${desk.action} WATCHLIST`
+      : `GAMEWEEK ${VX.gw} REVIEW`;
 
     /* ---------- APPROVED LEFT PANELS + NARRATED TABLE EMPHASIS ---------- */
 
@@ -18575,7 +18603,7 @@ window.__seek=function(t){
       (t-VX.metrics_t)/Number(timing.table_reveal_duration||.58)
     );
     document.querySelectorAll(".reviewPanel,.chipsPanel,.fixturesPanel").forEach(el=>{
-        el.style.setProperty("opacity",panelsP,"important");
+        el.style.setProperty("opacity",desk ? 0 : panelsP,"important");
         el.style.transform=
           `translateY(${(1-panelsP)*38}px) scale(${.985+.015*panelsP})`;
     });
@@ -18813,6 +18841,20 @@ for _metric_index, (_metric_key, _metric_span) in enumerate(_metric_items):
             _next_metric_start,
         ),
     })
+
+# Sample both the card transitions and the restored information panels.
+for _desk_item in _market_cards:
+    _desk_segment = seg(_desk_item["segment_id"])
+    if _desk_segment:
+        _desk_start, _desk_end = float(_desk_segment["t0"]), float(_desk_segment["t1"])
+        for _suffix, _start, _end in (
+            ("in", _desk_start, min(_desk_end, _desk_start + .34)),
+            ("out", max(_desk_start, _desk_end - .34), _desk_end + .04),
+        ):
+            _review_motion_windows.append({
+                "id": f"{_desk_item['segment_id']}_{_suffix}",
+                "start": _start, "end": _end,
+            })
 
 manifest = {
     "html":str(ANIM_HTML),
