@@ -37,8 +37,8 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None, review_statu
         if has_market:
             targets_sub = "OFFICIAL MARKET MOVEMENT / VERIFY FIXTURES & MINUTES"
             targets_speech = (
-                "Transfer targets: buy, hold and sell are watchlists, "
-                "not a personalized transfer without verified bank and team news."
+                "Transfer targets: buy, hold and sell player cards show current market watchlists. "
+                "They are not personalized transfers without verified bank and team news."
             )
         elif has_comparison:
             targets_sub = "VORTEX MODEL / CURRENT PRICE / EXPECTED MINUTES"
