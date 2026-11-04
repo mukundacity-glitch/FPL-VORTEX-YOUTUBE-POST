@@ -15,6 +15,7 @@ on:
       - "vortex/day1_agenda.py"
       - "vortex/day1_market_desk.py"
       - "tests/test_day1_market_desk.py"
+      - "tests/test_day1_season_dedup.py"
       - "day3/transfer_desk.py"
       - "tools/hero_card_audit/**"
       - ".github/workflows/day-1.yml"
@@ -51,6 +52,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
       - name: Validate retrospective review manifest and legitimate script file
         run: python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
+      - name: Verify no duplicate private upload across seasons
+        run: python -m unittest discover -s tests -p 'test_day1_season_dedup.py' -v
       - name: Day 1 player card contract
         run: python -m unittest discover -s tests -p 'test_day1_player_card.py' -v
       - name: Post-review market desk contracts
