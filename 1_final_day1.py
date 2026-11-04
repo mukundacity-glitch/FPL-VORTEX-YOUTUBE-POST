@@ -16610,7 +16610,7 @@ print("✅ Saved:",OUT)
 # The pitch, formation, narration, footer and all other slide code are untouched.
 # ============================================================
 
-PLAYER_CARD_DESIGN_VERSION = "V5.0_4K_SAMPLE_REWRITE"
+PLAYER_CARD_DESIGN_VERSION = "V6.0_SIDE_HERO_SAMPLE"
 PLAYER_CARD_RATIO = "AUTO_SLOT"
 
 PLAYER_CARD_CSS = r"""
@@ -16618,22 +16618,26 @@ PLAYER_CARD_CSS = r"""
 <style id="vx-player-card-design">
 
 /* ------------------------------------------------------------
-   PLAYER CARD TOKENS — 4K SCALE
+   PLAYER CARD — V6.0 SIDE HERO (supplied sample layout)
+   Designed on the sample's 816-unit width. Every size is a multiple of
+   --u (1/816 of the card width), so the card scales to any slot with the
+   same proportions: header strip, portrait, name, price/ownership banner,
+   six stat rows, next-five fixtures, FDR legend.
    ------------------------------------------------------------ */
 .vx-player-card{
-  --pc-bg:#0a0e1a;
-  --pc-card:#0d1220;
-  --pc-card-2:#111a2b;
-  --pc-accent:#3ec8ff;
-  --pc-accent-2:#138cff;
-  --pc-accent-glow:rgba(62,200,255,.34);
-  --pc-heading:#e8f7ff;
-  --pc-value:#38ef8b;
-  --pc-muted:#aebbd0;
-  --pc-green:#2ecc71;
-  --pc-amber:#f39c12;
-  --pc-red:#e74c3c;
-  --pc-divider:rgba(255,255,255,.11);
+  --pc-violet:#7b3dff;
+  --pc-violet-2:#a35cff;
+  --pc-pink:#d94bff;
+  --pc-ink:#0a0620;
+  --pc-ink-2:#140b3d;
+  --pc-ink-3:#1d1260;
+  --pc-yellow:#ffd21f;
+  --pc-muted:#cfc4f5;
+  --pc-easy:#22df5e;
+  --pc-normal:#ffd21f;
+  --pc-hard:#ff8a1f;
+  --pc-vhard:#ff3b3b;
+  --pc-none:#5c5a7a;
 
   position:relative;
   width:100%;
@@ -16645,19 +16649,14 @@ PLAYER_CARD_CSS = r"""
   isolation:isolate;
   container-type:size;
 
-  padding:36px;
-  border:2px solid var(--pc-accent);
-  border-radius:24px;
-
+  border:4px solid transparent;
+  border-radius:44px;
   background:
-    radial-gradient(circle at 16% 18%,rgba(35,125,255,.16),transparent 34%),
-    radial-gradient(circle at 88% 10%,rgba(42,210,255,.08),transparent 30%),
-    linear-gradient(160deg,#0b1221 0%,#080d18 54%,#07101b 100%);
-
+    linear-gradient(#0c0730,#0c0730) padding-box,
+    linear-gradient(140deg,#b56bff,#5f2cff 46%,#e04dff) border-box;
   box-shadow:
-    0 0 24px var(--pc-accent-glow),
-    inset 0 0 24px rgba(62,200,255,.05),
-    0 28px 54px rgba(0,0,0,.48);
+    0 0 38px rgba(123,61,255,.55),
+    0 28px 56px rgba(0,0,0,.52);
 
   color:#fff;
   font-family:Inter,"Arial Narrow","Roboto Condensed",Arial,sans-serif;
@@ -16668,28 +16667,19 @@ PLAYER_CARD_CSS = r"""
 .vx-player-card *::before,
 .vx-player-card *::after{box-sizing:border-box}
 
-.pc-card-grid{
+.pc-card-glow{
   position:absolute;
   inset:0;
   z-index:0;
   pointer-events:none;
-  opacity:.20;
-  background-image:
-    linear-gradient(rgba(62,200,255,.08) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(62,200,255,.06) 1px,transparent 1px);
-  background-size:52px 52px;
-  mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.65) 54%,transparent 100%);
-}
-
-.pc-card-sheen{
-  position:absolute;
-  inset:0;
-  z-index:0;
-  pointer-events:none;
-  background:linear-gradient(122deg,transparent 0 64%,rgba(42,165,255,.08) 65%,transparent 78%);
+  background:
+    radial-gradient(circle at 22% 30%,rgba(123,61,255,.42),transparent 46%),
+    radial-gradient(circle at 92% 8%,rgba(217,75,255,.22),transparent 40%),
+    linear-gradient(170deg,#140b43 0%,#0c0730 52%,#09051f 100%);
 }
 
 .pc-card-body{
+  --u:calc(100cqw / 816);
   position:relative;
   z-index:2;
   width:100%;
@@ -16697,20 +16687,153 @@ PLAYER_CARD_CSS = r"""
   min-width:0;
   min-height:0;
   display:grid;
-  grid-template-rows:auto 500px minmax(0,1fr) 260px auto auto;
-  gap:24px;
+  grid-template-rows:auto minmax(0,1fr) auto auto;
+  gap:calc(var(--u) * 14);
+  padding:calc(var(--u) * 20) calc(var(--u) * 20) calc(var(--u) * 16);
 }
 
-/* ------------------------------------------------------------
-   IDENTITY — TWO-COLOR NAME
-   Original 1920 sample: 28 / 44 px -> 56 / 88 px at 4K.
-   ------------------------------------------------------------ */
-.pc-identity{
+/* ---------------- header strip ---------------- */
+.pc-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:calc(var(--u) * 16);
+  min-width:0;
+}
+
+.pc-brand{
+  display:flex;
+  align-items:center;
+  height:calc(var(--u) * 64);
+  padding:0 calc(var(--u) * 34);
+  border:2px solid rgba(163,92,255,.65);
+  border-radius:calc(var(--u) * 16);
+  background:linear-gradient(90deg,#120a3c,#231474);
+  font-size:calc(var(--u) * 42);
+  font-weight:1000;
+  font-style:italic;
+  letter-spacing:calc(var(--u) * 1);
+  white-space:nowrap;
+}
+.pc-brand b{color:#fff;font-weight:1000;margin-right:calc(var(--u) * 12)}
+.pc-brand span{color:#b27dff}
+.pc-brand small{margin-left:calc(var(--u) * 16);font-size:calc(var(--u) * 22);font-style:normal;font-weight:850;color:var(--pc-muted);letter-spacing:calc(var(--u) * 1)}
+
+.pc-position{
+  display:flex;
+  align-items:center;
+  gap:calc(var(--u) * 12);
+  min-width:0;
+  height:calc(var(--u) * 64);
+  padding:0 calc(var(--u) * 30) 0 calc(var(--u) * 20);
+  border:2px solid rgba(255,255,255,.88);
+  border-radius:999px;
+  background:linear-gradient(90deg,#3b1aa8,#6a2cff);
+  font-size:calc(var(--u) * 36);
+  font-weight:1000;
+  font-style:italic;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.pc-position svg{flex:none;width:calc(var(--u) * 38);height:calc(var(--u) * 38)}
+
+/* ---------------- main area ---------------- */
+.pc-main{
+  min-width:0;
+  min-height:0;
+  display:grid;
+  grid-template-columns:minmax(0,37fr) minmax(0,63fr);
+  gap:calc(var(--u) * 16);
+}
+
+.pc-portrait-col{
   position:relative;
   min-width:0;
-  min-height:150px;
-  padding-right:132px;
+  min-height:0;
+  margin:calc(var(--u) * -6) 0 calc(var(--u) * -6) calc(var(--u) * -20);
+  overflow:hidden;
+  border-radius:0 calc(var(--u) * 28) calc(var(--u) * 28) 0;
 }
+
+.pc-portrait{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:50% 12%;
+  display:block;
+  -webkit-mask-image:linear-gradient(180deg,#000 0,#000 78%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 0,#000 78%,transparent 100%);
+  filter:drop-shadow(0 calc(var(--u) * 10) calc(var(--u) * 14) rgba(0,0,0,.5));
+}
+
+.pc-portrait-fallback{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:calc(var(--u) * 24);
+  color:var(--pc-muted);
+  font-size:calc(var(--u) * 26);
+  font-weight:850;
+  letter-spacing:calc(var(--u) * 1);
+  text-align:center;
+}
+
+.pc-result-chip{
+  position:absolute;
+  left:calc(var(--u) * 28);
+  top:calc(var(--u) * 14);
+  max-width:calc(100% - var(--u) * 40);
+  padding:calc(var(--u) * 7) calc(var(--u) * 14);
+  border-radius:calc(var(--u) * 12);
+  border:2px solid rgba(255,255,255,.55);
+  background:rgba(10,6,32,.82);
+  font-size:calc(var(--u) * 21);
+  font-weight:900;
+  letter-spacing:calc(var(--u) * .5);
+  line-height:1.15;
+  white-space:normal;
+}
+.pc-result-chip.is-captain{border-color:var(--pc-yellow);color:var(--pc-yellow)}
+
+.pc-info-col{
+  min-width:0;
+  min-height:0;
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr);
+  gap:calc(var(--u) * 14);
+}
+
+.pc-identity{
+  min-width:0;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:calc(var(--u) * 16);
+}
+
+.pc-club-crest{
+  width:calc(var(--u) * 124);
+  height:calc(var(--u) * 124);
+  object-fit:contain;
+  display:block;
+  filter:drop-shadow(0 calc(var(--u) * 8) calc(var(--u) * 12) rgba(0,0,0,.5));
+}
+.pc-crest-fallback{
+  width:calc(var(--u) * 124);
+  height:calc(var(--u) * 124);
+  border-radius:50%;
+  border:2px solid rgba(163,92,255,.65);
+  display:grid;
+  place-items:center;
+  font-size:calc(var(--u) * 40);
+  font-weight:1000;
+  color:var(--pc-muted);
+}
+
+.pc-name-block{min-width:0}
 
 .pc-name-first,
 .pc-name-last,
@@ -16720,417 +16843,260 @@ PLAYER_CARD_CSS = r"""
   max-width:100%;
   white-space:nowrap;
   overflow:hidden;
+  text-overflow:ellipsis;
 }
-
 .pc-name-first{
-  font-size:56px;
-  line-height:.95;
-  font-weight:900;
-  letter-spacing:2px;
+  font-size:calc(var(--u) * 36);
+  line-height:1;
+  font-weight:700;
+  letter-spacing:calc(var(--u) * 1);
   color:#fff;
-  text-shadow:0 4px 12px rgba(0,0,0,.62);
 }
-
 .pc-name-last{
-  margin-top:2px;
-  font-size:88px;
-  line-height:.92;
+  margin-top:calc(var(--u) * 2);
+  font-size:calc(var(--u) * 72);
+  line-height:.98;
   font-weight:1000;
-  letter-spacing:1px;
-  background:linear-gradient(90deg,#64edff 0%,#2fc8ff 42%,#228fff 100%);
-  -webkit-background-clip:text;
-  background-clip:text;
-  -webkit-text-fill-color:transparent;
-  filter:drop-shadow(0 5px 11px rgba(0,0,0,.55));
+  font-style:italic;
+  color:#fff;
+  text-shadow:0 calc(var(--u) * 4) calc(var(--u) * 12) rgba(0,0,0,.6);
 }
-
 .pc-club{
-  margin-top:12px;
-  font-size:34px;
-  line-height:1;
-  font-weight:750;
-  letter-spacing:2px;
-  color:var(--pc-muted);
-}
-
-.pc-club-crest{
-  position:absolute;
-  right:4px;
-  top:4px;
-  width:112px;
-  height:112px;
-  object-fit:contain;
-  filter:drop-shadow(0 8px 12px rgba(0,0,0,.45));
-}
-
-/* ------------------------------------------------------------
-   PHOTO + INFO
-   Fixed photo box. Image is never allowed to overflow/crop.
-   ------------------------------------------------------------ */
-.pc-photo-info{
-  min-width:0;
-  min-height:0;
-  display:grid;
-  grid-template-columns:42% minmax(0,1fr);
-  gap:32px;
-  align-items:stretch;
-}
-
-.pc-portrait-box{
-  position:relative;
-  width:100%;
-  height:100%;
-  max-height:100%;
-  min-width:0;
-  min-height:0;
-  overflow:hidden;
-  border:2px solid var(--pc-accent);
-  border-radius:24px;
-  background:
-    radial-gradient(circle at 50% 40%,rgba(39,125,200,.38),transparent 58%),
-    linear-gradient(150deg,#12243b,#0b1322 68%,#08101b);
-  box-shadow:
-    0 0 20px var(--pc-accent-glow),
-    inset 0 0 26px rgba(52,160,255,.08);
-}
-
-.pc-portrait-box::after{
-  content:"";
-  position:absolute;
-  inset:14px;
-  border:1px solid rgba(120,220,255,.18);
-  border-radius:18px;
-  pointer-events:none;
-}
-
-.pc-portrait{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
+  display:inline-block;
+  width:auto;
   max-width:100%;
-  max-height:100%;
-  object-fit:contain;
-  object-position:center bottom;
-  padding:10px 10px 0;
-  display:block;
-  filter:drop-shadow(0 15px 16px rgba(0,0,0,.44));
-}
-
-.pc-portrait-fallback{
-  position:absolute;
-  inset:0;
-  display:grid;
-  place-items:center;
-  padding:28px;
-  color:var(--pc-muted);
-  font-size:28px;
+  margin-top:calc(var(--u) * 8);
+  padding:calc(var(--u) * 5) calc(var(--u) * 18);
+  border-radius:calc(var(--u) * 8);
+  background:linear-gradient(90deg,#5c2cf2,#7b3dff);
+  font-size:calc(var(--u) * 26);
+  line-height:1.1;
   font-weight:850;
-  letter-spacing:1px;
-  text-align:center;
+  letter-spacing:calc(var(--u) * 1);
 }
 
-.pc-info-stack{
-  width:100%;
-  height:100%;
-  max-height:100%;
-  min-width:0;
-  min-height:0;
+/* ---------------- price / ownership ---------------- */
+.pc-banner{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  height:calc(var(--u) * 78);
+  border-radius:calc(var(--u) * 18);
   overflow:hidden;
-  display:grid;
-  grid-template-rows:repeat(5,minmax(0,1fr));
-  gap:14px;
-  align-content:stretch;
+  border:2px solid rgba(163,92,255,.6);
 }
-
-.pc-info-item{
+.pc-banner-cell{
   min-width:0;
-  display:grid;
-  grid-template-columns:64px minmax(0,1fr);
-  gap:20px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
   align-items:center;
-  padding:10px 16px;
-  border-bottom:2px solid var(--pc-divider);
-  background:linear-gradient(90deg,rgba(62,200,255,.045),transparent 72%);
+  line-height:1;
 }
-
-.pc-info-item:last-child{border-bottom:0}
-
-.pc-info-icon{
-  width:64px;
-  height:64px;
-  border-radius:50%;
-  border:2px solid var(--pc-accent);
-  display:grid;
-  place-items:center;
-  flex:none;
-  color:var(--pc-accent);
-  font-size:28px;
+.pc-banner-price{background:linear-gradient(180deg,#ffe24a,#ffc400);color:#1b1230}
+.pc-banner-own{background:linear-gradient(180deg,#5a2cf0,#3d1bb8);color:#fff}
+.pc-banner-label{
+  font-size:calc(var(--u) * 22);
+  font-weight:850;
+  letter-spacing:calc(var(--u) * 1);
+  display:flex;
+  align-items:center;
+  gap:calc(var(--u) * 8);
+}
+.pc-banner-label svg{width:calc(var(--u) * 26);height:calc(var(--u) * 26)}
+.pc-banner-value{
+  margin-top:calc(var(--u) * 5);
+  max-width:100%;
+  font-size:calc(var(--u) * 42);
   font-weight:1000;
-  line-height:1;
-  box-shadow:inset 0 0 14px rgba(62,200,255,.07);
-}
-
-.pc-info-copy{min-width:0}
-
-.pc-info-label{
-  min-width:0;
-  font-size:26px;
-  line-height:1;
-  font-weight:800;
-  color:var(--pc-heading);
-  letter-spacing:2px;
   white-space:nowrap;
   overflow:hidden;
 }
 
-.pc-info-value{
-  min-width:0;
-  margin-top:8px;
-  font-size:40px;
-  line-height:1;
-  font-weight:1000;
-  color:var(--pc-value);
-  letter-spacing:1px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-shadow:0 0 18px rgba(56,239,139,.17);
-}
-
-.pc-info-value.pc-captain-yes{color:#ffd94a}
-
-/* ------------------------------------------------------------
-   PER-90 STATS
-   Every row owns its own space. No squeeze / overlap.
-   ------------------------------------------------------------ */
+/* ---------------- six stat rows ---------------- */
 .pc-stat-rows{
   min-width:0;
   min-height:0;
   display:grid;
-  grid-template-rows:repeat(5,minmax(0,1fr));
-  overflow:hidden;
-  border:2px solid rgba(62,200,255,.28);
-  border-radius:20px;
-  background:linear-gradient(180deg,rgba(11,20,35,.88),rgba(7,13,24,.92));
+  grid-template-rows:repeat(6,minmax(0,1fr));
+  gap:calc(var(--u) * 10);
 }
 
 .pc-stat-row{
   min-width:0;
+  min-height:0;
   display:grid;
-  grid-template-columns:64px minmax(0,1fr) 190px;
-  gap:20px;
+  grid-template-columns:calc(var(--u) * 52) minmax(0,1fr) calc(var(--u) * 128);
   align-items:center;
-  padding:12px 24px;
-  border-bottom:2px solid var(--pc-divider);
+  gap:calc(var(--u) * 14);
+  padding:calc(var(--u) * 5) calc(var(--u) * 8) calc(var(--u) * 5) calc(var(--u) * 8);
+  border:2px solid rgba(163,92,255,.5);
+  border-radius:999px;
+  background:linear-gradient(90deg,#1d1260,#110a38);
 }
-
-.pc-stat-row:last-child{border-bottom:0}
 
 .pc-stat-icon{
-  width:54px;
-  height:54px;
-  border-radius:14px;
+  width:calc(var(--u) * 52);
+  height:calc(var(--u) * 52);
+  border-radius:50%;
   display:grid;
   place-items:center;
-  color:var(--pc-accent);
-  border:2px solid rgba(62,200,255,.64);
-  background:rgba(16,40,72,.68);
-  font-size:26px;
-  font-weight:1000;
-  box-shadow:inset 0 0 12px rgba(62,200,255,.08);
+  background:linear-gradient(180deg,#8a4dff,#5424e0);
+  box-shadow:0 0 calc(var(--u) * 14) rgba(163,92,255,.55);
 }
+.pc-stat-icon svg{width:calc(var(--u) * 30);height:calc(var(--u) * 30)}
 
 .pc-stat-label{
   min-width:0;
-  font-size:32px;
+  font-size:calc(var(--u) * 28);
   line-height:1;
-  font-weight:900;
-  letter-spacing:1px;
-  color:var(--pc-heading);
+  font-weight:850;
+  letter-spacing:calc(var(--u) * .5);
   white-space:nowrap;
   overflow:hidden;
 }
 
 .pc-stat-value{
   min-width:0;
-  text-align:right;
-  font-size:38px;
-  line-height:1;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:calc(var(--u) * 14);
+  background:var(--pc-ink);
+  color:var(--pc-yellow);
+  font-size:calc(var(--u) * 40);
   font-weight:1000;
-  letter-spacing:1px;
-  color:var(--pc-value);
   white-space:nowrap;
   overflow:hidden;
-  text-shadow:0 0 16px rgba(56,239,139,.16);
 }
 
-/* ------------------------------------------------------------
-   SIX FIXTURES — ONE ROW
-   FDR 1-2 GREEN • 3 AMBER • 4-5 RED
-   ------------------------------------------------------------ */
-.pc-fixture-row{
+/* ---------------- next five fixtures ---------------- */
+.pc-fixtures{
+  position:relative;
   min-width:0;
-  min-height:0;
+  margin-top:calc(var(--u) * 14);
+  padding:calc(var(--u) * 50) calc(var(--u) * 12) calc(var(--u) * 12);
+  border:2px solid rgba(163,92,255,.7);
+  border-radius:calc(var(--u) * 22);
+  background:linear-gradient(180deg,rgba(24,14,72,.94),rgba(10,6,32,.96));
+}
+
+.pc-fixtures-tab{
+  position:absolute;
+  left:calc(var(--u) * 14);
+  top:calc(var(--u) * -18);
+  display:flex;
+  align-items:center;
+  gap:calc(var(--u) * 12);
+  height:calc(var(--u) * 50);
+  padding:0 calc(var(--u) * 26) 0 calc(var(--u) * 16);
+  border-radius:calc(var(--u) * 16);
+  border:2px solid rgba(255,255,255,.7);
+  background:linear-gradient(90deg,#5524e6,#7b3dff);
+  font-size:calc(var(--u) * 28);
+  font-weight:1000;
+  letter-spacing:calc(var(--u) * .5);
+  white-space:nowrap;
+}
+.pc-fixtures-tab svg{width:calc(var(--u) * 30);height:calc(var(--u) * 30)}
+
+.pc-fixture-row{
   display:grid;
-  grid-template-columns:repeat(6,minmax(0,1fr));
-  gap:16px;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:calc(var(--u) * 10);
 }
 
 .pc-fixture-card{
   min-width:0;
-  min-height:0;
-  overflow:hidden;
-  border-radius:16px;
-  border:2px solid rgba(255,255,255,.22);
   display:grid;
-  grid-template-rows:minmax(0,1fr) auto;
-  align-items:stretch;
-  color:#fff;
+  grid-template-rows:auto calc(var(--u) * 58) auto;
+  justify-items:center;
+  gap:calc(var(--u) * 6);
   text-align:center;
-  box-shadow:0 8px 18px rgba(0,0,0,.30);
-}
-
-.pc-fixture-card.fdr-1,
-.pc-fixture-card.fdr-2{
-  background:linear-gradient(180deg,#229a51,#126d39);
-  border-color:#43ea8a;
-}
-.pc-fixture-card.fdr-3{
-  background:linear-gradient(180deg,#b87309,#815004);
-  border-color:#ffbf3a;
-}
-.pc-fixture-card.fdr-4,
-.pc-fixture-card.fdr-5{
-  background:linear-gradient(180deg,#b9363b,#7d1822);
-  border-color:#ff5963;
-}
-.pc-fixture-card.fdr-none{
-  background:linear-gradient(180deg,#33435a,#202b3c);
-  border-color:#6d819d;
 }
 
 .pc-fixture-main{
   min-width:0;
-  min-height:0;
-  padding:14px 8px 8px;
+  max-width:100%;
   display:flex;
-  flex-direction:column;
-  align-items:center;
+  align-items:baseline;
   justify-content:center;
-  gap:6px;
+  gap:calc(var(--u) * 6);
+  white-space:nowrap;
 }
-
-.pc-fixture-crest{
-  width:52px;
-  height:52px;
-  object-fit:contain;
-  filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));
-}
-
 .pc-fixture-team{
   min-width:0;
-  max-width:100%;
-  font-size:36px;
-  line-height:1.05;
+  font-size:calc(var(--u) * 26);
   font-weight:1000;
-  letter-spacing:1px;
-  white-space:nowrap;
   overflow:hidden;
 }
-
 .pc-fixture-venue{
-  margin-top:2px;
-  font-size:28px;
-  line-height:1;
-  font-weight:900;
-  white-space:nowrap;
+  font-size:calc(var(--u) * 24);
+  font-weight:850;
+  color:var(--pc-muted);
 }
-
-.pc-fixture-meta{
-  min-width:0;
-  padding:12px 6px 14px;
-  border-top:2px solid rgba(255,255,255,.20);
-  background:rgba(0,0,0,.18);
+.pc-fixture-card.no-crests{grid-template-rows:auto auto}
+.pc-fixture-crests{
   display:flex;
-  flex-direction:column;
-  gap:7px;
   align-items:center;
   justify-content:center;
-}
-
-.pc-fixture-gw,
-.pc-fixture-fdr{
+  gap:calc(var(--u) * 4);
   min-width:0;
-  max-width:100%;
-  font-size:27px;
-  line-height:1.1;
-  font-weight:1000;
-  letter-spacing:.5px;
-  white-space:nowrap;
-  overflow:hidden;
+  height:100%;
 }
+.pc-fixture-crest{
+  height:100%;
+  width:auto;
+  max-width:calc(var(--u) * 70);
+  object-fit:contain;
+}
+.pc-fixture-fdr{
+  min-width:calc(var(--u) * 92);
+  padding:calc(var(--u) * 6) 0;
+  border-radius:calc(var(--u) * 12);
+  border:2px solid rgba(255,255,255,.35);
+  font-size:calc(var(--u) * 38);
+  line-height:1;
+  font-weight:1000;
+  color:#0a0620;
+}
+.pc-fixture-card.fdr-1 .pc-fixture-fdr,
+.pc-fixture-card.fdr-2 .pc-fixture-fdr{background:var(--pc-easy)}
+.pc-fixture-card.fdr-3 .pc-fixture-fdr{background:var(--pc-normal)}
+.pc-fixture-card.fdr-4 .pc-fixture-fdr{background:var(--pc-hard)}
+.pc-fixture-card.fdr-5 .pc-fixture-fdr{background:var(--pc-vhard);color:#fff}
+.pc-fixture-card.fdr-none .pc-fixture-fdr{background:var(--pc-none);color:#fff}
 
-/* ------------------------------------------------------------
-   LEGEND + FOOTER
-   ------------------------------------------------------------ */
+/* ---------------- legend ---------------- */
 .pc-legend{
   min-width:0;
   display:flex;
   align-items:center;
-  justify-content:center;
-  gap:36px;
-  font-size:28px;
-  line-height:1;
-  font-weight:800;
-  letter-spacing:1px;
-  color:var(--pc-muted);
-  white-space:nowrap;
-  overflow:hidden;
-}
-
-.pc-legend-item{display:flex;align-items:center;gap:12px;min-width:0}
-.pc-legend-dot{width:16px;height:16px;border-radius:50%;flex:none;box-shadow:0 0 10px currentColor}
-.pc-legend-dot.easy{background:var(--pc-green);color:var(--pc-green)}
-.pc-legend-dot.medium{background:var(--pc-amber);color:var(--pc-amber)}
-.pc-legend-dot.hard{background:var(--pc-red);color:var(--pc-red)}
-
-.pc-card-footer{
-  min-width:0;
-  display:flex;
-  align-items:center;
   justify-content:space-between;
-  gap:24px;
-  padding-top:8px;
-  border-top:2px solid var(--pc-divider);
-  font-size:26px;
-  line-height:1;
-  font-weight:800;
-  letter-spacing:1px;
-  color:var(--pc-accent);
+  gap:calc(var(--u) * 10);
+  padding:calc(var(--u) * 8) calc(var(--u) * 14);
+  border:2px solid rgba(163,92,255,.5);
+  border-radius:calc(var(--u) * 16);
+  background:rgba(10,6,32,.9);
+  font-size:calc(var(--u) * 26);
+  font-weight:900;
   white-space:nowrap;
-  overflow:hidden;
 }
-
-.pc-card-footer > span{min-width:0;overflow:hidden;white-space:nowrap}
-
-/* Compact only when the actual existing hero slot is unusually short.
-   This does not alter the pitch or slide geometry. */
-@container (max-height:1500px){
-  .pc-card-body{grid-template-rows:auto 420px minmax(0,1fr) 230px auto auto;gap:20px}
-  .pc-name-first{font-size:52px}
-  .pc-name-last{font-size:80px}
-  .pc-club{font-size:30px}
-  .pc-info-label{font-size:24px}
-  .pc-info-value{font-size:36px}
-  .pc-stat-label{font-size:29px}
-  .pc-stat-value{font-size:35px}
-  .pc-fixture-crest{width:42px;height:42px}
-  .pc-fixture-team{font-size:31px}
-  .pc-fixture-venue{font-size:24px}
-  .pc-fixture-gw,.pc-fixture-fdr{font-size:23px}
-  .pc-legend{font-size:25px}
-  .pc-card-footer{font-size:24px}
+.pc-legend-title{font-size:calc(var(--u) * 30);font-weight:1000}
+.pc-legend-item{display:flex;align-items:center;gap:calc(var(--u) * 8)}
+.pc-legend-chip{
+  display:inline-grid;
+  place-items:center;
+  width:calc(var(--u) * 40);
+  height:calc(var(--u) * 36);
+  border-radius:calc(var(--u) * 8);
+  color:#0a0620;
+  font-weight:1000;
 }
+.pc-legend-chip.easy{background:var(--pc-easy)}
+.pc-legend-chip.normal{background:var(--pc-normal)}
+.pc-legend-chip.hard{background:var(--pc-hard)}
+.pc-legend-chip.vhard{background:var(--pc-vhard);color:#fff}
 
 </style>
 <!-- VX_PLAYER_CARD_DESIGN_END -->
@@ -17157,13 +17123,29 @@ PLAYER_CARD_JS = r"""
 
   const upper = (value, fallback="—") => text(value, fallback).toUpperCase();
 
+  const ICONS = {
+    ball:'<circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="2"/><polygon points="12,7.5 16,10.4 14.5,15 9.5,15 8,10.4" fill="#fff"/>',
+    boot:'<path d="M4 15c3 0 4-2 5-5l2 1c0 2 2 3 5 4 2 .7 3 1.200 3 3H4z" fill="#fff"/>',
+    target:'<circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="4.500" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="1.500" fill="#fff"/>',
+    assist:'<path d="M5 19l9-9m0 0l-2-2 3-3 5 5-3 3z" fill="none" stroke="#fff" stroke-width="2.200" stroke-linejoin="round"/>',
+    shield:'<path d="M12 3l7 3v5c0 5-3 8.500-7 10-4-1.500-7-5-7-10V6z" fill="none" stroke="#fff" stroke-width="2"/><path d="M12 8v7M8.500 11.500h7" stroke="#fff" stroke-width="2"/>',
+    glove:'<path d="M7 20v-7l-2-3 2-1 2 2V5h2v6V4h2v7V5h2v7V7h2v8c0 3-2 5-5 5z" fill="#fff"/>',
+    goal:'<path d="M3 18V7h18v11M3 7l3 4h12l3-4M6 11v7M18 11v7" fill="none" stroke="#fff" stroke-width="2"/>',
+    clock:'<circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="#fff" stroke-width="2"/>',
+    star:'<polygon points="12,3 14.600,9 21,9.500 16,13.800 17.600,20.500 12,17 6.400,20.500 8,13.800 3,9.500 9.400,9" fill="#fff"/>',
+    people:'<circle cx="9" cy="9" r="3.200" fill="currentColor"/><circle cx="17" cy="10" r="2.600" fill="currentColor"/><path d="M3 19c0-3.500 2.500-5.500 6-5.500s6 2 6 5.500zM15 19c0-2 .8-3.400 2.200-4.200 2.300.2 3.800 1.500 3.800 4.200z" fill="currentColor"/>',
+    calendar:'<rect x="3.500" y="5" width="17" height="15" rx="2" fill="none" stroke="#fff" stroke-width="2"/><path d="M3.500 10h17M8 3v4M16 3v4" stroke="#fff" stroke-width="2"/>'
+  };
+
+  const svg = (key, size) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[key] || ICONS.star}</svg>`;
+
   function nameParts(p){
     const explicitFirst = text(p?.first_name, "");
     const explicitLast  = text(p?.surname, "");
     if (explicitFirst || explicitLast){
       return {
-        first: explicitFirst || explicitLast || "PLAYER",
-        last: explicitLast && explicitFirst ? explicitLast : ""
+        first: explicitFirst && explicitLast ? explicitFirst : "",
+        last: explicitLast || explicitFirst || "PLAYER"
       };
     }
 
@@ -17171,53 +17153,20 @@ PLAYER_CARD_JS = r"""
       .replace(/\s+/g," ")
       .trim();
     const bits = raw.split(" ").filter(Boolean);
-    if (bits.length <= 1) return {first:bits[0] || "PLAYER", last:""};
+    if (bits.length <= 1) return {first:"", last:bits[0] || "PLAYER"};
     return {first:bits[0], last:bits.slice(1).join(" ")};
   }
 
-  function captainValue(p){
-    return p?.captain ? "YES" : "NO";
-  }
-
-  function statIcon(key){
-    const k = String(key || "").toLowerCase();
-    if (k === "target") return "◎";
-    if (k === "boot" || k === "glove") return "↗";
-    if (k === "ball") return "●";
-    if (k === "shield") return "◇";
-    if (k === "spark") return "★";
-    return "•";
-  }
-
-  function infoRows(p){
-    const rows = [
-      ["P", "POSITION", upper(p?.position_label, upper(p?.position,"PLAYER")), ""],
-      ["£", "PRICE", upper(p?.price,"—"), ""],
-      ["O", "OWNERSHIP", upper(p?.ownership,"—"), ""],
-      ["M", "AVG MIN / START", upper(p?.avg_minutes_per_start, upper(p?.stats?.avg_minutes_per_start,"—")), ""],
-      ["C", "CAPTAIN THIS WEEK", captainValue(p), p?.captain ? "pc-captain-yes" : ""]
-    ];
-
-    return rows.map(([icon,label,value,klass]) => `
-      <div class="pc-info-item">
-        <div class="pc-info-icon">${esc(icon)}</div>
-        <div class="pc-info-copy">
-          <div class="pc-info-label" data-pc-fit data-pc-max="26" data-pc-min="18">${esc(label)}</div>
-          <div class="pc-info-value ${klass}" data-pc-fit data-pc-max="40" data-pc-min="24">${esc(value)}</div>
-        </div>
-      </div>`).join("");
-  }
-
   function statRows(p){
-    const rows = Array.isArray(p?.display_stats) ? p.display_stats.slice(0,5) : [];
+    const rows = Array.isArray(p?.display_stats) ? p.display_stats.slice(0,6) : [];
     const padded = rows.slice();
-    while (padded.length < 5) padded.push({icon:"",label:"—",value:"—"});
+    while (padded.length < 6) padded.push({icon:"star",label:"—",value:"—"});
 
     return padded.map(r => `
       <div class="pc-stat-row">
-        <div class="pc-stat-icon">${esc(statIcon(r?.icon))}</div>
-        <div class="pc-stat-label" data-pc-fit data-pc-max="32" data-pc-min="21">${esc(upper(r?.label))}</div>
-        <div class="pc-stat-value" data-pc-fit data-pc-max="38" data-pc-min="24">${esc(upper(r?.value))}</div>
+        <div class="pc-stat-icon">${svg(String(r?.icon || "star"))}</div>
+        <div class="pc-stat-label" data-pc-fit>${esc(upper(r?.label))}</div>
+        <div class="pc-stat-value" data-pc-fit>${esc(upper(r?.value))}</div>
       </div>`).join("");
   }
 
@@ -17244,26 +17193,24 @@ PLAYER_CARD_JS = r"""
   function fixtureCard(fx, index){
     if (!fx || fx.gw === null || fx.gw === undefined){
       return `<div class="pc-fixture-card fdr-none">
-        <div class="pc-fixture-main"><div class="pc-fixture-team">—</div><div class="pc-fixture-venue">—</div></div>
-        <div class="pc-fixture-meta"><div class="pc-fixture-gw">GW —</div><div class="pc-fixture-fdr">FDR —</div></div>
+        <div class="pc-fixture-main"><span class="pc-fixture-team">—</span></div>
+        <div class="pc-fixture-crests"></div>
+        <div class="pc-fixture-fdr">—</div>
       </div>`;
     }
 
     const venue = text(fx?.venue, "").replace(/[()]/g,"");
-    const oppBadge = text(fx?.badge, Array.isArray(fx?.badges) ? fx.badges[0] : "");
-    const crestHtml = oppBadge
-      ? `<img class="pc-fixture-crest" src="${esc(oppBadge)}" alt="" onerror="this.style.display='none'">`
-      : "";
-    return `<div class="pc-fixture-card ${fdrClass(fx)}" data-fixture-index="${index}">
+    const badges = (Array.isArray(fx?.badges) ? fx.badges : [fx?.badge]).filter(Boolean).slice(0,2);
+    const crests = badges.map(src =>
+      `<img class="pc-fixture-crest" src="${esc(src)}" alt="" onerror="this.style.visibility='hidden'">`
+    ).join("");
+    return `<div class="pc-fixture-card ${fdrClass(fx)}${crests ? "" : " no-crests"}" data-fixture-index="${index}">
       <div class="pc-fixture-main">
-        ${crestHtml}
-        <div class="pc-fixture-team" data-pc-fit data-pc-max="36" data-pc-min="22">${esc(upper(fx?.opponent,"—"))}</div>
-        <div class="pc-fixture-venue" data-pc-fit data-pc-max="28" data-pc-min="19">${venue ? `(${esc(venue.toUpperCase())})` : "—"}</div>
+        <span class="pc-fixture-team" data-pc-fit>${esc(upper(fx?.opponent,"—"))}</span>
+        <span class="pc-fixture-venue">${venue ? `(${esc(venue.toUpperCase())})` : ""}</span>
       </div>
-      <div class="pc-fixture-meta">
-        <div class="pc-fixture-gw" data-pc-fit data-pc-max="27" data-pc-min="18">GW ${esc(text(fx?.gw,"—"))}</div>
-        <div class="pc-fixture-fdr" data-pc-fit data-pc-max="27" data-pc-min="18">FDR ${esc(fdrDisplay(fx))}</div>
-      </div>
+      ${crests ? `<div class="pc-fixture-crests">${crests}</div>` : ""}
+      <div class="pc-fixture-fdr">${esc(fdrDisplay(fx))}</div>
     </div>`;
   }
 
@@ -17272,77 +17219,116 @@ PLAYER_CARD_JS = r"""
     const name = nameParts(p);
     const crest = text(p?.club_badge, "");
     const portrait = text(p?.player_image, "");
-    const fixtures = Array.isArray(p?.fixtures) ? p.fixtures.slice(0,6) : [];
-    while (fixtures.length < 6) fixtures.push(null);
+    const clubName = upper(p?.club, upper(p?.team_name,"CLUB"));
+    const position = upper(p?.position_label, upper(p?.position,"PLAYER"));
+    const result = text(p?.verdict_sub, "");
+    const leadership = p?.captain ? "C" : (p?.vice ? "VC" : "");
+    const fixtures = Array.isArray(p?.fixtures) ? p.fixtures.slice(0,5) : [];
+    while (fixtures.length < 5) fixtures.push(null);
 
     return `
       <article class="vx-player-card" data-player-id="${esc(p?.id ?? "")}">
-        <div class="pc-card-grid"></div>
-        <div class="pc-card-sheen"></div>
+        <div class="pc-card-glow"></div>
 
         <div class="pc-card-body">
-          <header class="pc-identity">
-            <div class="pc-name-first" data-pc-fit data-pc-max="56" data-pc-min="34">${esc(upper(name.first,"PLAYER"))}</div>
-            <div class="pc-name-last" data-pc-fit data-pc-max="88" data-pc-min="46">${esc(upper(name.last,""))}</div>
-            <div class="pc-club" data-pc-fit data-pc-max="34" data-pc-min="22">${esc(upper(p?.club, upper(p?.team_name,"CLUB")))}</div>
-            ${crest ? `<img class="pc-club-crest" src="${esc(crest)}" alt="">` : ""}
+          <header class="pc-top">
+            <div class="pc-brand"><b>FPL</b><span>VORTEX</span>${text(p?.season_label,"") ? `<small>${esc(upper(p.season_label))}</small>` : ""}</div>
+            <div class="pc-position">${svg("shield")}<span data-pc-fit>${esc(position)}</span></div>
           </header>
 
-          <section class="pc-photo-info">
-            <div class="pc-portrait-box">
+          <section class="pc-main">
+            <div class="pc-portrait-col">
               ${portrait
                 ? `<img class="pc-portrait" src="${esc(portrait)}" alt="" draggable="false">`
                 : `<div class="pc-portrait-fallback">PLAYER IMAGE</div>`}
+              ${result ? `<div class="pc-result-chip${leadership ? " is-captain" : ""}">${esc(upper(result).replaceAll(" | "," • "))}${leadership ? ` • ${leadership}` : ""}</div>` : ""}
             </div>
-            <div class="pc-info-stack">${infoRows(p)}</div>
+
+            <div class="pc-info-col">
+              <div class="pc-identity">
+                ${crest
+                  ? `<img class="pc-club-crest" src="${esc(crest)}" alt="" onerror="this.style.visibility='hidden'">`
+                  : `<div class="pc-crest-fallback">${esc(clubName.slice(0,3))}</div>`}
+                <div class="pc-name-block">
+                  ${name.first ? `<div class="pc-name-first" data-pc-fit>${esc(upper(name.first))}</div>` : ""}
+                  <div class="pc-name-last" data-pc-fit>${esc(upper(name.last,"PLAYER"))}</div>
+                  <div class="pc-club" data-pc-fit>${esc(clubName)}</div>
+                </div>
+              </div>
+
+              <div class="pc-banner">
+                <div class="pc-banner-cell pc-banner-price">
+                  <div class="pc-banner-label">PRICE</div>
+                  <div class="pc-banner-value" data-pc-fit>${esc(upper(p?.price,"—"))}</div>
+                </div>
+                <div class="pc-banner-cell pc-banner-own">
+                  <div class="pc-banner-label">${svg("people")}OWNERSHIP</div>
+                  <div class="pc-banner-value" data-pc-fit>${esc(upper(p?.ownership,"—"))}</div>
+                </div>
+              </div>
+
+              <section class="pc-stat-rows">${statRows(p)}</section>
+            </div>
           </section>
 
-          <section class="pc-stat-rows">${statRows(p)}</section>
-
-          <section class="pc-fixture-row">${fixtures.map(fixtureCard).join("")}</section>
+          <section class="pc-fixtures">
+            <div class="pc-fixtures-tab">${svg("calendar")}NEXT 5 FIXTURES</div>
+            <div class="pc-fixture-row">${fixtures.map(fixtureCard).join("")}</div>
+          </section>
 
           <div class="pc-legend" aria-label="Fixture difficulty legend">
-            <span class="pc-legend-item"><i class="pc-legend-dot easy"></i>GREEN EASY</span>
-            <span class="pc-legend-item"><i class="pc-legend-dot medium"></i>AMBER MEDIUM</span>
-            <span class="pc-legend-item"><i class="pc-legend-dot hard"></i>RED HARD</span>
+            <span class="pc-legend-title">FDR:</span>
+            <span class="pc-legend-item"><i class="pc-legend-chip easy">2</i>EASY</span>
+            <span class="pc-legend-item"><i class="pc-legend-chip normal">3</i>NORMAL</span>
+            <span class="pc-legend-item"><i class="pc-legend-chip hard">4</i>HARD</span>
+            <span class="pc-legend-item"><i class="pc-legend-chip vhard">5</i>VERY HARD</span>
           </div>
-
-          <footer class="pc-card-footer">
-            <span data-pc-fit data-pc-max="26" data-pc-min="18">STATS: ${esc(upper(p?.season_label,"CURRENT SEASON"))}</span>
-            <span data-pc-fit data-pc-max="26" data-pc-min="18">FPL VORTEX</span>
-          </footer>
         </div>
       </article>`;
   }
 
-  function elementWidthFits(el){
-    if (!el || el.clientWidth <= 0) return true;
-    return el.scrollWidth <= el.clientWidth + 1;
+  function overflows(el){
+    // The text's true extent (a Range ignores the box and the ellipsis) against
+    // the element's own content box. Both are normalised for any CSS transform
+    // on the pop-up slot; shrink-wrapped elements never count as overflowing.
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const text = range.getBoundingClientRect().width;
+    const box = el.getBoundingClientRect().width;
+    if (!(box > 0)) return false;
+    const cs = getComputedStyle(el);
+    const scale = el.offsetWidth > 0 ? box / el.offsetWidth : 1;
+    const inset = (
+      (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) +
+      (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0)
+    ) * scale;
+    return text > box - inset + 0.05;
   }
 
   function fitOne(el){
-    const max = Number(el?.dataset?.pcMax || 40);
-    const min = Number(el?.dataset?.pcMin || 16);
-    if (!el || !Number.isFinite(max) || !Number.isFinite(min)) return;
+    if (!el) return;
+    el.style.fontSize = "";
+    el.style.textOverflow = "clip";
+    try {
+      const base = parseFloat(getComputedStyle(el).fontSize);
+      if (!Number.isFinite(base) || el.clientWidth <= 0) return;
+      if (!overflows(el)) return;
 
-    let lo = Math.max(8, Math.min(min,max));
-    let hi = Math.max(lo,max);
-    let best = lo;
-
-    el.style.fontSize = `${hi}px`;
-    if (elementWidthFits(el)) return;
-
-    for (let i=0; i<12; i++){
-      const mid = (lo + hi) / 2;
-      el.style.fontSize = `${mid}px`;
-      if (elementWidthFits(el)){
-        best = mid;
-        lo = mid;
-      } else {
-        hi = mid;
+      let lo = base * 0.25;
+      let hi = base;
+      for (let i=0; i<12; i++){
+        const mid = (lo + hi) / 2;
+        el.style.fontSize = `${mid}px`;
+        if (!overflows(el)){
+          lo = mid;
+        } else {
+          hi = mid;
+        }
       }
+      el.style.fontSize = `${lo}px`;
+    } finally {
+      el.style.textOverflow = "";
     }
-    el.style.fontSize = `${best}px`;
   }
 
   function fitText(root){
@@ -17381,7 +17367,7 @@ PLAYER_CARD_JS = r"""
   }
 
   window.VXPlayerCard = Object.freeze({
-    version:"V5.0_4K_SAMPLE_REWRITE",
+    version:"V6.0_SIDE_HERO_SAMPLE",
     mount,
     render:renderPlayerCard,
     fitText,
@@ -17394,9 +17380,9 @@ PLAYER_CARD_JS = r"""
 
 print("✅ CELL 15A PLAYER CARD DESIGN READY")
 print("✅ Design version:", PLAYER_CARD_DESIGN_VERSION)
-print("✅ 4K-scaled type / spacing from supplied player-stat-panel sample")
-print("✅ Two-color player name • fixed contained portrait • full ownership")
-print("✅ Five padded stat rows • six FDR tiles • readable legend/footer")
+print("✅ Side-hero layout from the supplied sample: portrait, name, price/ownership, six stat rows")
+print("✅ Next five fixtures with FDR tiles + legend; scales with the pop-up slot")
+print("✅ Long names / clubs shrink to fit inside the card; nothing spills onto the scene")
 print("✅ PLAYER CARD ONLY — pitch / formation / footer / narration untouched")
 
 # ============================================================
@@ -17636,6 +17622,17 @@ def _pc_per90(value, season_minutes, decimals=2):
         return "—"
 
 
+def _pc_pct_per90(value, season_minutes):
+    """Share of 90-minute periods (e.g. clean sheets), current season only."""
+    try:
+        minutes = float(season_minutes)
+        if minutes <= 0:
+            return "—"
+        return f"{(float(value) * 90.0 / minutes * 100.0):.0f}%"
+    except Exception:
+        return "—"
+
+
 def _pc_avg_minutes_per_start(season_minutes, season_starts):
     try:
         starts = int(float(season_starts))
@@ -17698,24 +17695,37 @@ for p in pkg["players"]:
     }
 
     pos = str(p.get("pos", "")).upper()
-    # Player-card display data only: restore meaningful official current-season
-    # totals used by the earlier working hero card. No projection/preseason
-    # fallback and no card-design/layout change.
+    # Player-card display data only: six current-season rows in the supplied
+    # sample's order. Every value is an official season rate/total; a missing
+    # input shows an honest dash. No projection / preseason fallback.
+    _pc_ppg = _pc_text_number(p.get("season_ppg"), 1) if p.get("season_ppg") else "—"
+    _pc_cs_pct = _pc_pct_per90(season_clean_sheets, season_minutes)
     if pos == "GK":
         display_stats = [
-            {"icon":"spark", "label":"TOTAL FPL POINTS", "value":str(season_points)},
-            {"icon":"shield", "label":"CLEAN SHEETS", "value":str(season_clean_sheets)},
-            {"icon":"glove", "label":"SAVES", "value":str(season_saves)},
-            {"icon":"target", "label":"MINUTES", "value":str(season_minutes)},
-            {"icon":"ball", "label":"xGC", "value":_pc_text_number(p.get("season_xgc"), 2)},
+            {"icon":"glove",  "label":"SAVES PER 90",      "value":stats["saves_per90"]},
+            {"icon":"goal",   "label":"CONCEDED PER 90",   "value":stats["goals_conceded_per90"]},
+            {"icon":"ball",   "label":"xGC PER 90",        "value":_pc_per90(p.get("season_xgc"), season_minutes)},
+            {"icon":"shield", "label":"CLEAN SHEETS %",    "value":_pc_cs_pct},
+            {"icon":"clock",  "label":"MINUTES PER START", "value":stats["avg_minutes_per_start"]},
+            {"icon":"star",   "label":"POINTS PER MATCH",  "value":_pc_ppg},
+        ]
+    elif pos == "DEF":
+        display_stats = [
+            {"icon":"ball",   "label":"xG PER 90",        "value":stats["xg_per90"]},
+            {"icon":"boot",   "label":"xA PER 90",        "value":stats["xa_per90"]},
+            {"icon":"target", "label":"GOALS PER 90",     "value":stats["goals_per90"]},
+            {"icon":"assist", "label":"ASSISTS PER 90",   "value":stats["assists_per90"]},
+            {"icon":"shield", "label":"CLEAN SHEETS %",   "value":_pc_cs_pct},
+            {"icon":"star",   "label":"POINTS PER MATCH", "value":_pc_ppg},
         ]
     else:
         display_stats = [
-            {"icon":"spark", "label":"TOTAL FPL POINTS", "value":str(season_points)},
-            {"icon":"target", "label":"MINUTES", "value":str(season_minutes)},
-            {"icon":"ball", "label":"xG", "value":_pc_text_number(p.get("season_xg"), 2)},
-            {"icon":"boot", "label":"xA", "value":_pc_text_number(p.get("season_xa"), 2)},
-            {"icon":"target", "label":"xGI", "value":_pc_text_number(p.get("season_xgi"), 2)},
+            {"icon":"ball",   "label":"xG PER 90",        "value":stats["xg_per90"]},
+            {"icon":"boot",   "label":"xA PER 90",        "value":stats["xa_per90"]},
+            {"icon":"target", "label":"GOALS PER 90",     "value":stats["goals_per90"]},
+            {"icon":"assist", "label":"ASSISTS PER 90",   "value":stats["assists_per90"]},
+            {"icon":"goal",   "label":"xGI PER 90",       "value":_pc_per90(p.get("season_xgi"), season_minutes)},
+            {"icon":"star",   "label":"POINTS PER MATCH", "value":_pc_ppg},
         ]
 
     fixture = p.get("fixture") or {}
@@ -18251,9 +18261,11 @@ CSS = r"""
     position:absolute;
     /* 4K safe hero region: stage-left -> pitch boundary,
        18px below the logo -> 18px above the footer.
-       Parent .left is x=54,y=428,w=1202,h=1642; pitch starts x=1286. */
-    left:-54px;
-    right:-30px;
+       Parent .left is x=54,y=428,w=1202,h=1642; pitch starts x=1286.
+       The card pops up on the LEFT side only: 24px clear of the screen edge
+       and 20px clear of the pitch, so no scene text is ever covered. */
+    left:-30px;
+    right:-12px;
     top:-4px;
     bottom:-3px;
     z-index:95;
@@ -18263,7 +18275,8 @@ CSS = r"""
     overflow:hidden;
     opacity:0;
     pointer-events:none;
-    transform:translateY(45px);
+    transform:translateX(-10px) scale(.94);
+    transform-origin:left center;
     will-change:opacity,transform;
 }
 
@@ -18549,7 +18562,7 @@ window.__seek=function(t){
             hw.style.opacity=vis;
 
             hw.style.transform=
-              `translateY(${(1-vis)*34}px)`;
+              `translateX(${-(1-vis)*10}px) scale(${.94+.06*vis})`;
         }
     }
     else{
