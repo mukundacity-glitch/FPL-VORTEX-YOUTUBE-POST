@@ -21,14 +21,16 @@ Day 2 is isolated from Day 1:
 
 The Day 2 workflow reads shared model inputs and the existing Day 1 media assets, but it never publishes to the Day 1 output path and never edits the Day 1 workflow or scripts. The Day 1 opening/music contract is reproduced in `day2/media.py`: opening first with its original audio, background music beginning at the Day 2 `slide_00` program start at the same `12/255` gain, and `outro.mp3` for the final 6 seconds. The Day 2 notebook keeps the canonical VORTEX logo/lion-head treatment and its Scene 7 subscribe CTA.
 
-### Day 1 compact video — 4-minute target (November 2026)
+### Day 1 decision-led 4K video — up to seven minutes
 
-The manual **Day 1** workflow now enables a compact, evidence-backed narration profile. It keeps all 15 verified review player identities, the same 33-cell source, dynamic FPL Gameweek, music, branding and **Private-only** YouTube upload contract. The render aims for **240 seconds** rather than the former 480-second review target; its actual duration still depends on narration and visuals. It is a normal 16:9 episode, not a vertical YouTube Short.
+The existing **Day 1** workflow preserves all 33 original source cells and fifteen original V6.0 hero-card players (11 starters + four bench). The dynamic `vortex/day1_editorial.py` narration now spotlights the four biggest *verified* decisions using actual official availability/minutes and **the repository's own VORTEX xPts/xMinutes model**. All other player cards remain in their existing reveal sequence.
 
-- Implementation: `vortex/day1_editorial.py` reads `VORTEX_DAY1_COMPACT=1` during rendering and shortens repeated player commentary and editorial beats.
-- Workflow: `.github/workflows/day-1.yml` sets `VORTEX_DAY1_VIDEO_TARGET_SECONDS=240` and activates the compact profile only for the render/validation steps, not the baseline tests.
-- Check before publishing: Review the new **Private** YouTube upload and final video QA before manually making it public. Manual reruns create a new Private draft; they do **not** replace an existing published YouTube video.
-- The reference-to-video skill is at `.claude/skills/fpl-vortex-video-watch-short/SKILL.md`. Its referenced FPL Harry video still requires a real timed transcript and sampled frames before scene-level lessons can be claimed.
+- `.github/workflows/day-1.yml` sets an editorial pacing target of **330 seconds** and independently rejects any final MP4 exceeding **420 seconds including the original opening/outro**.
+- Five fixed agenda headings are wired through the existing spoken/visual system; no new standalone Shorts workflow is added.
+- `vortex/youtube_studio_package.py` checks 4K, maximum duration, SEO metadata, accurate chapter boundaries and the **Private-only** policy before upload.
+- `vortex/youtube_private_upload.py` checks the owned YouTube upload history for the same **official season and Gameweek** and prevents duplicate uploads on manual reruns; previously published public videos are never overwritten.
+- **No new scheduler or automatic public YouTube publication was added.** Start the existing manual `Day 1` action after verifying the FPL event; its in-run content updates from live sources.
+- Inspect the implementation and release evidence in [Day 1 audit](docs/DAY1_SEVEN_MINUTE_AUDIT.md). A real MP4 preview exists only after the production workflow has rendered it, not simply because source or tests were updated.
 
 ### Run Day 1 manually
 
