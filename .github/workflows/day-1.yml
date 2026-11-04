@@ -91,7 +91,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
           python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
           python -m unittest discover -s tests -p 'test_day1_player_card.py' -v
-          python -m unittest discover -s tests -p 'test_day1_market_desk.py' -v
 
       - name: Verify private YouTube upload configuration
         shell: bash
@@ -168,6 +167,7 @@ jobs:
             "google-auth>=2.35,<3" \
             "google-auth-httplib2>=0.2,<1"
           python -m unittest discover -s tests -p 'test_day1_source_loader.py' -v
+          python -m unittest discover -s tests -p 'test_day1_market_desk.py' -v
 
       - name: Install Chromium runtime
         shell: bash

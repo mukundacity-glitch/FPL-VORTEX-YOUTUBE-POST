@@ -105,6 +105,13 @@ class TestDay1Diagnostics(unittest.TestCase):
         self.assertIsInstance(error, RuntimeError)
         self.assertIn("cell execution unsuccessful without an exception", output)
 
+    def test_market_contract_runs_after_its_pandas_dependency_is_installed(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        install = workflow.index('"pandas>=2.2,<3"')
+        market_check = workflow.index("test_day1_market_desk.py")
+        self.assertLess(install, market_check)
+        self.assertLess(market_check, workflow.index("Execute Day 1 cells once in order"))
+
     def test_checks_run_before_full_day1_video_generation(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("test_day1_runner_diagnostics.py", workflow)
