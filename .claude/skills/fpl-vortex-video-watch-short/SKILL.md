@@ -5,8 +5,23 @@ description: Analyze a referenced FPL YouTube video using a timestamped transcri
 
 # FPL VORTEX — Watch → Verify → Shorten
 
+
+## USER'S CURRENT DAY 1 CONTRACT — SUPERSEDES PRIOR 180-SECOND SHORT DEFAULTS
+
+**ONE existing Day 1 MP4 per Gameweek. NO second video, no new Shorts workflow.** The legacy skill directory name contains "short", but this is solely for backward compatibility, NOT an instruction to make a separate short video.
+
+- **Runtime:** 5–7 minutes when warranted; **absolute MAXIMUM 420 seconds including existing opening and outro**, confirmed by ffprobe on final 16:9 4K MP4. A shorter meaningful episode is acceptable; never pad or artificially accelerate speech. Any legacy 150–180-second target or 3-minute storyboard is historical reference only.
+- **Keep the ORIGINAL player cards as they are in the current Day 1 implementation:** same current portrait/card components, exact typography/layout/animations, current club badges, neon VORTEX identity, data hierarchy and timing. Visually include **all fifteen** 11 starters + 4 bench from the original reviewed squad, but narrate the 3–5 genuinely relevant players in depth instead of fifteen repetitive robotic monologues. Match every card player ID to official FPL data and spoken subject. Do not replace cards with generic slides or fabricated logos.
+- **Five fixed headings:** (1) GAMEWEEK REVIEW — THE REAL STORY; (2) SQUAD PRESSURE — WHAT NEEDS FIXING?; (3) TRANSFER TARGETS — BUY / HOLD / SELL; (4) TRANSFER PLANS — ROLL, MOVE OR TAKE A HIT?; (5) THE FINAL VORTEX VERDICT. Spoken agenda must correspond to exactly the scenes displayed.
+- **Production story learned from FPL Harry's reference video (https://youtu.be/LOtSsW7j9lY):** open with a real transfer dilemma; identify player problems; compare relevant alternatives with prices, verified fixtures, minutes and xPts where genuine; explain roll/one FT/-4 scenarios without inventing personalized transfers; finish with conditional verdict. Never copy another creator's footage, speech or graphic assets.
+- **Skills:** Use all RELEVANT installed FPL, YouTube scripting/editing/SEO/retention, vidIQ and **Remotion** skills (remotion-best-practices, markup, captions, Studio, render) wherever they improve the EXISTING renderer. Evaluate compatibility first. Remotion is optional technical support, not permission to replace the current player-card renderer, audio, assets or automation. No need to use irrelevant skills.
+- **Edit the original GitHub production:** .github/workflows/day-1.yml, 1_final_day1.py, vortex/day1_editorial.py and timing/card modules as necessary. Maintain the existing 33-cell source, private-only upload, existing opening, soundtrack and six-second outro; don't edit Day 2/Day 3/other Task automations. Existing Day 1 must regenerate gameweek-correct video on future runs. Retain manual dispatch; any future automatic schedule belongs in the SAME workflow after checking match-completion gate and per-GW duplicate guard.
+- **Data integrity:** Live official FPL season, fixtures, clubs, deadline, status, minutes, transfers and previous-GW results; separate VORTEX model xPts/xMins with source/model timestamps and N/A when unavailable. No invented EO, odds, injuries or transfer state. Do not equate a previous completed GW squad with a verified future editable squad.
+- **QA:** Player card/voiceover/subtitle alignment, all 15 player IDs & current team logos, five agenda headings, verified statistics, 4K 16:9, actual ffprobe MP4 <=420s, captions, mobile readability, music/opening/outro, private YouTube upload, no duplicate GW video. Render/inspect real frames/audio when accessible. If only instructions/code were changed, explicitly state no actual MP4 was produced.
+- **Deliver:** Real repo changes/commits/QA/MP4 link when exists; otherwise exact blocker. No more standalone 3-minute script or second workflow unless explicitly requested.
+
 ## Source and activation
-Accept a canonical YouTube URL, source video ID, timestamped transcript, frames, current FPL VORTEX Day 1 media/code and a duration goal. Default to **150–180 seconds, horizontal 16:9** for Day 1. Make a **45–60 second vertical 9:16 Short** only when requested. Do not copy another creator's script, branding or proprietary graphics.
+Accept a canonical YouTube URL, source video ID, timestamped transcript, frames, current FPL VORTEX Day 1 media/code and a duration goal. Target 5–7 minutes, horizontal 16:9 4K, with a HARD maximum of 420 seconds for the SINGLE existing Day 1 MP4. Make a **45–60 second vertical 9:16 Short** only when requested. Do not copy another creator's script, branding or proprietary graphics.
 
 ## Mandatory /watch gate
 1. Invoke `/watch` if installed, requesting the complete timestamped transcript plus actual sampled video frames (opening, FPL data comparison, recommendation, ending and visual transitions). Validate returned video ID.
@@ -27,7 +42,7 @@ Inspect `mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST` before modifying anything:
 - private YouTube upload scripts must retain privacy and subscriber settings.
 Avoid changes to Day 2, Day 3 and scheduled Tasks 1/2. Preserve the complete 33-cell source until tested.
 
-### 180-second Day 1 storyboard
+### Historical 180-second reference ONLY — not an active Day 1 workflow
 | Time | Scene |
 |---|---|
 | 0:00–0:07 | One actionable FPL question; hook, current club badges. |
