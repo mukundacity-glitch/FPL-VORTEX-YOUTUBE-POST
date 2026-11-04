@@ -18593,6 +18593,7 @@ window.__seek=function(t){
     else{
         hw.style.opacity=0;
     }
+    if(desk) benchPanel.style.setProperty("opacity",0,"important");
     $v("#pitchGW").textContent=desk
       ? `NEXT GAMEWEEK • ${desk.action} WATCHLIST`
       : `GAMEWEEK ${VX.gw} REVIEW`;
