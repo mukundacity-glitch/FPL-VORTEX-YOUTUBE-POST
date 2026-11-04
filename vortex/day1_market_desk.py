@@ -72,7 +72,7 @@ def insert_market_segments(segments, desk):
     return segments[:cut] + additions + segments[cut:]
 
 
-def market_card(record, teams, fixtures):
+def market_card(record, teams, fixtures, photo_resolver=None):
     p = record['element']
     if p is None:
         return None
@@ -90,7 +90,8 @@ def market_card(record, teams, fixtures):
         surname=p.get('second_name') or p['web_name'], position=pos,
         club=team['name'], club_short=team['short_name'],
         club_badge=f"https://resources.premierleague.com/premierleague/badges/100/t{team['code']}.png",
-        player_image=f'https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png' if code else '',
+        player_image=(photo_resolver(p) if photo_resolver else
+            f'https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png' if code else ''),
         price=f"£{float(p['now_cost'])/10:.1f}m", ownership=f"{p['selected_by_percent']}%",
         verdict_sub=f"{record['action']} WATCHLIST • EVENT MARKET",
         display_stats=[dict(label=label, icon=icon, value=number(key, decimals)) for key,label,icon,decimals in labels],

@@ -18175,7 +18175,7 @@ ANIMATION_SEGMENTS = snapshot_review_animation_segments(pkg["segments"])
 _desk_teams = {int(team["id"]): team for team in boot["teams"]}
 _market_cards = [
     {"segment_id": row["segment_id"], "action": row["action"],
-     "card": market_card(row, _desk_teams, _pc_fixture_pack)}
+     "card": market_card(row, _desk_teams, _pc_fixture_pack, resolve_player_photo)}
     for row in VX_DAY1_MARKET_DESK
 ]
 
@@ -18695,6 +18695,7 @@ window.__auditLayout=function(t){
       title:Number($v(".pitchHeader")?.style.opacity||0),
       pitch:Number($v(".pitch")?.style.opacity||0),
       hero:Number($v("#vxHeroWrap")?.style.opacity||0),
+      cardPlayerId:Number($v("#vxHeroWrap .vx-player-card")?.dataset.playerId||0),
       benchCards:[...document.querySelectorAll(".benchPanel .mini")]
         .filter(x=>Number(x.style.opacity)>.5).length,
       table:Number(getComputedStyle($v(".reviewPanel")).opacity||0),
@@ -18873,6 +18874,10 @@ manifest = {
     "timeline":GW_REVIEW_ANIMATION_TIMING,
     "metric_times":metric_map,
     "motion_windows":_review_motion_windows,
+    "market_cues":[
+        {"segment_id":item["segment_id"], "player_id":item["card"]["id"]}
+        for item in _market_cards if item["card"] is not None
+    ],
     "segments":ANIMATION_SEGMENTS
 }
 # Source package is the in-memory current-run authority, not a Drive cache.
@@ -24270,6 +24275,18 @@ else:
                             "GW Review metric emphasis is not isolated to the narrated block: "
                             f"key={metric_key!r}, state={metric_state}"
                         )
+
+                # Verify each post-review card in the real scene before encoding.
+                for market_cue in _vx17_manifest.get("market_cues", []):
+                    market_segment = next(s for s in _vx17_manifest["segments"]
+                                          if s["id"] == market_cue["segment_id"])
+                    market_t = float(market_segment["t0"]) + min(
+                        2.0, (float(market_segment["t1"]) - float(market_segment["t0"])) / 2)
+                    market_state = await _vx17_dom_state(page, market_t)
+                    checkpoint_states[market_cue["segment_id"]] = market_state
+                    if (market_state["hero"] < .88 or market_state["table"] > .05
+                            or market_state["cardPlayerId"] != int(market_cue["player_id"])):
+                        raise RuntimeError(f"Post-review market card missing or obscured: {market_cue}: {market_state}")
 
                 expected_bench = int(_vx17_manifest.get("bench") or 0)
                 for final_key in ("final_start", "final_mid", "final_end"):

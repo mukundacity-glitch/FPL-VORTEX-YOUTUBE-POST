@@ -6,7 +6,7 @@ from playwright.async_api import async_playwright
 Usage: python audit.py <output_dir>   (run build_harness.py with the same dir first)
 """
 import pathlib
-S = str(pathlib.Path(sys.argv[1]))
+S = str(pathlib.Path(sys.argv[1]).resolve())
 html = S + "/harness.html"
 tag = "audit"
 vx = json.load(open(S + '/vx.json'))
