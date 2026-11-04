@@ -48,13 +48,21 @@ class EditorialTests(unittest.TestCase):
                 segments, roster[:11], roster[11:], ctx,
                 review_gw=11, next_gw=12, review_status='FINAL',
             )
-        self.assertEqual(meta['target_seconds'], 240)
+        self.assertEqual(meta['target_seconds'], 330)
+        self.assertEqual(len(meta['spotlight_player_ids']), 4)
         player_segments = [item for item in scripts if item.get('player_id') is not None]
         self.assertEqual(len(player_segments), 15)
-        self.assertTrue(all(len(item['text'].split()) <= 44 for item in player_segments))
+        self.assertTrue(all(
+            len(item['text'].split()) <= (100 if item.get('spotlight') else 44)
+            for item in player_segments
+        ))
+        self.assertEqual(sum(bool(item.get('spotlight')) for item in player_segments), 4)
+        self.assertIn(1, meta['spotlight_player_ids'], 'official availability is a decision priority')
         joined = ' '.join(item['text'] for item in scripts)
         self.assertIn('Expected points are forecasts, not guaranteed returns', joined)
         self.assertIn('Gameweek 11 review', joined)
+        self.assertIn('existing Vortex model', joined)
+        self.assertIn('Three routes', joined)
         self.assertIn('An Example Team', joined)
         self.assertEqual(len(segments), 23)
 

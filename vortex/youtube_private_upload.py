@@ -73,6 +73,88 @@ def _upload_marker(preview_gw: int) -> str:
     return f"fpl-vortex-auto-gw{preview_gw:02d}-video-1-of-3"
 
 
+
+def _official_season_identity(preview_gw: int) -> tuple[str, datetime]:
+    """Derive a cross-season-safe video key from the LIVE official FPL deadline.
+
+    A bare GW number repeats every season; blindly deduplicating GW10 would
+    eventually suppress next year's legitimate video. Fail closed if official
+    event identification is unavailable instead of guessing a season.
+    """
+    from urllib.request import Request, urlopen
+
+    request = Request(
+        "https://fantasy.premierleague.com/api/bootstrap-static/",
+        headers={"User-Agent": "FPL-VORTEX-Day1/1.0"},
+    )
+    with urlopen(request, timeout=20) as response:
+        bootstrap = json.load(response)
+    events = bootstrap.get("events") or []
+    event = next((e for e in events if int(e.get("id") or 0) == preview_gw), None)
+    if not event or not event.get("deadline_time"):
+        raise RuntimeError(
+            f"Official FPL GW{preview_gw} deadline unavailable; cannot safely deduplicate."
+        )
+    deadline = datetime.fromisoformat(str(event["deadline_time"]).replace("Z", "+00:00"))
+    if deadline.tzinfo is None:
+        raise RuntimeError("Official FPL deadline is not timezone aware")
+    start_year = deadline.year if deadline.month >= 7 else deadline.year - 1
+    return f"{start_year}-{start_year + 1}", datetime(start_year, 7, 1, tzinfo=timezone.utc)
+
+
+def _find_existing_gameweek_video(youtube: Any, *, marker: str,
+                                  legacy_marker: str,
+                                  season_start: datetime,
+                                  max_pages: int = 100) -> dict[str, str] | None:
+    """Scan uploads including PRIVATE videos; only the owner's tags count.
+
+    Never rely on search ranking or the local receipt alone. An older upload
+    with the legacy unqualified marker is eligible only inside THIS season.
+    Aborts rather than producing a duplicate if the upload list is incomplete.
+    """
+    response = youtube.channels().list(part="contentDetails", mine=True).execute()
+    channels = response.get("items") or []
+    if len(channels) != 1:
+        raise RuntimeError("Cannot verify exactly one owned uploads playlist")
+    uploads = ((channels[0].get("contentDetails") or {}).get("relatedPlaylists") or {}).get("uploads")
+    if not uploads:
+        raise RuntimeError("Owner uploads playlist is unavailable; duplicate check blocked")
+    token = None
+    for _ in range(max_pages):
+        params = {"part": "contentDetails", "playlistId": uploads, "maxResults": 50}
+        if token:
+            params["pageToken"] = token
+        page = youtube.playlistItems().list(**params).execute()
+        ids = [str((x.get("contentDetails") or {}).get("videoId") or "")
+               for x in page.get("items") or []]
+        ids = [x for x in ids if x]
+        if ids:
+            details = youtube.videos().list(part="snippet,status", id=",".join(ids)).execute()
+            for video in details.get("items") or []:
+                snippet = video.get("snippet") or {}
+                tags = set(snippet.get("tags") or [])
+                if marker in tags:
+                    return {"video_id": str(video["id"]),
+                            "privacy_status": str((video.get("status") or {}).get("privacyStatus") or "unknown")}
+                if legacy_marker in tags:
+                    published = str(snippet.get("publishedAt") or "")
+                    try:
+                        created = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                    except ValueError:
+                        # An unparseable date is not proof that this belongs to
+                        # the old season; a new upload would be unsafe.
+                        raise RuntimeError("Legacy upload has no verifiable publication date")
+                    if created >= season_start:
+                        return {"video_id": str(video["id"]),
+                                "privacy_status": str((video.get("status") or {}).get("privacyStatus") or "unknown")}
+        token = page.get("nextPageToken")
+        if not token:
+            return None
+    raise RuntimeError(
+        f"Owner upload inventory exceeded {max_pages} pages; refuse duplicate-risk upload"
+    )
+
+
 def _validate_package(output_root: Path) -> dict[str, Any]:
     package_path = output_root / "DATA" / PACKAGE_NAME
     package = _read_json(package_path, "YouTube package")
@@ -285,8 +367,17 @@ def upload_private(output_root: Path) -> dict[str, Any]:
     output_root = output_root.resolve()
     package = _validate_package(output_root)
     report_path = output_root / "DATA" / REPORT_NAME
+    preview_gw = int(package["metadata"]["preview_gw"])
+    season_id, season_start = _official_season_identity(preview_gw)
+    marker = f"fpl-vortex-{season_id}-gw{preview_gw:02d}-video-1-of-3"
+    legacy_marker = _upload_marker(preview_gw)
+    # Preserve the pre-existing source tags AND add a season-qualified tag.
+    package["upload_tags"] = list(dict.fromkeys(package["upload_tags"] + [marker]))
     report: dict[str, Any] = {
-        "version": "FPL-VORTEX-YOUTUBE-PRIVATE-UPLOAD-V2",
+        "version": "FPL-VORTEX-YOUTUBE-PRIVATE-UPLOAD-V3",
+        "preview_gw": preview_gw,
+        "season_id": season_id,
+        "deduplication_tag": marker,
         "started_at": _utc_now(),
         "status": "starting",
         "package_file": str(package["package_path"]),
@@ -296,7 +387,7 @@ def upload_private(output_root: Path) -> dict[str, Any]:
             "automatic_publish": False,
             "automatic_schedule": False,
             "manual_publication_required": True,
-            "new_private_upload_on_every_manual_run": True,
+            "one_private_upload_per_season_gameweek": True,
         },
     }
     _write_json_atomic(report_path, report)
@@ -308,9 +399,29 @@ def upload_private(output_root: Path) -> dict[str, Any]:
         report["status"] = "channel_verified"
         _write_json_atomic(report_path, report)
 
-        # A Day 1 workflow can only be started manually. Every successful manual
-        # run intentionally creates a new Private YouTube draft/review upload.
-        # We do not search for or reuse a previous upload from the same Gameweek.
+        # Owner-authenticated, cross-season upload inventory check. Private and
+        # previously published videos are BOTH protected against replacement.
+        existing = _find_existing_gameweek_video(
+            youtube, marker=marker, legacy_marker=legacy_marker,
+            season_start=season_start,
+        )
+        if existing:
+            video_id = existing["video_id"]
+            report.update({
+                "status": "already_uploaded",
+                "completed_at": _utc_now(),
+                "duplicate_prevented": True,
+                "youtube": {
+                    "video_id": video_id,
+                    "privacy_status": existing["privacy_status"],
+                    "studio_url": f"https://studio.youtube.com/video/{video_id}/edit",
+                    "watch_url": f"https://www.youtube.com/watch?v={video_id}",
+                },
+            })
+            _write_json_atomic(report_path, report)
+            print("[YOUTUBE] Day 1 already uploaded for this season/GW; skipped duplicate.")
+            return report
+
         video_id = _insert_private_video(youtube, package)
         report.update(
             {

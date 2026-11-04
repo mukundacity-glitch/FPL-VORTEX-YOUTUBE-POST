@@ -26,7 +26,15 @@ class Day1AgendaTests(unittest.TestCase):
         )
         self.assertEqual([c["key"] for c in cards],
                          ["review", "squad", "alternatives", "routes", "verdict"])
-        self.assertIn("GW11", cards[0]["title"])
+        self.assertEqual(cards[0]["title"], "GAMEWEEK REVIEW — THE REAL STORY")
+        self.assertIn("GW11", cards[0]["subtitle"])
+        self.assertEqual([item["title"] for item in cards], [
+            "GAMEWEEK REVIEW — THE REAL STORY",
+            "SQUAD PRESSURE — WHAT NEEDS FIXING?",
+            "TRANSFER TARGETS — BUY / HOLD / SELL",
+            "TRANSFER PLANS — ROLL, MOVE OR TAKE A HIT?",
+            "THE FINAL VORTEX VERDICT",
+        ])
         self.assertEqual(render_intro_agenda(cards).count('class="agenda-card '), 5)
         narration = spoken_intro_agenda(cards).lower()
         for c in cards:
@@ -48,7 +56,7 @@ class Day1AgendaTests(unittest.TestCase):
             review_segments=review_segments(),
         )
         self.assertEqual([c["key"] for c in cards],
-                         ["review", "squad", "fixtures", "goals", "defence"])
+                         ["review", "squad", "alternatives", "routes", "verdict"])
         one = build_intro_agenda(["00_intro", "04_clean_sheets"], next_gw=24)
         self.assertEqual([c["key"] for c in one], ["defence"])
         self.assertEqual(build_intro_agenda(["gw_review"], next_gw=24), [])
