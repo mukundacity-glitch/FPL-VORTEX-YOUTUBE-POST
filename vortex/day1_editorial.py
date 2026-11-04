@@ -332,6 +332,36 @@ def _candidate_data(official_players: list[dict[str, Any]], model_rows: dict[int
     return sorted(ranked, key=lambda x: (-x['xpts'], -x['xmins'], x['price'], x['id']))
 
 
+
+def _compact_player_script(p: dict[str, Any], ctx: dict[str, Any], *, next_gw: int) -> str:
+    """One evidence-backed beat per player for the shorter Day 1 cut."""
+    name = str(ctx.get('full_name') or p.get('name') or '').strip()
+    if not name:
+        raise ValueError('A reviewed player has no verified spoken identity')
+    state = str(p.get('review_state') or 'UNKNOWN').upper()
+    stats = ctx.get('stats') or {}
+    points = _integer(stats.get('total_points'))
+    minutes = _integer(stats.get('minutes'))
+    unit = 'point' if points == 1 else 'points'
+    if state == 'FINAL' and minutes is not None and minutes > 0 and points is not None:
+        first = f'{name} returned {points} {unit} in the completed Gameweek.'
+    elif state in ('LIVE', 'PARTIAL') and minutes is not None and minutes > 0 and points is not None:
+        first = f'{name} is on {points} {unit} so far; the result is not final.'
+    elif state == 'FINAL' and minutes == 0:
+        first = f'{name} did not play in the completed match.'
+    else:
+        first = f'{name} has no verified final return yet.'
+    flagged = str(ctx.get('status') or '').lower() not in ('', 'a')
+    next_fixture = _fixture(p, next_gw)
+    if flagged:
+        second = f'Team news is flagged for {name}; check availability before a move.'
+    elif next_fixture:
+        second = f'For {name}, next is {next_fixture}.'
+    else:
+        second = f'The next fixture for {name} is not verified.'
+    return first + ' ' + second
+
+
 def build_editorial_review(
     original: list[dict[str, Any]], starters: list[dict[str, Any]],
     bench: list[dict[str, Any]], context: dict[int, dict[str, Any]], *,
@@ -347,6 +377,9 @@ def build_editorial_review(
     """
     if not (1 <= review_gw < next_gw <= 38):
         raise ValueError('Review and upcoming Gameweeks are inconsistent')
+    compact = os.environ.get('VORTEX_DAY1_COMPACT', '').strip() == '1'
+    if compact:
+        target_seconds = 240
     if not 240 <= target_seconds <= 900:
         raise ValueError('Review duration target outside supported bounds')
     roster = starters + bench
@@ -362,8 +395,12 @@ def build_editorial_review(
     pick = _Variety()
     for i, p in enumerate(roster):
         segment = index[f"player_{p['id']}"]
-        segment['text'] = _player_script(p, context[int(p['id'])], i, bench=i >= len(starters),
-                                         next_gw=next_gw, pick=pick)
+        segment['text'] = (
+            _compact_player_script(p, context[int(p['id'])], next_gw=next_gw)
+            if compact else
+            _player_script(p, context[int(p['id'])], i, bench=i >= len(starters),
+                           next_gw=next_gw, pick=pick)
+        )
         segment['editorial_source'] = ['official review picks', 'official live player statistics', 'official bootstrap', 'official fixtures']
         if p.get('model_projection'):
             segment['editorial_source'].append('Vortex projected next-GW model, estimate only')
@@ -374,6 +411,8 @@ def build_editorial_review(
     opener = ((lead + ' The points count, but our next decision needs a closer look. ') if lead else
               f'Gameweek {review_gw}: the points count, but our next decision needs a closer look. ')
     opener += 'Minutes, availability and bench cover matter more than a single result.'
+    if compact:
+        opener = f'Gameweek {review_gw} review: the next decision comes down to minutes, team news and value.'
     index['headline']['text'] = opener
     if 'bench_intro' in index:
         index['bench_intro']['text'] = 'Now the bench. Can these players really cover an absence?'
@@ -454,6 +493,36 @@ def build_editorial_review(
     ])
     # Review close is followed by extra editorial beats on the same review
     # scoreboard, never inserted into the 15-player animation sequence.
+    if compact:
+        short_text = {
+            'editorial_defence': 'For defenders, check likely starts and clean-sheet chances.',
+            'editorial_routes': 'Hold when your eleven is reliable. Spend a transfer to fix a real risk. Only take a hit when its benefit justifies the cost.',
+            'editorial_tradeoff': 'One kind fixture is not enough. Compare minutes, bench cover and price before moving.',
+            'editorial_verdict': 'Hold if the squad is healthy; act if verified team news exposes a weakness. Expected points are forecasts, not guaranteed returns. Thanks for watching FPL Vortex.',
+        }
+        if 'bench_intro' in index:
+            index['bench_intro']['text'] = 'The bench matters when starters are unavailable.'
+        if 'metrics_intro' in index:
+            index['metrics_intro']['text'] = 'Now the captaincy and squad cover.'
+        if 'review_close' in index:
+            index['review_close']['text'] = (
+                'These are review picks, not a confirmed next-Gameweek team.'
+                + (' Some matches are unfinished; returns can change.' if provisional else '')
+            )
+        for beat in insert:
+            key = beat['id']
+            if key in short_text:
+                beat['text'] = short_text[key]
+            elif key == 'editorial_squad_context':
+                beat['text'] = note
+            elif key == 'editorial_squad_data':
+                beat['text'] = squad_data.split('. ')[0].rstrip('.') + '.' if squad_data else 'Verify the squad data before making a move.'
+            elif key == 'editorial_comparison' and cands:
+                candidate = cands[0]
+                beat['text'] = (
+                    f"Model comparison: {candidate['name']} at {candidate['price']:.1f} million, "
+                    f"forecast {candidate['xpts']:.1f} points. Verify minutes and affordability."
+                )
     scripts.extend(insert)
     validate_narration(scripts, player_ids=ids, max_words=1700)
     words = sum(len(WORD.findall(seg.get('text',''))) for seg in scripts)
