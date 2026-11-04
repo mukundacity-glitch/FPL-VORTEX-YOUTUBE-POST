@@ -413,7 +413,7 @@ def _spotlight_commentary(player: dict[str, Any], ctx: dict[str, Any]) -> str:
     if xpts is not None and xmins is not None:
         clauses.append(
             f'For {name}, our existing Vortex model estimates {xpts:.1f} expected points '
-            f'over about {round(xmins)} minutes. Both numbers are forecasts.'
+            f'over about {round(xmins)} minutes, with uncertainty in both figures.'
         )
     elif xpts is not None:
         clauses.append(
