@@ -412,12 +412,12 @@ def _spotlight_commentary(player: dict[str, Any], ctx: dict[str, Any]) -> str:
         )
     if xpts is not None and xmins is not None:
         clauses.append(
-            f'Our existing Vortex model estimates {xpts:.1f} expected points '
+            f'For {name}, our existing Vortex model estimates {xpts:.1f} expected points '
             f'over about {round(xmins)} minutes. Both numbers are forecasts.'
         )
     elif xpts is not None:
         clauses.append(
-            f'The existing Vortex model estimates {xpts:.1f} points, '
+            f'For {name}, the existing Vortex model estimates {xpts:.1f} points, '
             'but expected minutes were not verified.'
         )
     elif not clauses:
@@ -489,10 +489,12 @@ def build_editorial_review(
             for p in starters
         )
         if flagged_count:
-            plural = 'starter carries an' if flagged_count == 1 else 'starters carry'
+            subject = ('starter carries an official availability flag'
+                       if flagged_count == 1
+                       else 'starters carry official availability flags')
             opener = (
-                f'Gameweek {review_gw} review: {flagged_count} {plural} official '
-                'availability flag. Is this a time to move or can we still roll?'
+                f'Gameweek {review_gw} review: {flagged_count} {subject}. '
+                'Is this a time to move or can we still roll?'
             )
         else:
             opener = (
