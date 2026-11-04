@@ -362,6 +362,72 @@ def _compact_player_script(p: dict[str, Any], ctx: dict[str, Any], *, next_gw: i
     return first + ' ' + second
 
 
+
+def _decision_spotlight_ids(roster: list[dict[str, Any]],
+                            context: dict[int, dict[str, Any]],
+                            *, count: int = 4) -> set[int]:
+    """Choose a few important cards from observed FPL facts and existing VORTEX maths.
+
+    This is an editorial sort, not a new xPts/odds formula. Actual FPL flags
+    and unusually short final-match minutes come first. Then use only the
+    VORTEX model projection already attached to the player's verified record.
+    No player names, price targets or fixed Gameweek are encoded here.
+    """
+    ranked: list[tuple[tuple[float, ...], int]] = []
+    for index, player in enumerate(roster):
+        pid = int(player['id'])
+        ctx = context[pid]
+        state = str(player.get('review_state') or '').upper()
+        official_status = str(ctx.get('status') or 'a').lower()
+        flagged = official_status not in ('', 'a')
+        minutes = _integer((ctx.get('stats') or {}).get('minutes'))
+        limited_minutes = state == 'FINAL' and minutes is not None and minutes < 65
+        xpts, _ = _model(player)
+        # Lexicographic selection protects availability before model upside.
+        priority = (float(flagged), float(limited_minutes),
+                    float(xpts is not None), xpts if xpts is not None else -1.0,
+                    -float(index))
+        ranked.append((priority, pid))
+    ranked.sort(reverse=True)
+    return {pid for _, pid in ranked[:count]}
+
+
+def _spotlight_commentary(player: dict[str, Any], ctx: dict[str, Any]) -> str:
+    """Extra insight belongs ONLY to a verified card whose player ID is in focus."""
+    name = str(ctx.get('full_name') or player.get('name') or '').strip()
+    minutes = _integer((ctx.get('stats') or {}).get('minutes'))
+    status = str(ctx.get('status') or 'a').lower()
+    xpts, xmins = _model(player)
+    clauses: list[str] = []
+    if status not in ('', 'a'):
+        clauses.append(
+            f'The question on {name} is availability, not simply the last score. '
+            'Hold that decision until official team news is clearer.'
+        )
+    elif (str(player.get('review_state') or '').upper() == 'FINAL'
+          and minutes is not None and minutes < 65):
+        clauses.append(
+            f'That {minutes}-minute appearance makes the starting role worth checking '
+            f'before trusting {name} for the next fixture.'
+        )
+    if xpts is not None and xmins is not None:
+        clauses.append(
+            f'Our existing Vortex model estimates {xpts:.1f} expected points '
+            f'over about {round(xmins)} minutes. Both numbers are forecasts.'
+        )
+    elif xpts is not None:
+        clauses.append(
+            f'The existing Vortex model estimates {xpts:.1f} points, '
+            'but expected minutes were not verified.'
+        )
+    elif not clauses:
+        clauses.append(
+            f'For {name}, we do not have a verified model comparison. '
+            'A transfer cannot be justified by a missing forecast.'
+        )
+    return ' '.join(clauses)
+
+
 def build_editorial_review(
     original: list[dict[str, Any]], starters: list[dict[str, Any]],
     bench: list[dict[str, Any]], context: dict[int, dict[str, Any]], *,
@@ -379,8 +445,10 @@ def build_editorial_review(
         raise ValueError('Review and upcoming Gameweeks are inconsistent')
     compact = os.environ.get('VORTEX_DAY1_COMPACT', '').strip() == '1'
     if compact:
-        target_seconds = 240
-    if not 240 <= target_seconds <= 900:
+        # Runtime is controlled by the EXISTING Day 1 workflow; never freeze the
+        # narration to the old 240-second mini-cut when a longer episode is desired.
+        target_seconds = int(os.environ.get('VORTEX_DAY1_VIDEO_TARGET_SECONDS', '330'))
+    if not 180 <= target_seconds <= 900:
         raise ValueError('Review duration target outside supported bounds')
     roster = starters + bench
     ids = [int(p['id']) for p in roster]
@@ -393,6 +461,7 @@ def build_editorial_review(
         raise ValueError('Narration/visual player ordering differs from the verified review')
     provisional = review_status.upper() not in ('FINAL', 'COMPLETE')
     pick = _Variety()
+    spotlight_ids = _decision_spotlight_ids(roster, context) if compact else set()
     for i, p in enumerate(roster):
         segment = index[f"player_{p['id']}"]
         segment['text'] = (
@@ -401,6 +470,9 @@ def build_editorial_review(
             _player_script(p, context[int(p['id'])], i, bench=i >= len(starters),
                            next_gw=next_gw, pick=pick)
         )
+        if compact and int(p['id']) in spotlight_ids:
+            segment['text'] += ' ' + _spotlight_commentary(p, context[int(p['id'])])
+        segment['spotlight'] = int(p['id']) in spotlight_ids
         segment['editorial_source'] = ['official review picks', 'official live player statistics', 'official bootstrap', 'official fixtures']
         if p.get('model_projection'):
             segment['editorial_source'].append('Vortex projected next-GW model, estimate only')
@@ -412,7 +484,20 @@ def build_editorial_review(
               f'Gameweek {review_gw}: the points count, but our next decision needs a closer look. ')
     opener += 'Minutes, availability and bench cover matter more than a single result.'
     if compact:
-        opener = f'Gameweek {review_gw} review: the next decision comes down to minutes, team news and value.'
+        flagged_count = sum(
+            str(context[int(p['id'])].get('status') or 'a').lower() not in ('', 'a')
+            for p in starters
+        )
+        if flagged_count:
+            opener = (
+                f'Gameweek {review_gw} review: {flagged_count} starters carry official '
+                'availability flags. Is this a time to move or can we still roll?'
+            )
+        else:
+            opener = (
+                f'Gameweek {review_gw} review: is one quiet score enough to force a '
+                'transfer, or does the verified evidence say hold?'
+            )
     index['headline']['text'] = opener
     if 'bench_intro' in index:
         index['bench_intro']['text'] = 'Now the bench. Can these players really cover an absence?'
@@ -496,9 +581,24 @@ def build_editorial_review(
     if compact:
         short_text = {
             'editorial_defence': 'For defenders, check likely starts and clean-sheet chances.',
-            'editorial_routes': 'Hold when your eleven is reliable. Spend a transfer to fix a real risk. Only take a hit when its benefit justifies the cost.',
-            'editorial_tradeoff': 'One kind fixture is not enough. Compare minutes, bench cover and price before moving.',
-            'editorial_verdict': 'Hold if the squad is healthy; act if verified team news exposes a weakness. Expected points are forecasts, not guaranteed returns. Thanks for watching FPL Vortex.',
+            'editorial_routes': (
+                'Three routes, and no automatic transfer. Roll only when the verified '
+                'eleven and bench are reliable. One free transfer can repair a proven '
+                'minutes or availability weakness. A minus four hit must earn back its '
+                'cost across realistic future starts, not just one attractive fixture.'
+            ),
+            'editorial_tradeoff': (
+                'The key trade-off is starting security against projected upside. '
+                'Compare Vortex forecasts with official minutes and fixture context; '
+                'the forecast is not a promise and we have not verified your available bank.'
+            ),
+            'editorial_verdict': (
+                'Here is the Vortex verdict: hold when your verified squad can cover '
+                'the next Gameweek. Act only if official news identifies a genuine '
+                'weakness and your exact transfer state makes the move feasible. '
+                'Expected points are forecasts, not guaranteed returns. '
+                'Thanks for watching FPL Vortex.'
+            ),
         }
         if 'bench_intro' in index:
             index['bench_intro']['text'] = 'The bench matters when starters are unavailable.'
@@ -527,6 +627,8 @@ def build_editorial_review(
     validate_narration(scripts, player_ids=ids, max_words=1700)
     words = sum(len(WORD.findall(seg.get('text',''))) for seg in scripts)
     return scripts, {'target_seconds':target_seconds,'draft_words':words,
+                     'spotlight_player_ids':sorted(spotlight_ids),
+                     'model_ranking':'existing Vortex next_gw_xpts; no substituted formula',
                      'review_gw':review_gw,'next_gw':next_gw,
                      'current_transfer_state_verified':False,
                      'source':'official review snapshot plus attributed Vortex estimates',
