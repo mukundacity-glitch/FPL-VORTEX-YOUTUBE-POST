@@ -55,12 +55,15 @@ class MarketDeskTests(unittest.TestCase):
         with self.assertRaises(ValueError):build_market_desk({})
 
     def test_insert_immediately_after_review_without_touching_scoring_identity(self):
-        original=[dict(id='player_9',player_id=9),dict(id='review_close'),dict(id='editorial_squad_context')]
+        original=[dict(id='player_9',player_id=9),dict(id='review_close'),dict(id='editorial_squad_context'),
+                  dict(id='editorial_comparison'),dict(id='editorial_defence'),dict(id='editorial_tradeoff')]
         result=insert_market_segments(original,build_market_desk(snapshot()))
         self.assertEqual([s['id'] for s in result][1:6],
             ['review_close','market_intro','market_buy','market_hold','market_sell'])
         self.assertEqual([s['player_id'] for s in result if 'player_id' in s],[9])
-        self.assertEqual(len(original),3)
+        self.assertEqual(len(original),6)
+        self.assertNotIn('editorial_comparison',[s['id'] for s in result])
+        self.assertNotIn('editorial_defence',[s['id'] for s in result])
 
     def test_card_uses_official_assets_identity_price_and_separate_fixture_handoff(self):
         row=build_market_desk(snapshot())[0]

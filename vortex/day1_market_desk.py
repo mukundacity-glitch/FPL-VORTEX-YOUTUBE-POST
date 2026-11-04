@@ -69,7 +69,11 @@ def insert_market_segments(segments, desk):
         "Now the next Gameweek: buy, hold and sell watchlists. These are current-event market trends, "
         "not rolling transfer momentum or a personalized move. Check your budget and free transfers first."))]
     additions.extend(dict(id=r['segment_id'], text=r['text']) for r in desk)
-    return segments[:cut] + additions + segments[cut:]
+    # The named desk replaces the generic alternatives/defence/trade-off tail,
+    # keeping the established narration budget and avoiding repeated advice.
+    tail = [s for s in segments[cut:] if s['id'] not in {
+        'editorial_comparison', 'editorial_defence', 'editorial_tradeoff'}]
+    return segments[:cut] + additions + tail
 
 
 def market_card(record, teams, fixtures, photo_resolver=None):
