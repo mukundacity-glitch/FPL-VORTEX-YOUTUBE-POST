@@ -12,6 +12,7 @@ concurrency:
 
 env:
   PYTHONUNBUFFERED: "1"
+  VORTEX_DAY1_VIDEO_TARGET_SECONDS: "240"
   SOURCE_FILE: 1_final_day1.py
   DAY1_ASSET_FOLDER_ID: 1h3Loznr5RnsMyh-kUd-zMxEgOf98uFSt
   DAY1_ASSET_DIR: /content/drive/MyDrive/FPL_VORTEX/Assets
@@ -393,6 +394,8 @@ jobs:
 
       - name: Execute Day 1 cells once in order
         shell: bash
+        env:
+          VORTEX_DAY1_COMPACT: "1"
         run: |
           set -o pipefail
           python - <<'PY' 2>&1 | tee "${RUNNER_TEMP}/day-1.log"
@@ -536,6 +539,8 @@ jobs:
 
       - name: Validate Day 1 output
         shell: bash
+        env:
+          VORTEX_DAY1_COMPACT: "1"
         run: |
           python - <<'PY'
           import json
@@ -608,7 +613,7 @@ jobs:
               requested_seconds = float(os.getenv("VORTEX_DAY1_VIDEO_TARGET_SECONDS", "480"))
               if not 240 <= requested_seconds <= 900 or abs(actual_seconds - requested_seconds) > 60:
                   raise SystemExit(
-                      f"Final video does not meet the eight-minute configurable target: "
+                      f"Final video does not meet the configured four-minute target: "
                       f"measured={actual_seconds:.2f}s target={requested_seconds:.2f}s"
                   )
               print(f"Day 1 humanized editorial QA: PASS, rendered={actual_seconds:.2f}s, "
