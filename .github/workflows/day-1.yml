@@ -91,6 +91,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
           python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
           python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
+          python -m unittest discover -s tests -p 'test_day1_season_dedup.py' -v
           python -m unittest discover -s tests -p 'test_day1_player_card.py' -v
 
       - name: Verify private YouTube upload configuration
