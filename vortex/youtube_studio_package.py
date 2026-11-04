@@ -150,8 +150,8 @@ def _vx23_chapters(qa, review_gw):
 
 def _vx23_metadata(preview_gw, review_gw, review_status, qa):
     title = (
-        f"FPL GW{preview_gw}: My "
-        f"GW{review_gw} Review (1/3) #FPL"
+        f"FPL GW{preview_gw}: Roll or Transfer? "
+        f"GW{review_gw} Review | FPL VORTEX"
     )
     status_text = "live/partial" if review_status == "LIVE/PARTIAL" else "completed"
     hashtags = ["#FPL", "#FantasyPremierLeague", f"#FPLGW{preview_gw}"]
@@ -164,13 +164,19 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
             ),
             "",
             f"VIDEO {YT_VIDEO_PART}/{YT_VIDEO_TOTAL} for Gameweek {preview_gw} covers:",
-            f"• My GW{review_gw} squad review, player by player",
-            "• Minutes, captaincy, bench and key returns",
+            f"• GAMEWEEK REVIEW — THE REAL STORY (GW{review_gw})",
+            "• SQUAD PRESSURE — WHAT NEEDS FIXING?",
+            "• TRANSFER TARGETS — BUY / HOLD / SELL",
+            "• TRANSFER PLANS — ROLL, MOVE OR TAKE A HIT?",
+            "• THE FINAL VORTEX VERDICT",
+            "• All 15 original player cards; focused commentary on the key decisions",
             "",
             "CHAPTERS",
             *chapters,
             "",
-            "FPL VORTEX reviews my squad using public FPL data. Live or provisional returns are identified in the review.",
+            "FPL VORTEX reviews the recorded squad using official FPL data and its existing VORTEX models. Live or provisional returns are identified in the review.",
+            "Transfer routes are conditional: current editable squad, bank and free transfers must be verified.",
+            "Expected points and captaincy recommendations are forecasts, not guaranteed returns.",
             "",
             " ".join(hashtags),
         ]
@@ -243,6 +249,13 @@ def build_youtube_studio_package(output_root):
         )
 
     video_probe = _vx23_probe_video(final_video)
+    # Re-check the ACTUAL combined source. This protects direct module use,
+    # not only the GitHub workflow's earlier ffprobe guard.
+    if not 0 < video_probe["duration"] <= 420.0:
+        raise RuntimeError(
+            f"Day 1 packaged video exceeds the seven-minute cap: "
+            f"{video_probe['duration']:.2f}s"
+        )
     if (video_probe["width"], video_probe["height"]) != YT_VIDEO_SIZE:
         raise RuntimeError(
             "YouTube Studio package requires a true 4K final MP4; "
