@@ -81,7 +81,7 @@ class LiveEditorialDay1Tests(unittest.TestCase):
         self.assertFalse(report["opinions"])
 
     def test_deadline_passed_and_old_feed_fail_closed(self):
-        late = self.report(now=NOW) if False else build_day1_brief(
+        late = build_day1_brief(
             bootstrap=BOOT, feed_xml=RSS, article_pages={URL: HTML},
             now=NOW + timedelta(hours=7))
         self.assertEqual(late["status"], "deadline_passed")
@@ -91,6 +91,22 @@ class LiveEditorialDay1Tests(unittest.TestCase):
                                   article_pages={URL: HTML},
                                   now=NOW + timedelta(days=9))
         self.assertEqual(result["status"], "no_current_articles")
+
+    def test_live_wordpress_index_fallback_uses_current_publication_date(self):
+        index = [{"title": {"rendered": "GW10 Transfer Plans and Team Selection"},
+                  "link": URL, "date_gmt": "2026-11-04T12:00:00"}]
+        def fake_fetch(url):
+            if url.endswith("/feed/"):
+                raise OSError("RSS blocked")
+            if "wp-json/wp/v2/posts" in url:
+                return json.dumps(index).encode()
+            if url == URL:
+                return HTML
+            raise AssertionError("Unexpected external URL")
+        with patch("vortex.day1_live_editorial._fetch", side_effect=fake_fetch):
+            report = build_day1_brief(bootstrap=BOOT, now=NOW)
+        self.assertEqual(report["status"], "verified_author_opinions")
+        self.assertGreater(len(report["opinions"]), 1)
 
     def test_unavailable_source_never_reuses_curated_gw10_json(self):
         with patch("vortex.day1_live_editorial._fetch", side_effect=OSError("offline")):
