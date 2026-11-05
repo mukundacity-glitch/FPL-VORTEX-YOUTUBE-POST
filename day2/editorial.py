@@ -30,10 +30,11 @@ def _player_ids(rows: Iterable[dict[str, Any]]) -> set[int]:
 
 def decisions(gameweek: int, highlighted_rows: Iterable[dict[str, Any]],
               *, path: str | Path | None = None, limit: int = 2) -> list[dict]:
-    """Return only decisions about current model-highlighted FPL players.
+    """Return current attributed decisions, preferring model-highlighted IDs.
 
-    One general roll/chip plan may be used when no named player overlaps.
-    Never select players solely because an external editorial article said so.
+    An author's alternative can still be discussed if it has valid live FPL
+    identity but missed our model shortlist. It remains an external suggestion;
+    never insert that name into the model's ranked cards or promote it to BUY.
     """
     if not 1 <= int(gameweek) <= 38 or limit < 1:
         return []
@@ -48,8 +49,12 @@ def decisions(gameweek: int, highlighted_rows: Iterable[dict[str, Any]],
         candidates = _player_ids(op.get("players") or [])
         if candidates and (candidates & focused):
             ranked.append((0, op))
-        elif not candidates and op.get("action") in {"ROLL", "BENCH_BOOST"}:
+        elif candidates:
+            # A factual article opinion is still useful as a clearly separate
+            # alternative; it must not contaminate model-ranked player cards.
             ranked.append((1, op))
+        elif op.get("action") in {"ROLL", "BENCH_BOOST"}:
+            ranked.append((2, op))
     ranked.sort(key=lambda item: (item[0],
                                   {"BUY_CONSIDER":0,"CAPTAIN_COMPARE":1,
                                    "START":2,"BENCH":3}.get(item[1].get("action"),9),
