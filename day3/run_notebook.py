@@ -1135,6 +1135,19 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = patch_popup_audio_source(source)
         source = remove_shortlist_cell(cell_index, source)
         source = patch_evidence_pipeline(cell_index, source)
+        # Add dated independent-author comparison only to the existing
+        # final-verdict speech. Never touch player-card art or motion.
+        if cell_index == SHARED_NARRATION_CELL_INDEX and os.environ.get("VORTEX_EDITORIAL_BRIEF"):
+            audio_anchor = "    scripts = {k: v for k, v in scripts.items() if k in _requested_shared}"
+            if source.count(audio_anchor) != 1:
+                raise RuntimeError("Day 3 attributed opinion speech anchor changed")
+            external_note = "\n".join([
+                "    from vortex.expert_editorial import narrator_note as _vx_external_note",
+                "    _vx_author_comparison = _vx_external_note(int(NEXT_GW), topics=('transfers', 'captaincy'), max_items=2)",
+                "    if _vx_author_comparison and scripts.get('05_outro'):",
+                "        scripts['05_outro'] = _vx_author_comparison + '\\n\\n' + scripts['05_outro']",
+            ])
+            source = source.replace(audio_anchor, audio_anchor + "\n" + external_note, 1)
         if PREVIEW_CELL_MARKER in source:
             print(f"⏭️ Skipping Colab-only live preview cell {cell_index}.")
             continue
