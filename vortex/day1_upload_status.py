@@ -61,7 +61,7 @@ def main() -> None:
                 f"- **Result:** {outcome}\n"
                 "- **Visibility:** Private (never automatically Public)\n"
                 f"- **Review in YouTube Studio:** {result['studio_url']}\n"
-                f"- **Video ID:** \`{result['video_id']}\`\n\n"
+                f"- **Video ID:** `{result['video_id']}`\n\n"
                 "The video stays Private until you manually publish it in YouTube Studio.\n"
             )
 
