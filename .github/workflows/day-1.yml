@@ -347,6 +347,16 @@ jobs:
           print("Previous Day 1 outputs cleared; folder structure preserved")
           PY
 
+      - name: Research current AllAboutFPL article references and author positions
+        shell: bash
+        run: |
+          # The standalone reader verifies official next GW and dated RSS sources.
+          # On an outage it writes an explicit source_unavailable result, not
+          # last week's recommendations. Neither player cards nor animations change.
+          brief="${RUNNER_TEMP}/allaboutfpl_editorial.json"
+          python -m vortex.expert_editorial --output "${brief}"
+          echo "VORTEX_EDITORIAL_BRIEF=${brief}" >> "${GITHUB_ENV}"
+
       - name: Prepare Colab compatibility layer
         shell: bash
         run: |
