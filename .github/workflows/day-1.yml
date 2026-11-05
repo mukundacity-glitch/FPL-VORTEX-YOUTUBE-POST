@@ -89,6 +89,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_agenda.py' -v
           python -m unittest discover -s tests -p 'test_day1_intro_voice_gate.py' -v
           python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
+          python -m unittest discover -s tests -p 'test_day1_soft_duration.py' -v
           python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
           python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
           python -m unittest discover -s tests -p 'test_day1_season_dedup.py' -v
