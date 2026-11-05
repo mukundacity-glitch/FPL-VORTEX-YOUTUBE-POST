@@ -57,8 +57,10 @@ class Day1EditorialIntegrationTests(unittest.TestCase):
         self.assertIn("word-level review captions", workflow)
         self.assertIn('VORTEX_DAY1_COMPACT: "1"', workflow)
         self.assertIn('VORTEX_DAY1_VIDEO_TARGET_SECONDS: "330"', workflow)
-        self.assertIn('Day 1 exceeds strict 7-minute MP4 limit', workflow)
-        self.assertLess(workflow.index("Day 1 exceeds strict 7-minute MP4 limit"),
+        self.assertIn('Day 1 soft 7-minute goal exceeded', workflow)
+        self.assertIn('Day 1 final MP4 has missing or invalid duration', workflow)
+        self.assertNotIn('Day 1 exceeds strict 7-minute MP4 limit', workflow)
+        self.assertLess(workflow.index("Day 1 soft 7-minute goal exceeded"),
                         workflow.index("Upload final 4K video privately to YouTube"))
 
 
