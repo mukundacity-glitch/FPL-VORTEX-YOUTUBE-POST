@@ -6,6 +6,14 @@ on:
     paths:
       - "vortex/youtube_private_upload.py"
       - "vortex/day1_upload_status.py"
+      - "vortex/expert_editorial.py"
+      - "vortex/allaboutfpl_verified_opinions.json"
+      - "vortex/day1_editorial.py"
+      - "day2/run_notebook.py"
+      - "day3/run_notebook.py"
+      - "tests/test_expert_editorial.py"
+      - ".github/workflows/day-2.yml"
+      - ".github/workflows/day-3.yml"
       - "tests/test_day1_season_dedup.py"
       - "tests/test_day1_upload_status.py"
       - ".github/workflows/day-1.yml"
@@ -14,6 +22,14 @@ on:
     paths:
       - "vortex/youtube_private_upload.py"
       - "vortex/day1_upload_status.py"
+      - "vortex/expert_editorial.py"
+      - "vortex/allaboutfpl_verified_opinions.json"
+      - "vortex/day1_editorial.py"
+      - "day2/run_notebook.py"
+      - "day3/run_notebook.py"
+      - "tests/test_expert_editorial.py"
+      - ".github/workflows/day-2.yml"
+      - ".github/workflows/day-3.yml"
       - "tests/test_day1_season_dedup.py"
       - "tests/test_day1_upload_status.py"
       - ".github/workflows/day-1.yml"
@@ -35,3 +51,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_season_dedup.py' -v
       - name: Reject successful workflows without a private YouTube draft
         run: python -m unittest discover -s tests -p 'test_day1_upload_status.py' -v
+      - name: Guard current gameweek and attributable editorial source
+        run: python -m unittest discover -s tests -p 'test_expert_editorial.py' -v
+      - name: Compile unchanged media runner with external-editorial integration
+        run: python -m py_compile vortex/expert_editorial.py vortex/day1_editorial.py day2/run_notebook.py day3/run_notebook.py
