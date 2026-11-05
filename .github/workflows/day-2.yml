@@ -101,15 +101,15 @@ jobs:
             "edge-tts==7.2.8"
           python -m playwright install --with-deps chromium
 
-      - name: Research current AllAboutFPL article references and author positions
+      - name: Collect next-Gameweek AllAboutFPL author recommendations
         shell: bash
         run: |
-          # The standalone reader verifies official next GW and dated RSS sources.
-          # On an outage it writes an explicit source_unavailable result, not
-          # last week's recommendations. Neither player cards nor animations change.
-          brief="${RUNNER_TEMP}/allaboutfpl_editorial.json"
-          python -m vortex.expert_editorial --output "${brief}"
+          # Original, source-attributed interpretation; no static GW10 opinion list.
+          brief="${RUNNER_TEMP}/day2_current_editorial.json"
+          python -m vortex.day1_live_editorial --output "${brief}"
           echo "VORTEX_EDITORIAL_BRIEF=${brief}" >> "${GITHUB_ENV}"
+          install -Dm644 "${brief}" "${DAY2_OUTPUT_ROOT}/Data/day2_editorial_sources.json"
+          echo "[DAY 2] Source manifest archived; player selection stays model-led."
 
       - name: Execute fresh Day 2 notebook
         shell: bash

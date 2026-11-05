@@ -1107,6 +1107,90 @@ def _patch_quality(payload: dict, quality: str, notebook_path: Path) -> None:
     _set_cell_source(cells[0], patched)
 
 
+def _patch_truthful_exposure_labels(payload: dict) -> None:
+    """Preserve every card/animation but never mislabel ownership as EO.
+
+    The existing Day 2 model records exact EO or the fallback ownership source
+    in relevant_eo_label. Only rendered captions and their spoken descriptor
+    change; no projection, ranking, player choice or timing logic changes.
+    """
+    voice_cell = payload["cells"][4]
+    voice_source = _cell_source(voice_cell)
+    phrase = (
+        '    _eo = float(row.get("relevant_eo") or row.get("overall_ownership") or 0.0)'
+        '\n    _own = float(row.get("overall_ownership") or 0.0)'
+    )
+    replacement = phrase + "\n" + (
+        '    _eo_source = str(row.get("relevant_eo_label") or "OVERALL OWNERSHIP").upper()'
+        '\n    _eo_spoken = ("effective ownership" if _eo_source == "TOP 1K EO"'
+        ' else "top-one-thousand ownership" if _eo_source == "TOP 1K OWNERSHIP"'
+        ' else "overall ownership")'
+    )
+    if voice_source.count(phrase) != 1:
+        raise RuntimeError("Day 2 source-specific exposure narration anchor changed")
+    voice_source = voice_source.replace(phrase, replacement, 1)
+    wrong = 'f"At {_eo:.1f} percent effective ownership and {_own:.1f} percent overall ownership, there is clear room for rank gain. "'
+    correct = 'f"At {_eo:.1f} percent {_eo_spoken} and {_own:.1f} percent overall ownership, there is room for rank gain if minutes and fixtures support it. "'
+    if voice_source.count(wrong) != 1:
+        raise RuntimeError("Day 2 effective ownership narration phrase changed")
+    _set_cell_source(voice_cell, voice_source.replace(wrong, correct, 1))
+
+    graphics_cell = payload["cells"][13]
+    graphics_source = _cell_source(graphics_cell)
+    old1 = '    _eo = float(player.get("relevant_eo") or _own)'
+    new1 = old1 + "\n" + (
+        '    _eo_source = str(player.get("relevant_eo_label") or "OVERALL OWNERSHIP").upper()'
+        '\n    _eo_label = ("TOP1K EO" if _eo_source == "TOP 1K EO"'
+        ' else "TOP1K OWN" if _eo_source == "TOP 1K OWNERSHIP" else "FPL OWN")'
+    )
+    old2 = '    _eo = float(player.get("relevant_eo") or player.get("overall_ownership") or 0.0)'
+    new2 = old2 + "\n" + (
+        '    _eo_source = str(player.get("relevant_eo_label") or "OVERALL OWNERSHIP").upper()'
+        '\n    _eo_label = ("TOP1K EO" if _eo_source == "TOP 1K EO"'
+        ' else "TOP1K OWN" if _eo_source == "TOP 1K OWNERSHIP" else "FPL OWN")'
+    )
+    changes = [
+        (old1, new1),
+        (old2, new2),
+        ('<span>RELEVANT EO</span>', '<span>{_eo_label}</span>'),
+        ('<div class="band">EO {_eo:.1f}%</div>',
+         '<div class="band">{_eo_label} {_eo:.1f}%</div>'),
+        ('<small>EO {_eo:.1f}%</small>',
+         '<small>{_eo_label} {_eo:.1f}%</small>'),
+        ('<div class="filterChip" data-in="0.6">LOW EO</div>',
+         '<div class="filterChip" data-in="0.6">LOW EXPOSURE</div>'),
+        ('<div>NAME • PRICE • EO</div>',
+         '<div>NAME • PRICE • EXPOSURE</div>'),
+    ]
+    for before, after in changes:
+        if graphics_source.count(before) != 1:
+            raise RuntimeError("Day 2 exposure label template changed: " + before[:58])
+        graphics_source = graphics_source.replace(before, after, 1)
+    _set_cell_source(graphics_cell, graphics_source)
+
+
+def _enforce_official_next_gameweek(payload: dict) -> None:
+    """Fail closed if the live FPL API no longer identifies one next GW.
+
+    Only patches the transient execution copy of the Drive notebook.
+    Existing player selection, card animation and presentation remain intact.
+    """
+    cell = payload["cells"][4]
+    source = _cell_source(cell)
+    old = '    next_gw_obj = next((e for e in events if e.get("is_next")), current_gw_obj)'
+    new = "\n".join([
+        "    _vx_verified_next = [e for e in events if e.get('is_next') is True]",
+        "    if len(_vx_verified_next) != 1 or not _vx_verified_next[0].get('deadline_time'):",
+        "        raise RuntimeError('Official FPL next Gameweek unavailable or ambiguous')",
+        "    if not isinstance(elements, list) or not elements or not teams_raw:",
+        "        raise RuntimeError('Official FPL player or club roster unavailable')",
+        "    next_gw_obj = _vx_verified_next[0]",
+    ])
+    if source.count(old) != 1:
+        raise RuntimeError("Day 2 official next-GW source anchor changed")
+    _set_cell_source(cell, source.replace(old, new, 1))
+
+
 def _patch_brand_asset(payload: dict) -> None:
     logo = Path(os.environ["DAY2_ASSET_DIR"]) / "logo1.png"
     if not logo.is_file():
@@ -1161,11 +1245,14 @@ def execute_notebook(notebook_path: Path, quality: str) -> None:
     asyncio.run(_verify_edge_ryan())
     payload = json.loads(notebook_path.read_text(encoding="utf-8"))
     _patch_scene2_player_validation(payload)
+    _enforce_official_next_gameweek(payload)
     repaired = _repair_python311_fstrings(payload)
     replaced = _replace_last_data_slide(payload)
     _audit_notebook(payload)
     if repaired or replaced:
         _sync_repaired_notebook(payload, notebook_path)
+    # Exact EO labels are source-specific; patch only the transient render copy.
+    _patch_truthful_exposure_labels(payload)
     _patch_quality(payload, quality, notebook_path)
     _patch_brand_asset(payload)
     patch_player_images(payload)
@@ -1179,10 +1266,15 @@ def execute_notebook(notebook_path: Path, quality: str) -> None:
         if editorial_source.count(audio_anchor) != 1:
             raise RuntimeError("Day 2 voice-only editorial anchor changed")
         editorial_injection = "\n".join([
-            "from vortex.expert_editorial import narrator_note as _vx_external_note",
-            "_vx_external_view = _vx_external_note(int(target_gw), topics=('transfers', 'captaincy'), max_items=2)",
+            "from day2.editorial import spoken_comparison as _vx_spoken_expert_comparison",
+            "_vx_highlighted = list(s2_featured_4) + list(s5_top_10_diffs)",
+            "_vx_external_view = _vx_spoken_expert_comparison(int(target_gw), _vx_highlighted)",
             "if _vx_external_view:",
-            "    scene7_narration = vx_full_word_narration(_vx_external_view + ' ' + scene7_narration, context='Attributed expert plans')",
+            "    scene7_narration = vx_full_word_narration(",
+            "        scene7_narration.replace(",
+            "            'Everything now comes down to the final decisions',",
+            "            _vx_external_view + ' Everything now comes down to the final decisions',",
+            "            1), context='Day 2 current expert perspective')",
             "",
             "",
         ])

@@ -26,6 +26,19 @@ html body .vx-gwPill{{font-family:VortexDisplay!important;font-weight:600!import
 html body .sceneTitle h1{{font-size:104px!important;line-height:1.06!important}}
 html body .sceneSub{{font-size:32px!important;line-height:1.1!important;max-width:100%!important;white-space:normal!important}}
 html body .rankName,html body .idText strong,html body .name,html body .rankMetric strong,html body .metricValue{{line-height:1.08!important}}
+
+/* FPL VORTEX premium Day 2 broadcast system: editorial canvas only.
+   Character: midnight scoreboard ink, champagne-white type,
+   aged-gold keylines and subdued cyan data accents.
+   DO NOT target player-card figures, fixtures, images, or timed animation. */
+html body .vx-topHeader{{border-bottom:2px solid rgba(126,198,207,.24)!important}}
+html body .vx-channelName{{color:#F6F5F1!important;letter-spacing:.25px!important;text-shadow:none!important}}
+html body .vx-channelSub{{color:#A8CED3!important;font-weight:640!important;letter-spacing:.2px!important}}
+html body .sceneTitle h1{{font-family:VortexDisplay!important;letter-spacing:.2px!important;font-weight:700!important;color:#F9F8F2!important;text-shadow:0 3px 16px rgba(0,5,13,.35)!important}}
+html body .sceneSub{{font-family:VortexBody!important;color:#C1D5D8!important;font-weight:620!important;letter-spacing:.2px!important}}
+html body .vx-gwPill{{font-family:VortexDisplay!important;background:linear-gradient(110deg,#F8E7B7,#D2AD62)!important;border:1px solid #F5E9CA!important;color:#102233!important;box-shadow:0 6px 18px rgba(0,0,0,.19)!important}}
+html body .sceneTitle h1 .accentGold,html body .sceneTitle h1 .goldAccent{{color:#E9C985!important}}
+
 """
 
 

@@ -94,7 +94,7 @@ def _parse_video_date(value: str) -> date:
     return parsed
 
 
-def _render_metadata(config: dict[str, Any], video_date: str) -> dict[str, Any]:
+def _render_metadata(config: dict[str, Any], video_date: str, *, scene_context: dict[str, Any]) -> dict[str, Any]:
     parsed = _parse_video_date(video_date)
     topic = str(config.get("topic") or "").strip()
     summary = str(config.get("summary") or "").strip()
@@ -109,16 +109,28 @@ def _render_metadata(config: dict[str, Any], video_date: str) -> dict[str, Any]:
         "day_2digit": parsed.strftime("%d"),
         "topic": topic,
         "summary": summary,
+        "gameweek": scene_context["gameweek"],
     }
     title = title_template.format(**values)
     description = description_template.format(**values)
-    from vortex.expert_editorial import source_credits
-    description += source_credits()
+    featured = scene_context["expected_minutes_players"]
+    differ = scene_context["differential_players"]
+    description += ("\n\nGW" + str(scene_context["gameweek"])
+                    + " | VORTEX model minutes shortlist: "
+                    + ", ".join(str(p["name"]) for p in featured)
+                    + "\nGW" + str(scene_context["gameweek"])
+                    + " | VORTEX differential shortlist: "
+                    + ", ".join(str(p["name"]) for p in differ)
+                    + "\nExpected points and minutes are forecasts, not guaranteed returns.")
+    from .editorial import youtube_credits
+    description += youtube_credits(scene_context["gameweek"])
     hashtags = [str(item).strip() for item in config.get("hashtags") or [] if str(item).strip()]
     tags = [str(item).strip() for item in config.get("tags") or [] if str(item).strip()]
 
     if len(title) > 100:
         raise RuntimeError(f"YouTube title exceeds 100 characters: {len(title)}")
+    if f"GW{scene_context['gameweek']}" not in title:
+        raise RuntimeError("Day 2 title must display current verified Gameweek")
     if "Day 2" not in title:
         raise RuntimeError("Day 2 title must visibly identify Day 2")
     if parsed.strftime("%B") not in title or parsed.strftime("%d") not in title:
@@ -130,6 +142,7 @@ def _render_metadata(config: dict[str, Any], video_date: str) -> dict[str, Any]:
 
     return {
         "video_date": parsed.isoformat(),
+        "gameweek": scene_context["gameweek"],
         "title": title,
         "description": description,
         "hashtags": hashtags,
@@ -163,7 +176,9 @@ def build_package(
         raise RuntimeError("Day 2 media QA has not passed")
 
     probe = _probe_video(video)
-    metadata = _render_metadata(config, configured_date)
+    from .release_contract import verify_current_scene_package
+    scene_context = verify_current_scene_package(output_root)
+    metadata = _render_metadata(config, configured_date, scene_context=scene_context)
     upload_ready = [probe["width"], probe["height"]] == [3840, 2160]
 
     package = {
@@ -182,6 +197,7 @@ def build_package(
             "duration_seconds": probe["duration"],
         },
         "metadata": metadata,
+        "model_context": scene_context,
         "studio_checklist": [
             "The GitHub workflow may upload this Day 2 MP4 only as Private.",
             "Review title, description, tags, thumbnail, and video in YouTube Studio.",

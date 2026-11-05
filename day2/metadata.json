@@ -1,20 +1,24 @@
 {
-  "version": "FPL-VORTEX-DAY2-YOUTUBE-METADATA-V1",
-  "topic": "Expected Minutes, Rank Pressure & Differentials",
-  "summary": "Expected minutes, ownership pressure, rank gain and loss, differential picks, and model exposure traps for the current Fantasy Premier League Gameweek.",
-  "title_template": "{month_name} {day_2digit} | Day 2 | {topic} #FPL #FantasyPremierLeague",
-  "description_template": "Day 2 of my Fantasy Premier League video series.\n\n{summary}\n\n#FPL #FantasyPremierLeague #PremierLeague",
+  "version": "FPL-VORTEX-DAY2-YOUTUBE-METADATA-V2",
+  "topic": "Expected Minutes, Differentials & Rank Decisions",
+  "summary": "I compare the latest VORTEX minutes and points models with verified FPL availability, ownership, fixture risk and differentials. Every player shortlist comes from this video's current Gameweek data.",
+  "title_template": "{month_name} {day_2digit} | GW{gameweek} Day 2 | xMins & Differentials | FPL VORTEX",
+  "description_template": "GW{gameweek} • FPL VORTEX Day 2 — I break down expected minutes, rank pressure and the differentials I am watching this Gameweek.\n\n{summary}\n\nIndependent expert discussions are attributed below when available, and are not substituted for official player news or VORTEX projections.\n\n#FPL #FantasyPremierLeague #PremierLeague #FPLVORTEX",
   "hashtags": [
     "#FPL",
     "#FantasyPremierLeague",
-    "#PremierLeague"
+    "#PremierLeague",
+    "#FPLVORTEX"
   ],
   "tags": [
     "FPL",
     "Fantasy Premier League",
     "Premier League",
     "FPL VORTEX",
-    "Day 2"
+    "FPL Gameweek",
+    "Expected Minutes",
+    "Differentials",
+    "Rank Decisions"
   ],
   "category_id": "17",
   "language": "en-GB"
