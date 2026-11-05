@@ -6,6 +6,9 @@ on:
     paths:
       - "vortex/youtube_private_upload.py"
       - "vortex/day1_upload_status.py"
+      - "vortex/youtube_studio_package.py"
+      - "day2/youtube.py"
+      - "day3/publish_private.py"
       - "vortex/expert_editorial.py"
       - "vortex/allaboutfpl_verified_opinions.json"
       - "vortex/day1_editorial.py"
@@ -22,6 +25,9 @@ on:
     paths:
       - "vortex/youtube_private_upload.py"
       - "vortex/day1_upload_status.py"
+      - "vortex/youtube_studio_package.py"
+      - "day2/youtube.py"
+      - "day3/publish_private.py"
       - "vortex/expert_editorial.py"
       - "vortex/allaboutfpl_verified_opinions.json"
       - "vortex/day1_editorial.py"
@@ -54,4 +60,4 @@ jobs:
       - name: Guard current gameweek and attributable editorial source
         run: python -m unittest discover -s tests -p 'test_expert_editorial.py' -v
       - name: Compile unchanged media runner with external-editorial integration
-        run: python -m py_compile vortex/expert_editorial.py vortex/day1_editorial.py day2/run_notebook.py day3/run_notebook.py
+        run: python -m py_compile vortex/expert_editorial.py vortex/day1_editorial.py day2/run_notebook.py day3/run_notebook.py vortex/youtube_studio_package.py day2/youtube.py day3/publish_private.py
