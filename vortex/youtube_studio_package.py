@@ -182,7 +182,7 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
             " ".join(hashtags),
         ]
     )
-    from vortex.expert_editorial import source_credits
+    from vortex.day1_live_editorial import source_credits
     description += source_credits(preview_gw)
     tags = [
         "FPL",

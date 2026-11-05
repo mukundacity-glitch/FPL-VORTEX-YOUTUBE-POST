@@ -96,6 +96,42 @@ def spoken_intro_agenda(cards):
     return " ".join(card["speech"] for card in cards)
 
 
+
+# Premium light treatment is scoped ONLY to the existing intro agenda.
+# Player-card CSS and entrance/exit animation remain exactly unchanged.
+PREMIUM_AGENDA_CSS = """
+<style id="vx-day1-agenda-premium">
+.agendaWrap .agenda-card {
+  background:linear-gradient(135deg,#ffffff 0%,#f4f8fb 100%)!important;
+  border:2px solid rgba(103,170,188,.32)!important;
+  border-radius:24px!important;
+  box-shadow:0 12px 38px rgba(0,8,24,.22),inset 0 1px 0 #fff!important;
+}
+.agendaWrap .agenda-card:nth-child(even) {
+  background:linear-gradient(135deg,#fbfdff 0%,#eaf5fa 100%)!important;
+  border-color:rgba(196,156,70,.32)!important;
+}
+.agendaWrap .agendaNum {
+  color:#aa8029!important;font-weight:900!important;
+  font-variant-numeric:tabular-nums;
+}
+.agendaWrap .agenda-card:nth-child(even) .agendaNum{color:#168ea7!important}
+.agendaWrap .agenda-title {
+  color:#152337!important;text-shadow:none!important;
+  font-size:52px!important;letter-spacing:.45px!important;
+  font-weight:950!important;
+}
+.agendaWrap .agenda-sub {
+  color:#557083!important;font-weight:850!important;
+  font-size:27px!important;letter-spacing:1.15px!important;
+}
+.agendaWrap .agendaAccent {
+  background:linear-gradient(180deg,#17a6bf,#cfad59)!important;
+  width:7px!important;box-shadow:none!important;
+}
+</style>
+"""
+
 def render_intro_agenda(cards):
     rows = []
     for i, card in enumerate(cards, 1):
@@ -108,4 +144,4 @@ def render_intro_agenda(cards):
             f'<div class="agenda-sub">{subtitle}</div></div>'
             '<div class="agendaAccent" aria-hidden="true"></div></div>'
         )
-    return "\n".join(rows)
+    return PREMIUM_AGENDA_CSS + "\n" + "\n".join(rows)

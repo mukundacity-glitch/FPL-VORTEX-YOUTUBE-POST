@@ -5,6 +5,11 @@ on:
     paths:
       - "1_final_day1.py"
       - "vortex/day1_editorial.py"
+      - "vortex/day1_live_editorial.py"
+      - "vortex/expert_editorial.py"
+      - "vortex/day1_agenda.py"
+      - "vortex/youtube_studio_package.py"
+      - "tests/test_day1_live_editorial.py"
       - "tests/test_day1_editorial*.py"
       - "tests/test_day1_agenda.py"
       - "tests/test_day1_intro_voice_gate.py"
@@ -43,6 +48,27 @@ jobs:
         run: python -m pip install "pandas>=2.2,<3" "numpy>=2.0,<3"
       - name: Compile the 33 untouched notebook-cell boundaries and check editorial binding
         run: python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
+      - name: Compile Day 1 live editorial and packaging changes
+        run: python -m py_compile vortex/day1_live_editorial.py vortex/day1_editorial.py vortex/day1_agenda.py vortex/youtube_studio_package.py
+      - name: Verify live article extraction, player IDs, original narrator and agenda CSS
+        run: python -m unittest discover -s tests -p 'test_day1_live_editorial.py' -v
+      - name: Inspect live official-GW and external expert-source reachability (non-publishing)
+        shell: bash
+        run: |
+          python -m vortex.day1_live_editorial --output "${RUNNER_TEMP}/day1-live-source.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          source = json.loads((Path(os.environ["RUNNER_TEMP"]) / "day1-live-source.json").read_text())
+          print("[DAY1 LIVE SOURCE] GW", source.get("gameweek"), "status", source.get("status"))
+          print("[DAY1 LIVE SOURCE] articles", len(source.get("articles") or []),
+                "qualified opinion statements", len(source.get("opinions") or []))
+          for op in source.get("opinions") or []:
+              print("[DAY1 LIVE ADVICE]", op.get("author"), op.get("action"),
+                    [p.get("name") for p in op.get("players") or []],
+                    "article:", (op.get("url") or "").rsplit("/", 2)[-2])
+          PY
       - name: Verify dynamic narratives, missing-data handling and exact captions
         run: python -m unittest discover -s tests -p 'test_day1_editorial.py' -v
       - name: Verify soft 7-minute pacing and natural Ryan voice
