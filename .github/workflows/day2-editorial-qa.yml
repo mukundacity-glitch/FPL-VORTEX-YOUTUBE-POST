@@ -34,6 +34,10 @@ jobs:
           runner = Path("day2/run_notebook.py").read_text()
           assert "python -m vortex.day1_live_editorial" in wf
           assert "from vortex.expert_editorial import narrator_note" not in runner
-          assert "GW10" not in Path("day2/editorial.py").read_text()
-          print("No hardcoded day-specific player recommendation source: PASS")
+          import ast
+          tree = ast.parse(Path("day2/editorial.py").read_text())
+          constants = [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant)]
+          assert not any(isinstance(v,str) and v in ("Tavernier", "Rayan", "Gabriel", "Haaland") for v in constants)
+          assert "def decisions(gameweek:" in Path("day2/editorial.py").read_text()
+          print("No hardcoded named-player recommendation in the Day 2 decision module: PASS")
           PY
