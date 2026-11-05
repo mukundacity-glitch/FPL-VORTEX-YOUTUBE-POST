@@ -61,10 +61,37 @@ class LiveEditorialDay1Tests(unittest.TestCase):
         self.assertIn(("Srini", "ROLL"), labels)
         self.assertIn(("Srini", "CAPTAIN_COMPARE"), labels)
         self.assertIn(("Surya", "BUY_CONSIDER"), labels)
-        self.assertIn(("Surya", "START_BENCH"), labels)
+        self.assertIn(("Surya", "START"), labels)
         buys = [x for x in data["opinions"] if x["action"] == "BUY_CONSIDER"]
         self.assertEqual(len(buys), 1, "Negative BUY wording must be excluded")
         self.assertEqual({p["id"] for p in buys[0]["players"]}, {12, 13})
+
+    def test_club_team_selection_is_not_fpl_start_bench_recommendation(self):
+        article = {"url": URL, "title": "GW10 Team Selection",
+                   "gameweek": 10, "published_at": NOW.isoformat()}
+        page = (b"<article><h3>Team News</h3>"
+                b"<p>I am expecting Saliba to start for Arsenal next weekend.</p>"
+                b"<p>I think Gabriel will play 90 minutes.</p></article>")
+        players = BOOT["elements"] + [{"id": 19, "web_name": "Saliba",
+                                     "team": 1, "status": "a", "element_type": 2}]
+        self.assertEqual(extract_article_opinions(page, article, players), [])
+
+    def test_sell_scope_excludes_unrelated_defender_names(self):
+        article = {"url": URL, "title": "GW10 Transfer Plans",
+                   "gameweek": 10, "published_at": NOW.isoformat()}
+        page = (b"<article><h3>Transfer Plans</h3>"
+                b"<p>I plan on removing Konsa and Calafiori later on, "
+                b"while Gabriel and Saliba are alternatives.</p></article>")
+        players = BOOT["elements"] + [
+            {"id": 19, "web_name": "Saliba", "team": 1, "status": "a", "element_type": 2},
+            {"id": 20, "web_name": "Konsa", "team": 1, "status": "a", "element_type": 2},
+            {"id": 21, "web_name": "Calafiori", "team": 1, "status": "a", "element_type": 2},
+        ]
+        found = extract_article_opinions(page, article, players)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["action"], "SELL_CONSIDER")
+        self.assertEqual({p["name"] for p in found[0]["players"]},
+                         {"Konsa", "Calafiori"})
 
     def test_no_names_or_verified_fpl_player_ids_means_no_buy_opinion(self):
         article = {"url": URL, "title": "GW10 Transfer Plans",
