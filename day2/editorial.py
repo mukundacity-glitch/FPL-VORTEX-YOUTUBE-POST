@@ -35,7 +35,7 @@ def decisions(gameweek: int, highlighted_rows: Iterable[dict[str, Any]],
     One general roll/chip plan may be used when no named player overlaps.
     Never select players solely because an external editorial article said so.
     """
-    if not 1 <= int(gameweek) <= 38:
+    if not 1 <= int(gameweek) <= 38 or limit < 1:
         return []
     report = _fresh(gameweek, path=path)
     if not report:
