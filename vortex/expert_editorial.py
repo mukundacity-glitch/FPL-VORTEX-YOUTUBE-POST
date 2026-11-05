@@ -150,6 +150,25 @@ def narrator_note(gameweek, *, topics=("transfers", "captaincy"), max_items=2):
     return " ".join(lines)
 
 
+def source_credits(gameweek=None):
+    """Provide original-context attribution in YouTube descriptions only if fresh."""
+    if gameweek is None:
+        path = os.environ.get("VORTEX_EDITORIAL_BRIEF")
+        if not path:
+            return ""
+        try:
+            gameweek = json.loads(Path(path).read_text(encoding="utf-8"))["gameweek"]
+        except (OSError, ValueError, TypeError, KeyError):
+            return ""
+    report = load_live_brief(gameweek)
+    if not report:
+        return ""
+    links = list(dict.fromkeys(op["url"] for op in report["opinions"]))
+    return ("\n\nIndependent editorial perspectives reviewed (AllAboutFPL):\n"
+            + "\n".join(links[:4])
+            + "\nTheir authors' stated plans are independent opinions, not official FPL facts or VORTEX forecasts.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--output", type=Path, required=True)
