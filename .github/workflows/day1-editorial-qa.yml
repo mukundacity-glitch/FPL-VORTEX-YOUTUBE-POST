@@ -64,6 +64,10 @@ jobs:
           print("[DAY1 LIVE SOURCE] GW", source.get("gameweek"), "status", source.get("status"))
           print("[DAY1 LIVE SOURCE] articles", len(source.get("articles") or []),
                 "qualified opinion statements", len(source.get("opinions") or []))
+          for op in source.get("opinions") or []:
+              print("[DAY1 LIVE ADVICE]", op.get("author"), op.get("action"),
+                    [p.get("name") for p in op.get("players") or []],
+                    "article:", (op.get("url") or "").rsplit("/", 2)[-2])
           PY
       - name: Verify dynamic narratives, missing-data handling and exact captions
         run: python -m unittest discover -s tests -p 'test_day1_editorial.py' -v
