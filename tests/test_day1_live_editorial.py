@@ -66,6 +66,18 @@ class LiveEditorialDay1Tests(unittest.TestCase):
         self.assertEqual(len(buys), 1, "Negative BUY wording must be excluded")
         self.assertEqual({p["id"] for p in buys[0]["players"]}, {12, 13})
 
+    def test_captaincy_between_players_for_me_is_explicit_opinion(self):
+        article = {"url": URL, "title": "GW10 Team Selection",
+                   "gameweek": 10, "published_at": NOW.isoformat()}
+        source = (b"<article><h3>Captaincy</h3>"
+                  b"<p>Captaincy is between Haaland and Gabriel at the moment for me.</p>"
+                  b"</article>")
+        picks = extract_article_opinions(source, article, BOOT["elements"])
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(picks[0]["action"], "CAPTAIN_COMPARE")
+        self.assertEqual({p["name"] for p in picks[0]["players"]},
+                         {"Haaland", "Gabriel"})
+
     def test_club_team_selection_is_not_fpl_start_bench_recommendation(self):
         article = {"url": URL, "title": "GW10 Team Selection",
                    "gameweek": 10, "published_at": NOW.isoformat()}
