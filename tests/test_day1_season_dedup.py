@@ -17,7 +17,8 @@ from vortex.youtube_private_upload import (
 
 
 class Day1SeasonDedupeTests(unittest.TestCase):
-    def _client(self, *, tags, published="2026-11-03T12:00:00Z", next_page=None):
+    def _client(self, *, tags, published="2026-11-03T12:00:00Z", next_page=None,
+                privacy="private"):
         youtube = Mock()
         youtube.channels.return_value.list.return_value.execute.return_value = {
             "items": [{
@@ -31,7 +32,7 @@ class Day1SeasonDedupeTests(unittest.TestCase):
         youtube.videos.return_value.list.return_value.execute.return_value = {
             "items": [{
                 "id": "test-video-123",
-                "status": {"privacyStatus": "private"},
+                "status": {"privacyStatus": privacy},
                 "snippet": {"tags": tags, "publishedAt": published},
             }]
         }
@@ -72,6 +73,52 @@ class Day1SeasonDedupeTests(unittest.TestCase):
             marker=marker, legacy_marker=old, season_start=since,
         )
         self.assertIsNone(ignored)
+
+    def test_published_video_does_not_block_a_new_private_draft(self):
+        marker = "fpl-vortex-2026-2027-gw12-video-1-of-3"
+        for privacy in ("public", "unlisted"):
+            with self.subTest(privacy=privacy):
+                youtube = self._client(tags=[marker], privacy=privacy)
+                found = _find_existing_gameweek_video(
+                    youtube, marker=marker,
+                    legacy_marker="fpl-vortex-auto-gw12-video-1-of-3",
+                    season_start=datetime(2026, 7, 1, tzinfo=timezone.utc),
+                )
+                self.assertIsNone(found, "Published copy cannot masquerade as a private draft")
+
+    def test_private_draft_found_even_if_public_copy_precedes_it(self):
+        marker = "fpl-vortex-2026-2027-gw12-video-1-of-3"
+        youtube = self._client(tags=[marker], privacy="public")
+        youtube.playlistItems.return_value.list.return_value.execute.return_value = {
+            "items": [
+                {"contentDetails": {"videoId": "published-123"}},
+                {"contentDetails": {"videoId": "private-456"}},
+            ]
+        }
+        youtube.videos.return_value.list.return_value.execute.return_value = {
+            "items": [
+                {"id": "published-123", "status": {"privacyStatus": "public"},
+                 "snippet": {"tags": [marker]}},
+                {"id": "private-456", "status": {"privacyStatus": "private"},
+                 "snippet": {"tags": [marker]}},
+            ]
+        }
+        found = _find_existing_gameweek_video(
+            youtube, marker=marker,
+            legacy_marker="fpl-vortex-auto-gw12-video-1-of-3",
+            season_start=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        )
+        self.assertEqual(found, {"video_id": "private-456", "privacy_status": "private"})
+
+    def test_unknown_existing_video_privacy_fails_closed(self):
+        marker = "fpl-vortex-2026-2027-gw12-video-1-of-3"
+        with self.assertRaisesRegex(RuntimeError, "Cannot verify privacy"):
+            _find_existing_gameweek_video(
+                self._client(tags=[marker], privacy=""),
+                marker=marker,
+                legacy_marker="fpl-vortex-auto-gw12-video-1-of-3",
+                season_start=datetime(2026, 7, 1, tzinfo=timezone.utc),
+            )
 
     def test_cannot_verify_owners_uploads_fails_closed(self):
         youtube = Mock()
