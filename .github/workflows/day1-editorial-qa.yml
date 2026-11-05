@@ -52,6 +52,19 @@ jobs:
         run: python -m py_compile vortex/day1_live_editorial.py vortex/day1_editorial.py vortex/day1_agenda.py vortex/youtube_studio_package.py
       - name: Verify live article extraction, player IDs, original narrator and agenda CSS
         run: python -m unittest discover -s tests -p 'test_day1_live_editorial.py' -v
+      - name: Inspect live official-GW and external expert-source reachability (non-publishing)
+        shell: bash
+        run: |
+          python -m vortex.day1_live_editorial --output "${RUNNER_TEMP}/day1-live-source.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          source = json.loads((Path(os.environ["RUNNER_TEMP"]) / "day1-live-source.json").read_text())
+          print("[DAY1 LIVE SOURCE] GW", source.get("gameweek"), "status", source.get("status"))
+          print("[DAY1 LIVE SOURCE] articles", len(source.get("articles") or []),
+                "qualified opinion statements", len(source.get("opinions") or []))
+          PY
       - name: Verify dynamic narratives, missing-data handling and exact captions
         run: python -m unittest discover -s tests -p 'test_day1_editorial.py' -v
       - name: Verify soft 7-minute pacing and natural Ryan voice
