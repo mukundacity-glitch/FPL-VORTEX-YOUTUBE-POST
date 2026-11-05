@@ -112,6 +112,8 @@ def _render_metadata(config: dict[str, Any], video_date: str) -> dict[str, Any]:
     }
     title = title_template.format(**values)
     description = description_template.format(**values)
+    from vortex.expert_editorial import source_credits
+    description += source_credits()
     hashtags = [str(item).strip() for item in config.get("hashtags") or [] if str(item).strip()]
     tags = [str(item).strip() for item in config.get("tags") or [] if str(item).strip()]
 
