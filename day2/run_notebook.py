@@ -1107,6 +1107,28 @@ def _patch_quality(payload: dict, quality: str, notebook_path: Path) -> None:
     _set_cell_source(cells[0], patched)
 
 
+def _enforce_official_next_gameweek(payload: dict) -> None:
+    """Fail closed if the live FPL API no longer identifies one next GW.
+
+    Only patches the transient execution copy of the Drive notebook.
+    Existing player selection, card animation and presentation remain intact.
+    """
+    cell = payload["cells"][4]
+    source = _cell_source(cell)
+    old = '    next_gw_obj = next((e for e in events if e.get("is_next")), current_gw_obj)'
+    new = "\n".join([
+        "    _vx_verified_next = [e for e in events if e.get('is_next') is True]",
+        "    if len(_vx_verified_next) != 1 or not _vx_verified_next[0].get('deadline_time'):",
+        "        raise RuntimeError('Official FPL next Gameweek unavailable or ambiguous')",
+        "    if not isinstance(elements, list) or not elements or not teams_raw:",
+        "        raise RuntimeError('Official FPL player or club roster unavailable')",
+        "    next_gw_obj = _vx_verified_next[0]",
+    ])
+    if source.count(old) != 1:
+        raise RuntimeError("Day 2 official next-GW source anchor changed")
+    _set_cell_source(cell, source.replace(old, new, 1))
+
+
 def _patch_brand_asset(payload: dict) -> None:
     logo = Path(os.environ["DAY2_ASSET_DIR"]) / "logo1.png"
     if not logo.is_file():
@@ -1161,6 +1183,7 @@ def execute_notebook(notebook_path: Path, quality: str) -> None:
     asyncio.run(_verify_edge_ryan())
     payload = json.loads(notebook_path.read_text(encoding="utf-8"))
     _patch_scene2_player_validation(payload)
+    _enforce_official_next_gameweek(payload)
     repaired = _repair_python311_fstrings(payload)
     replaced = _replace_last_data_slide(payload)
     _audit_notebook(payload)
