@@ -145,7 +145,7 @@ def narrator_note(gameweek, *, topics=("transfers", "captaincy"), max_items=2):
         return ""
     lines = ["For perspective, independent All About FPL writers have different plans."]
     for row in selected:
-        lines.append(row["author"] + " says " + row["decision"].removeprefix("He "))
+        lines.append("All About FPL author " + row["author"] + " " + row["decision"].removeprefix("He "))
     lines.append("These describe their teams, not yours; compare the alternatives with verified Vortex forecasts.")
     return " ".join(lines)
 
