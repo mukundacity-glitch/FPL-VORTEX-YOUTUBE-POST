@@ -57,6 +57,12 @@ class EditorialTests(unittest.TestCase):
             for item in player_segments
         ))
         self.assertEqual(sum(bool(item.get('spotlight')) for item in player_segments), 4)
+        # Show/narrate all 15 original cards but save time by not reading every
+        # fixture/statistic for the eleven other players. TTS speed is unchanged.
+        other_players = [item for item in player_segments if not item['spotlight']]
+        self.assertEqual(len(other_players), 11)
+        self.assertTrue(all(len(item['text'].split()) <= 17 for item in other_players))
+        self.assertTrue(all('For Example ' not in item['text'] for item in other_players))
         self.assertIn(1, meta['spotlight_player_ids'], 'official availability is a decision priority')
         joined = ' '.join(item['text'] for item in scripts)
         self.assertIn('Expected points are forecasts, not guaranteed returns', joined)

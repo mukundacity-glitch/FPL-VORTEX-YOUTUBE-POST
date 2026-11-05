@@ -16,6 +16,7 @@ on:
       - "vortex/day1_market_desk.py"
       - "tests/test_day1_market_desk.py"
       - "tests/test_day1_season_dedup.py"
+      - "tests/test_day1_soft_duration.py"
       - "day3/transfer_desk.py"
       - "tools/hero_card_audit/**"
       - ".github/workflows/day-1.yml"
@@ -44,6 +45,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
       - name: Verify dynamic narratives, missing-data handling and exact captions
         run: python -m unittest discover -s tests -p 'test_day1_editorial.py' -v
+      - name: Verify soft 7-minute pacing and natural Ryan voice
+        run: python -m unittest discover -s tests -p 'test_day1_soft_duration.py' -v
       - name: Verify dynamic spoken intro agendas
         run: python -m unittest discover -s tests -p 'test_day1_agenda.py' -v
       - name: Verify production intro TTS full-word contract

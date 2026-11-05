@@ -6,8 +6,8 @@ Scope: **the existing** `.github/workflows/day-1.yml` and `1_final_day1.py`; no 
 
 | Priority | Component | Actual finding | Mitigation |
 | --- | --- | --- | --- |
-| P0 | Day 1 workflow | Existing manual `workflow_dispatch`, 33 notebook cell compiler/runner, existing Drive inputs and Private YouTube upload. The November implementation set `VORTEX_DAY1_VIDEO_TARGET_SECONDS=240`. | Set one measured editorial target (330s), plus a **hard** final-MP4 limit of 420s regardless of scene count. Keep all existing source cells and Private-only safety gates. |
-| P0 | Player-card contract | `tests/test_day1_player_card.py` pins original `V6.0_SIDE_HERO_SAMPLE` JSX-in-string styling, position-specific stats, portrait URLs, club badges and hero animation. Eleven starters + four bench are separately validated in `vortex/day1_publish_contract.py`. | **Leave original 1.1MB `1_final_day1.py` unchanged**. Keep current component; make selected existing player scenes richer from their verified player_id and TTS boundaries. Run unchanged card-layout CI. |
+| P0 | Day 1 workflow | Existing manual `workflow_dispatch`, 33 notebook cell compiler/runner, existing Drive inputs and Private YouTube upload. The November implementation set `VORTEX_DAY1_VIDEO_TARGET_SECONDS=240`. | Use a measured **330s editorial preference** and **420s total-duration advisory**, never a rejection solely for running long. Shorten repetitive narration without speeding up Edge Ryan. Keep all existing source cells and Private-only safety gates. |
+| P0 | Player-card contract | `tests/test_day1_player_card.py` pins original `V6.0_SIDE_HERO_SAMPLE` JSX-in-string styling, position-specific stats, portrait URLs, club badges and hero animation. Eleven starters + four bench are separately validated in `vortex/day1_publish_contract.py`. | Preserve the original player-card component and 33-cell boundaries. Make **only targeted natural-voice pacing changes** to `1_final_day1.py` without changing hero graphics, data mapping or the render engine. Run unchanged card-layout CI. |
 | P0 | Dynamic FPL/model math | `vortex/day1_editorial.py` consumes verified 15-person retrospective roster, live context, official players and VORTEX model rows (`next_gw_xpts`, `expected_minutes_next_gw`). Model is not a personal transfer/bank state. | Keep actual VORTEX projections; add transparent **editorial prioritization** only, no replacement projection formula, fabricated figures or fake FTs/bank. |
 | P0 | Intro agenda | `vortex/day1_agenda.py` already joins rendered agenda cards with spoken TTS anchors but formerly used inconsistent headings and optional substitutes. | Lock all five user-required on-screen titles and matching spoken anchors for GW review runs; show data-dependent caveat when no target qualifies. |
 | P0 | Narration & sync | Existing Edge TTS Ryan with timed WordBoundary offsets, measured audio, `word_timed_vtt`, player reveal timings and original portrait cards. | Select four evidence-led spotlights by availability, verified minutes and existing VORTEX xPts; keep all 15 spoken/visible IDs; refrain from rewriting the reliable renderer. |
@@ -31,8 +31,8 @@ The agenda headings are visual anchors; YouTube chapters still use **actual rend
 
 ## 3. Runtime and safety acceptance
 
-- **One original** Day 1 16:9 3840x2160 MP4, up to **420.00 seconds inclusive** of the original intro and 6s outro.
-- The 330s editorial setting is a **pacing target**, not an inferred final duration. Real ffprobe measurement decides pass/fail. A shorter episode is acceptable if useful.
+- **One original** Day 1 16:9 3840x2160 MP4; **420 seconds is a preferred duration, not a publication gate**. A longer technically valid video must not be rejected for length alone.
+- The 330s editorial setting is a **soft pacing target**, not an inferred final duration. ffprobe records real seconds. Malformed/missing media still fails QA, but normal audio beyond 7:00 produces a warning only. No TTS rate increase to hit an arbitrary target.
 - All 15 `player_id` identities (11 + 4), correct current club names/crests/photos, original card language, no newly hardcoded football facts.
 - TTS WordBoundary aligns player-name audio, reveal animation and captions; mismatches fail production.
 - Preserve current original soundtrack, opening, outro, Private-only upload and no automatic public post/schedule.
@@ -42,7 +42,7 @@ The agenda headings are visual anchors; YouTube chapters still use **actual rend
 
 ## 4. Deliberately unchanged
 
-- `1_final_day1.py`: canonical 33-cell source, including original card JavaScript and CSS. The GitHub connector could not return its >1 MB UTF-8 body during this review; it was verified through existing source-contract tests, not falsely claimed as a frame-by-frame rendering review.
+- `1_final_day1.py`: the canonical 33-cell source and V6 player-card JavaScript/CSS remain visually unchanged. The full >1MB source was retrieved through GitHub blob SHA; only the earlier audio-duration rejection and automatic outro rate correction were removed, preserving original WordBoundary synchronization. New output still needs a real rendered inspection.
 - `vortex/day1_media.py`: established signed source audio and mixing implementation.
 - Day 2, Day 3 and external FPL VORTEX automated graphics tasks.
 - Public YouTube publishing and all unrelated social schedules.

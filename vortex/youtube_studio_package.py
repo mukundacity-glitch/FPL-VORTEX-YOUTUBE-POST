@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from datetime import datetime, timezone
+import math
 import json
 import os
 import re
@@ -249,12 +250,14 @@ def build_youtube_studio_package(output_root):
         )
 
     video_probe = _vx23_probe_video(final_video)
-    # Re-check the ACTUAL combined source. This protects direct module use,
-    # not only the GitHub workflow's earlier ffprobe guard.
-    if not 0 < video_probe["duration"] <= 420.0:
-        raise RuntimeError(
-            f"Day 1 packaged video exceeds the seven-minute cap: "
-            f"{video_probe['duration']:.2f}s"
+    # Check measured media integrity without blocking a naturally narrated
+    # episode solely because it exceeds the preferred seven-minute length.
+    if not math.isfinite(video_probe["duration"]) or video_probe["duration"] <= 0:
+        raise RuntimeError("Day 1 combined MP4 has missing or invalid duration")
+    if video_probe["duration"] > 420.0:
+        print(
+            f"ℹ️ Day 1 preferred 7-minute runtime exceeded "
+            f"({video_probe['duration']:.2f}s); preserving natural voice pace."
         )
     if (video_probe["width"], video_probe["height"]) != YT_VIDEO_SIZE:
         raise RuntimeError(

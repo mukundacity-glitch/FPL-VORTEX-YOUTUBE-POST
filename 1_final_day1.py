@@ -18114,10 +18114,15 @@ _editorial_audio_report = measured_audio_report(
 )
 print(f"✅ Measured Ryan narration: {_editorial_audio_report['audio_seconds']:.2f}s "
       f"at {_editorial_audio_report['measured_wpm']:.1f} words/minute")
+# Duration is a SOFT editorial goal. Never discard a valid 15-player video
+# because Ryan speaks naturally slower than the estimated script target.
+# Fix future pacing by selecting concise evidence, never speeding up speech.
 if not _editorial_audio_report["within_target"]:
-    raise RuntimeError(
-        "Narration is outside the configurable target by more than one minute: "
-        f"{_editorial_audio_report}. Review the generated script and voice before publishing."
+    print(
+        "ℹ️ Review pacing advisory (NOT a rendering error): "
+        f"{_editorial_audio_report['audio_seconds']:.2f}s measured versus "
+        f"{_editorial_audio_report['target_seconds']}s preferred. "
+        "Keep original natural Ryan speaking rates."
     )
 
 # ------------------------------------------------------------
@@ -24966,36 +24971,16 @@ async def make_audio(key,text,rate_override=None):
 
 manifest={}
 
-def _vx_rate_percent(rate_text):
-    m=re.fullmatch(r"\s*([+-]?\d+(?:\.\d+)?)%\s*",str(rate_text))
-    if not m:
-        raise ValueError(f"Unsupported Edge TTS rate: {rate_text!r}")
-    return float(m.group(1))
-
-def _vx_rate_text(value):
-    value=max(-45.0,min(50.0,float(value)))
-    return f"{value:+.0f}%"
-
 for key,text in scripts.items():
     manifest[key]=await make_audio(key,text)
 
-    # Keep the approved outro script, but automatically correct Ryan's speaking
-    # rate if Edge TTS drifts outside the 20–25 second production window.
-    if key=="05_outro":
-        for _attempt in range(2):
-            _d=float(manifest[key]["duration"])
-            if 20.0 <= _d <= 25.8:
-                break
-            _current_rate=_vx_rate_percent(manifest[key]["tts_profile"]["rate"])
-            _current_speed=max(0.20,1.0+_current_rate/100.0)
-            _target_seconds=23.5
-            _needed_speed=_current_speed*(_d/_target_seconds)
-            _new_rate=_vx_rate_text((_needed_speed-1.0)*100.0)
-            print(
-                f"↻ Outro Ryan pacing correction: {_d:.2f}s at "
-                f"{manifest[key]['tts_profile']['rate']} → {_new_rate}"
-            )
-            manifest[key]=await make_audio(key,text,rate_override=_new_rate)
+    # Do not resynthesize or accelerate Ryan to hit a fixed outro duration.
+    # The actual WordBoundary/MP3 timing drives the existing visual timeline.
+    if key=="05_outro" and not 20.0 <= float(manifest[key]["duration"]) <= 25.8:
+        print(
+            "ℹ️ Outro pacing advisory: naturally narrated "
+            f"{float(manifest[key]['duration']):.2f}s; no voice speed correction."
+        )
 
     print(
         f"✅ {key:<20}"
@@ -25006,12 +24991,9 @@ for key,text in scripts.items():
 
 if "05_outro" in manifest:
     _outro_duration = float(manifest["05_outro"]["duration"])
-    if not 20.0 <= _outro_duration <= 25.8:
-        raise RuntimeError(
-            f"Outro duration must land between 20 and 25 seconds after automatic Ryan pacing correction. "
-            f"Current audio: {_outro_duration:.2f}s"
-        )
-    print(f"✅ Outro duration locked: {_outro_duration:.2f}s")
+    if not 0 < _outro_duration < 120:
+        raise RuntimeError("Outro narration has missing or corrupt measured audio")
+    print(f"✅ Natural outro audio: {_outro_duration:.2f}s (not rate-corrected)")
 
 OUT=TIMING/"other_scenes_narration.json"
 
