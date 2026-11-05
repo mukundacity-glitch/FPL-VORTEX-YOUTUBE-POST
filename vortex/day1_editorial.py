@@ -643,8 +643,8 @@ def build_editorial_review(
     # editorial beat. Do not alter any of the 15 player-card reveal segments,
     # renderer, animation, or official FPL / VORTEX forecast calculations.
     if compact:
-        from vortex.expert_editorial import narrator_note
-        outside_opinions = narrator_note(next_gw, topics=('transfers', 'captaincy'))
+        from vortex.day1_live_editorial import presenter_note
+        outside_opinions = presenter_note(next_gw, roster)
         if outside_opinions:
             tradeoff = next(beat for beat in insert if beat['id'] == 'editorial_tradeoff')
             tradeoff['text'] += ' ' + outside_opinions
