@@ -639,6 +639,17 @@ def build_editorial_review(
                     f"Model comparison: {candidate['name']} at {candidate['price']:.1f} million, "
                     f"forecast {candidate['xpts']:.1f} points. Verify minutes and affordability."
                 )
+    # Additional attributed commentary belongs in an existing non-player
+    # editorial beat. Do not alter any of the 15 player-card reveal segments,
+    # renderer, animation, or official FPL / VORTEX forecast calculations.
+    if compact:
+        from vortex.expert_editorial import narrator_note
+        outside_opinions = narrator_note(next_gw, topics=('transfers', 'captaincy'))
+        if outside_opinions:
+            tradeoff = next(beat for beat in insert if beat['id'] == 'editorial_tradeoff')
+            tradeoff['text'] += ' ' + outside_opinions
+            tradeoff['editorial_source'] = ['AllAboutFPL dated attributed author opinions',
+                                            'separate from official FPL and VORTEX forecast']
     scripts.extend(insert)
     validate_narration(scripts, player_ids=ids, max_words=1700)
     words = sum(len(WORD.findall(seg.get('text',''))) for seg in scripts)
