@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 from html import unescape
 from html.parser import HTMLParser
+from xml.etree import ElementTree
 import json
 import os
 from pathlib import Path
@@ -209,8 +210,43 @@ def extract_article_opinions(html_bytes, article, players):
 
 
 def _discover_fresh_articles(gw, now, feed_xml=None):
-    payload = _fetch(FEED) if feed_xml is None else feed_xml
-    return parse_feed(payload, gw, now)
+    """Prefer official RSS, fall back to public WordPress post metadata.
+
+    The WordPress fallback uses *real publication timestamps* and article
+    URLs; it never infers freshness from the URL's month or cached opinions.
+    """
+    if feed_xml is not None:
+        return parse_feed(feed_xml, gw, now)
+    try:
+        rss = parse_feed(_fetch(FEED), gw, now)
+        if rss:
+            return rss
+    except (OSError, ValueError, ElementTree.ParseError):
+        pass
+    endpoint = ("https://allaboutfpl.com/wp-json/wp/v2/posts"
+                f"?per_page=30&search=GW{int(gw)}")
+    posts = json.loads(_fetch(endpoint))
+    if not isinstance(posts, list):
+        raise ValueError("WordPress article index was not a list")
+    found = {}
+    for post in posts:
+        if not isinstance(post, dict):
+            continue
+        try:
+            title = unescape(str((post.get("title") or {}).get("rendered") or ""))
+            if not re.search(GW_PATTERN % gw, title, re.I):
+                continue
+            url = _url(post.get("link"))
+            issued = datetime.fromisoformat(str(post.get("date_gmt") or ""))
+            if issued.tzinfo is None:
+                issued = issued.replace(tzinfo=timezone.utc)
+            issued = issued.astimezone(timezone.utc)
+            if not now - timedelta(days=ARTICLE_AGE_DAYS) <= issued <= now + timedelta(minutes=10):
+                continue
+            found[url] = {"url": url, "title": title, "published_at": issued.isoformat()}
+        except (TypeError, ValueError, AttributeError):
+            continue
+    return list(found.values())[:15]
 
 
 def build_day1_brief(*, bootstrap=None, feed_xml=None, article_pages=None, now=None):
@@ -258,7 +294,7 @@ def build_day1_brief(*, bootstrap=None, feed_xml=None, article_pages=None, now=N
         report["opinions"] = report["opinions"][:12]
         report["status"] = ("verified_author_opinions" if report["opinions"]
                             else "article_discovery_only")
-    except (OSError, KeyError, ValueError, TypeError, json.JSONDecodeError) as error:
+    except (OSError, KeyError, ValueError, TypeError, json.JSONDecodeError, ElementTree.ParseError) as error:
         report["status"] = "source_unavailable"
         report["opinions"] = []
         report["warning"] = type(error).__name__ + ": " + str(error)[:180]
