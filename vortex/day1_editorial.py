@@ -333,8 +333,14 @@ def _candidate_data(official_players: list[dict[str, Any]], model_rows: dict[int
 
 
 
-def _compact_player_script(p: dict[str, Any], ctx: dict[str, Any], *, next_gw: int) -> str:
-    """One evidence-backed beat per player for the shorter Day 1 cut."""
+def _compact_player_script(p: dict[str, Any], ctx: dict[str, Any], *,
+                           next_gw: int, spotlight: bool = True) -> str:
+    """Keep every original player-card reveal, without narrating every stat.
+
+    The 11 non-spotlight cards receive their actual result in one natural beat.
+    Only the dynamic evidence-ranked spotlight players receive an additional
+    fixture/risk comparison. This shortens CONTENT, not Ryan's speaking rate.
+    """
     name = str(ctx.get('full_name') or p.get('name') or '').strip()
     if not name:
         raise ValueError('A reviewed player has no verified spoken identity')
@@ -351,6 +357,10 @@ def _compact_player_script(p: dict[str, Any], ctx: dict[str, Any], *, next_gw: i
         first = f'{name} did not play in the completed match.'
     else:
         first = f'{name} has no verified final return yet.'
+    # Cards already display price, fixtures and statistics. Do not redundantly
+    # read those fields for all fifteen players at the cost of natural pacing.
+    if not spotlight:
+        return first
     flagged = str(ctx.get('status') or '').lower() not in ('', 'a')
     next_fixture = _fixture(p, next_gw)
     if flagged:
@@ -465,7 +475,10 @@ def build_editorial_review(
     for i, p in enumerate(roster):
         segment = index[f"player_{p['id']}"]
         segment['text'] = (
-            _compact_player_script(p, context[int(p['id'])], next_gw=next_gw)
+            _compact_player_script(
+                p, context[int(p['id'])], next_gw=next_gw,
+                spotlight=int(p['id']) in spotlight_ids,
+            )
             if compact else
             _player_script(p, context[int(p['id'])], i, bench=i >= len(starters),
                            next_gw=next_gw, pick=pick)
