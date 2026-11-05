@@ -1170,25 +1170,22 @@ def execute_notebook(notebook_path: Path, quality: str) -> None:
     _patch_brand_asset(payload)
     patch_player_images(payload)
 
-    # Keep every existing Day 2 slide and card unchanged. Add only the
-    # independently credited expert comparison to the existing measured Ryan
-    # outro narration, conditional on a fresh same-Gameweek source manifest.
-    from vortex.expert_editorial import load_live_brief
+    # Cards and animations remain unchanged: inject source-attributed language
+    # only into the existing Day 2 measured Ryan outro narration.
     if os.environ.get("VORTEX_EDITORIAL_BRIEF"):
         editorial_cell = payload["cells"][4]
         editorial_source = _cell_source(editorial_cell)
         audio_anchor = 'scene7_audio_path = os.path.join(AUDIO_DIR, "scene_07_ryan.mp3")'
         if editorial_source.count(audio_anchor) != 1:
-            raise RuntimeError("Day 2 editorial audio anchor changed; cards and animations remain untouched")
-        editorial_injection = (
-            "from vortex.expert_editorial import narrator_note as _vortex_expert_note\\n"
-            "_vortex_external_view = _vortex_expert_note(int(target_gw), "
-            "topics=('transfers', 'captaincy'), max_items=2)\\n"
-            "if _vortex_external_view:\\n"
-            "    scene7_narration = vx_full_word_narration("
-            "_vortex_external_view + ' ' + scene7_narration, "
-            "context='Day 2 attributed external author context')\\n\\n"
-        ).replace('\\\\n', '\\n')
+            raise RuntimeError("Day 2 voice-only editorial anchor changed")
+        editorial_injection = "\n".join([
+            "from vortex.expert_editorial import narrator_note as _vx_external_note",
+            "_vx_external_view = _vx_external_note(int(target_gw), topics=('transfers', 'captaincy'), max_items=2)",
+            "if _vx_external_view:",
+            "    scene7_narration = vx_full_word_narration(_vx_external_view + ' ' + scene7_narration, context='Attributed expert plans')",
+            "",
+            "",
+        ])
         _set_cell_source(editorial_cell, editorial_source.replace(
             audio_anchor, editorial_injection + audio_anchor, 1
         ))
