@@ -200,6 +200,8 @@ def _metadata(preview_gw: int, review_gw: int | None, plan: str, transfer_mode: 
             f"#FPL #FantasyPremierLeague #FPLGW{preview_gw} #FPLVORTEX",
         ]
     )
+    from vortex.expert_editorial import source_credits
+    description += source_credits(preview_gw)
     tags = [
         "FPL",
         "Fantasy Premier League",
