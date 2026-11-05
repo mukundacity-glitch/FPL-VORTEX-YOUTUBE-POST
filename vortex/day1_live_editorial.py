@@ -118,12 +118,24 @@ class ArticleBlocks(HTMLParser):
 
 
 def _explicit_opinion(heading, author, body, elements, article):
-    if not ACTION_TERMS.search(body):
+    # An author may state a captaincy comparison as "between X and Y
+    # for me", without using an explicit first-person verb.
+    author_captain = re.search(
+        r"\bcaptaincy\b.{0,140}\bbetween\b.{0,130}\b(?:for me|my)\b",
+        body, re.I,
+    )
+    if not ACTION_TERMS.search(body) and not author_captain:
         return None
     sentences = re.split(r"(?<=[.!?])\s+", body)
     headline = (heading or "").casefold()
     for sentence in sentences:
-        if not 24 <= len(sentence) <= 320 or not ACTION_TERMS.search(sentence):
+        if not 24 <= len(sentence) <= 320:
+            continue
+        explicit_comparison = re.search(
+            r"\bcaptaincy\b.{0,130}\bbetween\b.{0,130}\b(?:for me|my)\b",
+            sentence, re.I,
+        )
+        if not ACTION_TERMS.search(sentence) and not explicit_comparison:
             continue
         lower = sentence.casefold()
         action, names = None, []
@@ -193,7 +205,9 @@ def _explicit_opinion(heading, author, body, elements, article):
             "START": "leaning towards starting " + join,
             "BENCH": "leaning towards benching " + join,
             "BUY_CONSIDER": "considering " + join + " as a transfer option",
-            "SELL_CONSIDER": "considering moving on " + join,
+            "SELL_CONSIDER": ("considering a future sale of " + join
+                              if re.search(r"\b(?:coming weeks|later on|after the break)\b", lower)
+                              else "considering moving on " + join),
         }
         return {
             "author": author, "topic": "captaincy" if action == "CAPTAIN_COMPARE"
