@@ -545,6 +545,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import math
           import os
           import subprocess
           from pathlib import Path
