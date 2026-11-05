@@ -705,6 +705,10 @@ jobs:
         shell: bash
         run: python -m vortex.youtube_private_upload
 
+      - name: Confirm PRIVATE YouTube draft and show Studio link
+        shell: bash
+        run: python -m vortex.day1_upload_status
+
       - name: Save YouTube private-upload receipt to Google Drive
         if: always()
         shell: bash
