@@ -106,11 +106,12 @@ def _find_existing_gameweek_video(youtube: Any, *, marker: str,
                                   legacy_marker: str,
                                   season_start: datetime,
                                   max_pages: int = 100) -> dict[str, str] | None:
-    """Scan uploads including PRIVATE videos; only the owner's tags count.
+    """Find an existing PRIVATE review copy in the owner's uploads.
 
-    Never rely on search ranking or the local receipt alone. An older upload
-    with the legacy unqualified marker is eligible only inside THIS season.
-    Aborts rather than producing a duplicate if the upload list is incomplete.
+    A previously published public/unlisted GW video must NOT block creation
+    of the next private review copy. Never modify or delete that publication.
+    Legacy unqualified markers count only in their original season.
+    Fail closed on incomplete inventory to prevent duplicate private uploads.
     """
     response = youtube.channels().list(part="contentDetails", mine=True).execute()
     channels = response.get("items") or []
@@ -133,20 +134,29 @@ def _find_existing_gameweek_video(youtube: Any, *, marker: str,
             for video in details.get("items") or []:
                 snippet = video.get("snippet") or {}
                 tags = set(snippet.get("tags") or [])
-                if marker in tags:
-                    return {"video_id": str(video["id"]),
-                            "privacy_status": str((video.get("status") or {}).get("privacyStatus") or "unknown")}
-                if legacy_marker in tags:
+                matched = marker in tags
+                if not matched and legacy_marker in tags:
                     published = str(snippet.get("publishedAt") or "")
                     try:
                         created = datetime.fromisoformat(published.replace("Z", "+00:00"))
                     except ValueError:
-                        # An unparseable date is not proof that this belongs to
-                        # the old season; a new upload would be unsafe.
+                        # An unparseable date cannot establish the season;
+                        # do not risk creating a duplicate private video.
                         raise RuntimeError("Legacy upload has no verifiable publication date")
-                    if created >= season_start:
-                        return {"video_id": str(video["id"]),
-                                "privacy_status": str((video.get("status") or {}).get("privacyStatus") or "unknown")}
+                    matched = created >= season_start
+                if matched:
+                    privacy = str((video.get("status") or {}).get("privacyStatus") or "")
+                    if privacy == YOUTUBE_PRIVACY_STATUS:
+                        return {"video_id": str(video["id"]), "privacy_status": privacy}
+                    if privacy not in {"public", "unlisted"}:
+                        raise RuntimeError(
+                            f"Cannot verify privacy of existing GW upload {video['id']}; "
+                            "refusing duplicate-risk private upload"
+                        )
+                    # Preserve already published videos as-is, but keep scanning
+                    # for an existing PRIVATE review copy before creating one.
+                    print(f"[YOUTUBE] Existing GW video {video['id']} is {privacy}; "
+                          "preserving publication and checking for a private draft.")
         token = page.get("nextPageToken")
         if not token:
             return None
@@ -422,6 +432,8 @@ def upload_private(output_root: Path) -> dict[str, Any]:
             print("[YOUTUBE] Day 1 already uploaded for this season/GW; skipped duplicate.")
             return report
 
+        print("[YOUTUBE] No private review copy found for this season/GW; "
+              "uploading the current render as PRIVATE (published videos unchanged).")
         video_id = _insert_private_video(youtube, package)
         report.update(
             {
