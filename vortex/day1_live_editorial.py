@@ -132,7 +132,7 @@ def _explicit_opinion(heading, author, body, elements, article):
         elif "bench boost" in lower and re.search(r"\b(?:plan|planning|activate|use)\b", lower):
             action = "BENCH_BOOST"
         elif ("captain" in lower or "captain" in headline) and (
-             "between" in lower or re.search(r"\b(?:lean|captain|choose|prefer)\b", lower)):
+             "between" in lower or re.search(r"\b(?:lean(?:ing)?|captain(?:ing)?|choos(?:e|ing)|prefer)\b", lower)):
             names = _players_in(sentence, elements)
             if names:
                 action = "CAPTAIN_COMPARE"
@@ -140,11 +140,14 @@ def _explicit_opinion(heading, author, body, elements, article):
             names = _players_in(sentence, elements)
             if names:
                 action = "START_BENCH"
-        elif re.search(r"\b(?:getting in|bring in|buy|transfer in|replacement|move to)\b", lower):
+        elif re.search(r"\b(?:getting in|bring in|buy|transfer in|replacement|move to|move .{1,60}? to)\b", lower):
             # A sentence with both OUT and IN is restricted to the named
             # targets after the positive acquisition phrase.
-            incoming = re.split(r"\b(?:getting in|bring in|transfer in|replacement|move to)\b",
-                                sentence, maxsplit=1, flags=re.I)
+            incoming = re.split(
+                r"\b(?:getting in|bring in|transfer in|replacement|move to|"
+                r"move .{1,60}? to)\b",
+                sentence, maxsplit=1, flags=re.I,
+            )
             probe = incoming[-1] if len(incoming) > 1 else sentence
             names = _players_in(probe, elements)
             if names:
