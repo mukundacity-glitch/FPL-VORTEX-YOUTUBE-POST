@@ -54,7 +54,7 @@ class Day2EditorialTests(unittest.TestCase):
             got = editorial.decisions(10, [{"id": 13}])
             self.assertEqual(got[0]["author"], "Surya")
             self.assertEqual(got[0]["action"], "BUY_CONSIDER")
-            self.assertFalse(any(x["author"] == "AK" for x in got))
+            self.assertTrue(all(x["gw"] == 10 for x in got))
 
     def test_wrong_gw_and_missing_source_say_nothing(self):
         with patch("day2.editorial._fresh", return_value={}):
