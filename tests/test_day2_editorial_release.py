@@ -72,11 +72,15 @@ class Day2EditorialTests(unittest.TestCase):
         self.assertNotIn("I bought Tavernier", spoken)
         self.assertNotIn("guaranteed points", spoken)
 
-    def test_model_only_exclusions_never_insert_unrelated_player(self):
+    def test_outside_model_expert_picks_are_discussed_not_promoted(self):
+        model_selection = [{"id": 1}, {"id": 2}]
         with patch("day2.editorial._fresh", return_value=valid_report()):
-            got = editorial.decisions(10, [{"id": 1}, {"id": 2}])
-        self.assertFalse(any(x["action"] == "BUY_CONSIDER" for x in got))
-        self.assertTrue(all(x["action"] in ("ROLL", "BENCH_BOOST") for x in got))
+            got = editorial.decisions(10, model_selection)
+        self.assertEqual(got[0]["action"], "BUY_CONSIDER")
+        self.assertEqual(got[0]["author"], "Surya")
+        self.assertEqual(model_selection, [{"id": 1}, {"id": 2}],
+                         "Expert talk must not modify ranked model player cards")
+        self.assertTrue(all(x["gw"] == 10 for x in got))
 
     def test_verified_seven_scene_package(self):
         with TemporaryDirectory() as d:
