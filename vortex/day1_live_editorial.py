@@ -137,10 +137,22 @@ def _explicit_opinion(heading, author, body, elements, article):
             names = _players_in(sentence, elements)
             if names:
                 action = "CAPTAIN_COMPARE"
-        elif re.search(r"\b(?:bench|starting|start|lineup|line-up)\b", lower):
-            names = _players_in(sentence, elements)
-            if names:
-                action = "START_BENCH"
+        elif re.search(
+            r"\b(?:i|we)\b.{0,95}\b(?:leaning towards|leaning toward|"
+            r"planning to|plan to|decided to|going to)\s+start(?:ing)?\b", lower
+        ):
+            start = re.search(r"\bstart(?:ing)?\b", sentence, flags=re.I)
+            names = _players_in(sentence[start.end():] if start else "", elements)
+            if 1 <= len(names) <= 2:
+                action = "START"
+        elif re.search(
+            r"\b(?:i|we)\b.{0,95}\b(?:leaning towards|leaning toward|"
+            r"planning to|plan to|decided to|going to)\s+bench(?:ing)?\b", lower
+        ):
+            start = re.search(r"\bbench(?:ing)?\b", sentence, flags=re.I)
+            names = _players_in(sentence[start.end():] if start else "", elements)
+            if 1 <= len(names) <= 2:
+                action = "BENCH"
         elif re.search(r"\b(?:getting in|bring in|buy|transfer in|replacement|move to|move .{1,60}? to)\b", lower):
             # A sentence with both OUT and IN is restricted to the named
             # targets after the positive acquisition phrase.
@@ -154,8 +166,16 @@ def _explicit_opinion(heading, author, body, elements, article):
             if names:
                 action = "BUY_CONSIDER"
         elif re.search(r"\b(?:sell|remov(?:e|ing)|get rid of)\b", lower):
-            names = _players_in(sentence, elements)
-            if names:
+            outgoing = re.search(r"\b(?:sell|selling|remove|removing|get rid of)\b",
+                                 sentence, flags=re.I)
+            if outgoing:
+                # Only players syntactically AFTER the sale verb are possible
+                # sales. Names elsewhere in the paragraph are not sell picks.
+                tail = sentence[outgoing.end():]
+                tail = re.split(r"\b(?:because|due to|instead|later on)\b",
+                                tail, maxsplit=1, flags=re.I)[0]
+                names = _players_in(tail[:90], elements)
+            if 1 <= len(names) <= 2:
                 action = "SELL_CONSIDER"
         if not action:
             continue
@@ -170,14 +190,15 @@ def _explicit_opinion(heading, author, body, elements, article):
             "ROLL": "considering keeping the free transfer",
             "BENCH_BOOST": "considering using Bench Boost",
             "CAPTAIN_COMPARE": "weighing " + join + " for captaincy",
-            "START_BENCH": "reconsidering the starting or bench decision for " + join,
+            "START": "leaning towards starting " + join,
+            "BENCH": "leaning towards benching " + join,
             "BUY_CONSIDER": "considering " + join + " as a transfer option",
             "SELL_CONSIDER": "considering moving on " + join,
         }
         return {
             "author": author, "topic": "captaincy" if action == "CAPTAIN_COMPARE"
             else "chips" if action == "BENCH_BOOST"
-            else "bench" if action == "START_BENCH" else "transfers",
+            else "bench" if action in {"START", "BENCH"} else "transfers",
             "decision": verbs[action], "action": action,
             "players": names, "url": article["url"], "gw": article["gameweek"],
             "published_at": article["published_at"],
@@ -286,7 +307,7 @@ def build_day1_brief(*, bootstrap=None, feed_xml=None, article_pages=None, now=N
             report["opinions"].extend(found)
         # Highest-value named actions first, before generic roll/chip topics.
         priority = {"BUY_CONSIDER": 0, "CAPTAIN_COMPARE": 1,
-                    "SELL_CONSIDER": 2, "START_BENCH": 3,
+                    "SELL_CONSIDER": 2, "START": 3, "BENCH": 3,
                     "ROLL": 4, "BENCH_BOOST": 5}
         report["opinions"].sort(
             key=lambda x: (priority.get(x["action"], 99), x["url"], x["author"])
