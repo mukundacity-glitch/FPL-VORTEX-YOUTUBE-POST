@@ -1179,10 +1179,15 @@ def execute_notebook(notebook_path: Path, quality: str) -> None:
         if editorial_source.count(audio_anchor) != 1:
             raise RuntimeError("Day 2 voice-only editorial anchor changed")
         editorial_injection = "\n".join([
-            "from vortex.expert_editorial import narrator_note as _vx_external_note",
-            "_vx_external_view = _vx_external_note(int(target_gw), topics=('transfers', 'captaincy'), max_items=2)",
+            "from day2.editorial import spoken_comparison as _vx_spoken_expert_comparison",
+            "_vx_highlighted = list(s2_featured_4) + list(s5_top_10_diffs)",
+            "_vx_external_view = _vx_spoken_expert_comparison(int(target_gw), _vx_highlighted)",
             "if _vx_external_view:",
-            "    scene7_narration = vx_full_word_narration(_vx_external_view + ' ' + scene7_narration, context='Attributed expert plans')",
+            "    scene7_narration = vx_full_word_narration(",
+            "        scene7_narration.replace(",
+            "            'Everything now comes down to the final decisions',",
+            "            _vx_external_view + ' Everything now comes down to the final decisions',",
+            "            1), context='Day 2 current expert perspective')",
             "",
             "",
         ])
