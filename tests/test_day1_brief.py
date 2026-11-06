@@ -103,6 +103,7 @@ class BriefFacts(unittest.TestCase):
         valid=self.build(forecasts={"xPts":model})["projections"]["xPts"]
         self.assertEqual(valid["dataStatus"],"MODEL ESTIMATE")
         self.assertEqual(valid["freshnessStatus"],"fresh")
+        self.assertIn("test-v1",badge(valid))
         for field in ("methodologyVersion","retrievedAt","gameweek","source"):
             invalid=deepcopy(model);invalid.pop(field)
             self.assertNotEqual(self.build(forecasts={"xPts":invalid})["projections"]["xPts"]["freshnessStatus"],"fresh")

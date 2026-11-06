@@ -60,7 +60,8 @@ def badge(item):
     label = {"fresh": "Data verified", "stale": "Data may be stale",
              "unavailable": "Unavailable", "not_verified": "Not verified"}.get(state, "Not verified")
     status = str(item.get("dataStatus") or "UNKNOWN")
-    return f"{label}: {local} · GW{item.get('gameweek') or '—'} · {status}"
+    version = " · " + str(item["methodologyVersion"]) if item.get("methodologyVersion") else ""
+    return f"{label}: {local} · GW{item.get('gameweek') or '—'} · {status}{version}"
 
 
 def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
@@ -151,7 +152,10 @@ def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
             "minutes", "goals_scored", "assists", "clean_sheets", "saves", "bonus",
             "defensive_contribution", "defensive_contribution_points", "yellow_cards",
             "red_cards", "own_goals", "penalties_saved", "penalties_missed", "total_points")}
-        fields["availability"] = official(identity.get("news") or identity.get("status"), "bootstrap")
+        availability = {"a":"Available in official FPL snapshot", "d":"Doubtful — official FPL",
+                        "i":"Injured — official FPL", "s":"Suspended — official FPL",
+                        "u":"Unavailable — official FPL"}.get(identity.get("status"))
+        fields["availability"] = official(identity.get("news") or availability, "bootstrap")
         fields["ownership"] = official(identity.get("selected_by_percent"), "bootstrap")
         fields["availability"]["gameweek"] = next_gw
         fields["ownership"]["gameweek"] = next_gw
