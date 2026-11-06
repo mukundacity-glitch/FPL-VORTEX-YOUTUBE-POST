@@ -748,6 +748,7 @@ FPL_API_BASE = "https://fantasy.premierleague.com/api"
 # The first response for each official endpoint is locked and every later caller
 # receives a deep copy of that exact payload.
 _VX_RUN_JSON_CACHE: dict[str, Any] = {}
+_VX_RUN_JSON_META: dict[str, Any] = {}
 
 
 def _vx_http_session() -> requests.Session:
@@ -787,6 +788,8 @@ def _vx_get_json(session: requests.Session, path: str) -> Any:
     response.raise_for_status()
     payload = response.json()
     _VX_RUN_JSON_CACHE[cache_key] = copy.deepcopy(payload)
+    from datetime import datetime, timezone
+    _VX_RUN_JSON_META[cache_key] = {"source": FPL_API_BASE + path, "retrievedAt": datetime.now(timezone.utc).isoformat()}
     return copy.deepcopy(payload)
 
 
@@ -1150,6 +1153,16 @@ def fetch_gw_review_snapshot(
         "picks": _vx_get_json(session, f"/entry/{entry_id}/event/{review_gw}/picks/"),
         "live": _vx_get_json(session, f"/event/{review_gw}/live/"),
         "fixtures": fixtures,
+        "provenance": {
+            label: dict(_VX_RUN_JSON_META.get(path) or {}, source=source)
+            for label, path, source in (
+                ("bootstrap", "/bootstrap-static/", FPL_API_BASE + "/bootstrap-static/"),
+                ("fixtures", "/fixtures/", FPL_API_BASE + "/fixtures/"),
+                ("history", f"/entry/{entry_id}/history/", "Official FPL presenter history"),
+                ("picks", f"/entry/{entry_id}/event/{review_gw}/picks/", "Official FPL presenter picks"),
+                ("live", f"/event/{review_gw}/live/", FPL_API_BASE + f"/event/{review_gw}/live/"),
+            )
+        },
     }
 
 
@@ -15090,7 +15103,7 @@ else:
         html = html.replace("</head>", _rank_direction_style + "\n</head>", 1)
 
         LIVE_REVIEW_DATA = {
-            "entry": _entry,
+            "entry": {"name": "FPL VORTEX"},
             "event": {
                 "id": int(_event.get("id", REVIEW_GW)),
                 "average_entry_score": _event.get("average_entry_score"),
@@ -15108,9 +15121,18 @@ else:
         raise RuntimeError(f"Could not build GW Review from canonical snapshot: {_gw_exc}") from _gw_exc
 
 
+    # Source metadata comes from actual HTTP retrieval, never rendering time.
+    from vortex.day1_brief import build_brief, badge
+    _review_brief = build_brief(GW_REVIEW, next_gw=int(NEXT_GW))
+    _source_label = badge(_review_brief["reviewSource"])
+    # Retain the original C/VC decision flags; the scoreboard uses the actual
+    # applied multiplier when the vice-captain was promoted after a non-appearance.
+    html = html.replace("starters.find(p=>p.captain)||starters[0]",
+        "data.players.find(p=>Number(p.multiplier)>1)||starters.find(p=>p.captain)")
+    html = html.replace("`LIVE PUBLIC FPL API • ENTRY ${CONFIG.teamId}`", json.dumps(_source_label))
     # Inject the already-fetched canonical Python snapshot.
     _live_json = json.dumps(LIVE_REVIEW_DATA, ensure_ascii=False).replace("</", "<\\/")
-    html = html.replace("__TEAM_ID__", str(int(TEAM_ID_LOCAL)), 1)
+    html = html.replace("__TEAM_ID__", "0", 1)
     html = html.replace("__REVIEW_DATA_JSON__", _live_json, 1)
     if "__TEAM_ID__" in html or "__REVIEW_DATA_JSON__" in html:
         raise RuntimeError("GW Review HTML snapshot placeholders were not fully resolved.")
@@ -18609,8 +18631,10 @@ window.__seek=function(t){
       (t-VX.metrics_t)/Number(timing.table_reveal_duration||.58)
     );
     document.querySelectorAll(".reviewPanel,.chipsPanel,.fixturesPanel").forEach(el=>{
-        el.style.setProperty("opacity",desk ? 0 : panelsP,"important");
-        el.style.transform=
+        const firstPlayer = VX.segments.find(s=>s.player_id && s.kind==="starter");
+        const scoreboardOpening = el.classList.contains("reviewPanel") && t < Number(firstPlayer?.reveal_at || 0);
+        el.style.setProperty("opacity",desk ? 0 : scoreboardOpening ? 1 : panelsP,"important");
+        el.style.transform=scoreboardOpening ? "none" :
           `translateY(${(1-panelsP)*38}px) scale(${.985+.015*panelsP})`;
     });
 
@@ -19170,13 +19194,18 @@ SOCIAL = r'''
 <span class="socialPair"><span class="xIcon">𝕏</span><span>@FPLVORTEXM</span></span>
 '''
 
-from vortex.day1_agenda import build_intro_agenda, spoken_intro_agenda, render_intro_agenda
+from vortex.day1_agenda import spoken_intro_agenda, render_intro_agenda
+from vortex.day1_brief import build_intro_agenda, build_brief, render_brief, build_timeline
+VX_BRIEF = build_brief(GW_REVIEW, next_gw=int(NEXT_GW),
+    player_model_rows=phase10_player_fixture_expected_points.to_dict(orient="records"),
+    fixture_model_rows=fixture_fdr_model_only.to_dict(orient="records"))
 VX_INTRO_AGENDA = build_intro_agenda(
     SELECTED_SCENES,
     next_gw=int(NEXT_GW),
     review_gw=int(REVIEW_GW) if SLIDE_SELECTION.get("gw_review") else None,
     review_status=str(GW_REVIEW_STATUS_LOCAL) if SLIDE_SELECTION.get("gw_review") else None,
     review_segments=segments if SLIDE_SELECTION.get("gw_review") else None,
+    brief=VX_BRIEF,
 )
 VX_INTRO_AGENDA_SPOKEN = spoken_intro_agenda(VX_INTRO_AGENDA)
 VX_INTRO_AGENDA_HTML = render_intro_agenda(VX_INTRO_AGENDA)
@@ -19392,10 +19421,10 @@ linear-gradient(140deg,#04111e 0%,#091b2d 45%,#020711 100%)}
 .outroScene .bgFade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:20}
 '''
 
-INTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$style</style></head><body><div class="scene introScene">
-<header class="topHeader"><div class="brandLock"><div class="logoBox">$logo</div><div class="brandWords"><div class="channelName">FPL VORTEX</div><div class="channelSub">GAMEWEEK DATA • MODEL • DECISIONS</div></div></div><div class="gwPill">GAMEWEEK $gw</div></header>
-<div class="mainHeading">GAMEWEEK $gw <span>• THE DECISION DESK</span></div><div class="headingRule"></div>
-<main class="agendaWrap">$agenda_cards</main>$fixture_grid$results_strip<footer class="footer"><div class="footerLeft"><strong>FPL VORTEX</strong> &nbsp;|&nbsp; GAMEWEEK $gw</div><div class="footerSocial">$social</div><div class="footerRight"><span class="updated">UPDATED: $updated</span><span class="season">2026/27 SEASON</span></div></footer></div></body></html>''').substitute(style=STYLE,logo=vortex_logo_html,gw=int(NEXT_GW),social=SOCIAL,updated=str(VX_FOOTER_UPDATED_DATE),results_strip=LATEST_GW_REVIEW_STRIP,fixture_grid=NEXT_FIXTURE_GRID_HTML,agenda_cards=VX_INTRO_AGENDA_HTML)
+# One programme opening; no fixture grid, old results strip or duplicate ident.
+INTRO = render_brief(VX_BRIEF, logo_html=vortex_logo_html, cards=VX_INTRO_AGENDA)
+(Path(DATA_DIR) / "day1_brief_sources.json").write_text(
+    json.dumps(VX_BRIEF, ensure_ascii=False, indent=2), encoding="utf-8")
 
 OUTRO = Template(r'''<!DOCTYPE html><html><head><meta charset="UTF-8"><style>$style</style></head><body><div class="scene outroScene">
 <div class="bgFade" id="bgFade"></div>
@@ -19411,9 +19440,7 @@ $results_strip<footer class="footer outroFooter"><div class="footerLeft"><strong
 <section class="logoStage" id="logoStage"><div class="logoHolder">$logo</div><div class="outroHandle logo-handle">$handle</div></section>
 </div></body></html>''').substitute(style=STYLE+"\n"+OUTRO_STYLE,logo=vortex_logo_html,gw=int(NEXT_GW),social=SOCIAL,updated=str(VX_FOOTER_UPDATED_DATE),handle=str(globals().get("CHANNEL_HANDLE", "@FPLVORTEX")).strip(),today_attack_teams=TODAY_ATTACK_TEAMS,today_def_teams=TODAY_DEF_TEAMS,today_warn_teams=TODAY_WARN_TEAMS,results_strip=LATEST_GW_REVIEW_STRIP)
 
-INTRO = vx_apply_pl_lockup(INTRO)
 OUTRO = vx_apply_pl_lockup(OUTRO)
-INTRO = vx_polish_branding(INTRO)
 OUTRO = vx_polish_branding(OUTRO)
 if LATEST_GW_REVIEW_GW is not None:
     print(
@@ -19426,27 +19453,13 @@ else:
 INTRO_HTML.write_text(INTRO,encoding="utf-8")
 OUTRO_HTML.write_text(OUTRO,encoding="utf-8")
 print("✅ INTRO HTML:",INTRO_HTML)
-print(f"✅ Intro layout: fixtures → {len(VX_INTRO_AGENDA)} narration-synced agenda cards")
+print(f"✅ The Gameweek Brief: {len(VX_INTRO_AGENDA)} agenda cards → verified review")
 print("✅ OUTRO HTML:",OUTRO_HTML)
 
-# Guard against export_4k_png ever screenshotting a stale/partial file left over
-# from an earlier interrupted run at this same path. Read back what is actually
-# on disk (not the in-memory INTRO/OUTRO strings) and confirm the fixture board
-# markup + its styling are both really there before Chromium ever opens it.
+# Reject an old opening left at the same cached path.
 _on_disk_intro = INTRO_HTML.read_text(encoding="utf-8")
-if 'id="vxFixtureGrid"' not in _on_disk_intro:
-    raise RuntimeError(
-        f"{INTRO_HTML} does not contain the fixture grid markup on disk — "
-        f"refusing to screenshot a stale file. Restart the runtime and re-run "
-        f"from Cell 0 to clear /content/FPL_VORTEX_FIRST_DAY_WORK."
-    )
-if ".fxGrid{" not in _on_disk_intro:
-    raise RuntimeError(
-        f"{INTRO_HTML} is missing the .fxGrid stylesheet rule on disk — "
-        f"refusing to screenshot a stale file. Restart the runtime and re-run "
-        f"from Cell 0 to clear /content/FPL_VORTEX_FIRST_DAY_WORK."
-    )
-print("✅ Verified on-disk INTRO HTML contains fixture grid markup + styling")
+if "THE GAMEWEEK" not in _on_disk_intro or 'id="vxFixtureGrid"' in _on_disk_intro:
+    raise RuntimeError("Stale intro HTML: expected only The Gameweek Brief")
 
 if "export_4k_png" not in globals(): raise NameError("Run Cell 13 first — export_4k_png missing.")
 await export_4k_png(INTRO_HTML,INTRO_PNG)
@@ -24757,11 +24770,13 @@ scripts = {
 
 f"""
 
-Welcome back to Fantasy Premier League Vortex. A good score can hide a weak bench, and one blank doesn't make the original pick a bad one. Before Gameweek {NEXT_GW}, let's look at the fixtures on screen and separate the last result from the choices ahead. We want a plan that holds up when the team news changes. No chasing last week's points, and no transfers just for the sake of it.
+The points are only the start. Which performances matter next?
+This is Fantasy Premier League Vortex.
+Welcome to The Gameweek Brief, for Gameweek {NEXT_GW}.
 
 {VX_INTRO_AGENDA_SPOKEN}
 
-Let's get into it.
+Let's review the Gameweek, and decide what matters next.
 
 """.strip(),
 
@@ -24938,7 +24953,9 @@ async def make_audio(key,text,rate_override=None):
     raw=bytearray()
 
     mood = SCENE_MOODS.get(key, "analysis")
-    profile = vx_tts_profile(mood)
+    profile = dict(vx_tts_profile(mood))
+    if key == "00_intro":
+        profile["rate"] = "+0%"
     if rate_override is not None:
         profile["rate"]=str(rate_override)
 
@@ -24958,6 +24975,16 @@ async def make_audio(key,text,rate_override=None):
         )
 
     out.write_bytes(raw)
+    if key == "00_intro":
+        measured = vx_media_duration(out)
+        if measured > 40.0:
+            raise RuntimeError(f"Opening voice is {measured:.2f}s; shorten wording, never accelerate Ryan")
+        # A short final dashboard hold is allowed; no stretching or speeding audio.
+        if measured < 38.0:
+            padded = out.with_name("00_intro_padded.mp3")
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out),
+                "-af", "apad", "-t", "38", "-c:a", "libmp3lame", str(padded)], check=True)
+            padded.replace(out)
 
     return {
         "audio":str(out),
@@ -24973,6 +25000,16 @@ manifest={}
 
 for key,text in scripts.items():
     manifest[key]=await make_audio(key,text)
+    if key == "00_intro":
+        from vortex.day1_editorial import word_timed_vtt
+        _intro_info = manifest[key]
+        _intro_timeline = build_timeline(_intro_info["words"], duration=float(_intro_info["duration"]),
+            phrase_span=vx_phrase_span, cards=VX_INTRO_AGENDA)
+        _intro_info["brief_timeline"] = _intro_timeline
+        (TIMING / "day1_brief_timing.json").write_text(json.dumps(_intro_timeline, indent=2), encoding="utf-8")
+        (TIMING / "day1_brief_script.json").write_text(json.dumps({"script":text,"words":_intro_info["words"]}, indent=2), encoding="utf-8")
+        (TIMING / "day1_brief_master.vtt").write_text(word_timed_vtt([
+            {"t0":0,"t1":_intro_info["duration"],"text":text,"words":_intro_info["words"]}], max_words=8, max_seconds=3.8), encoding="utf-8")
 
     # Do not resynthesize or accelerate Ryan to hit a fixed outro duration.
     # The actual WordBoundary/MP3 timing drives the existing visual timeline.
@@ -25178,36 +25215,21 @@ def events_for(key, info):
         return round(float(start_time),3), max(float(min_duration),float(spoken_span))
 
     if key=="00_intro":
+        # The programme ident and each agenda card follow real speech boundaries.
         welcome_at,_ = _sync("Welcome", 0.35)
-        if not VX_INTRO_AGENDA:
-            raise RuntimeError("Intro has no verified agenda sections")
         agenda_events = []
         last_cue = -1.0
         for _agenda_index, _agenda in enumerate(VX_INTRO_AGENDA, 1):
-            cue = vx_phrase_span(
-                words, _agenda["anchor"], required=True,
-                context=f"00_intro agenda {_agenda_index}",
-            )
+            cue = vx_phrase_span(words, _agenda["anchor"], required=True,
+                context=f"00_intro agenda {_agenda_index}")
             cue_at = round(float(cue[0]), 3)
-            if cue_at < 18.0:
-                raise RuntimeError(f"Intro agenda starts before the fixture board phase: {cue_at:.2f}s")
-            if last_cue >= 0 and cue_at <= last_cue + 0.4:
+            if cue_at <= last_cue:
                 raise RuntimeError("Intro agenda word boundaries overlap or are out of order")
             last_cue = cue_at
-            agenda_events.append({
-                "sel":f".agenda-{_agenda_index}","at":cue_at,
-                "dur":0.46,"stagger":0,"fx":"rise",
-            })
-        return [
-            {"sel":".topHeader,.brandLock,.logoBox,.brandWords,.gwPill","at":welcome_at,"dur":0.65,"stagger":0.05,"fx":"left"},
-            {"sel":".mainHeading,.headingRule","at":welcome_at,"dur":0.70,"stagger":0.08,"fx":"zoom"},
-            {"sel":".prevResultsStrip","at":welcome_at,"dur":0.48,"stagger":0,"fx":"rise"},
-            {"sel":".footer","at":welcome_at,"dur":0.45,"stagger":0,"fx":"fade"},
-            {"sel":".fxGrid","at":0.0,"dur":0.55,"stagger":0,"fx":"rise"},
-            # Fixture grid disappears at the first spoken agenda cue.
-            # Every card then follows its own measured Ryan WordBoundary.
-            *agenda_events,
-        ]
+            agenda_events.append({"sel":f".agenda-card:nth-child({_agenda_index})",
+                "at":cue_at,"dur":0.45,"stagger":0,"fx":"rise"})
+        return [{"sel":".brand","at":info["brief_timeline"]["brand"],"dur":0.45,"fx":"fade"},
+                {"sel":".title-row","at":welcome_at,"dur":0.55,"fx":"rise"}, *agenda_events]
 
     if key=="02_fdr":
 
@@ -25774,6 +25796,27 @@ for key,(src_name,out_name) in SCENES.items():
 
     events=events_for(key,info)
 
+    if key == "00_intro":
+        import base64
+        review_html = HTML / "gw_review_scene_4k_animated.html"
+        if not review_html.is_file():
+            raise RuntimeError("The opening requires the current rendered Gameweek Review HTML")
+        review_uri = "data:text/html;base64," + base64.b64encode(review_html.read_bytes()).decode("ascii")
+        page = render_brief(VX_BRIEF, logo_html=vortex_logo_html, cards=VX_INTRO_AGENDA,
+            timeline=info["brief_timeline"], review_uri=review_uri)
+        from vortex.day1_brief import caption_cues
+        page = page.replace("</body>", "<script>window.__setBriefTimeline(" +
+            json.dumps(info["brief_timeline"]) + "," + json.dumps(caption_cues(info["words"])) + ");</script></body>")
+        out.write_text(page, encoding="utf-8")
+        # This is the responsive page for inspection; video uses the same DOM.
+        (HTML / "gameweek_brief.html").write_text(render_brief(VX_BRIEF,
+            logo_html=vortex_logo_html, cards=VX_INTRO_AGENDA), encoding="utf-8")
+        manifest[key] = {"html":str(out),"audio":info["audio"],"duration":duration,
+            "canvas":[3840,2160],"events":events,"agenda":VX_INTRO_AGENDA,
+            "brief_timeline":info["brief_timeline"],"caption_cues":caption_cues(info["words"]),
+            "highlights":[],"teasers":[]}
+        continue
+
     # Fill genuine dead-air: if meaningful body content is more than ~3s away, show a data teaser.
     if key=="00_intro":
         _body_candidates=[
@@ -25963,9 +26006,9 @@ print("✅ Spoken-team highlighting")
 print("✅ Outro footer matches Intro")
 print("✅ Subscribe + follow CTA")
 print("✅ Original-logo growl finale")
-print(f"✅ Intro sequence: centered fixtures → {len(VX_INTRO_AGENDA)} evidence-led agenda beats")
+print("✅ The Gameweek Brief → current verified Gameweek Review")
 print("✅ Each agenda title and short description reveal together as one card")
-print("✅ Intro fixture board is fully removed before agenda 01")
+print("✅ Old fixture-led intro removed from the production flow")
 print("✅ Outro finale has a protected visible tail hold")
 
 # ============================================================
@@ -26034,7 +26077,7 @@ for _helper in ("vx_media_duration", "vx_frame_plan", "vx_video_info", "vx_apply
 
 RENDERER_VERSION = "VX20-EVENT-KEYFRAMES-V1"
 SCENE_RENDER_REVISIONS = {
-    "00_intro": "VX20-INTRO-CENTERED-FIXTURES-V4-18S-MIXED-REVIEW",
+    "00_intro": "VX20-GAMEWEEK-BRIEF-V1",
     "05_outro": "VX20-OUTRO-VISIBLE-TAIL-V4-MIXED-REVIEW",
 }
 RESUME = bool(globals().get("RESUME_EXISTING_MP4", True))
@@ -26156,6 +26199,8 @@ def _vx20_fingerprint(key, cfg, html, audio, duration):
         "motion_capture_fps": MOTION_CAPTURE_FPS,
         "jpeg_quality": JPEG_QUALITY,
         "events": cfg.get("events", []),
+        "brief_timeline": cfg.get("brief_timeline"),
+        "caption_cues": cfg.get("caption_cues"),
         "highlights": cfg.get("highlights", []),
         "teasers": cfg.get("teasers", []),
         "fixture_grid_window": cfg.get("fixture_grid_window"),
@@ -26214,6 +26259,15 @@ async def _vx20_sample_times(page, cfg, duration, frame_plan):
         if end > start:
             times.add(round(min(last_t, (start + end) / 2.0), 6))
 
+
+    for cue in cfg.get("caption_cues", []):
+        _vx20_add_window(times, float(cue["start"]), float(cue["start"]) + 0.05, last_t)
+        _vx20_add_window(times, float(cue["end"]), float(cue["end"]) + 0.05, last_t)
+
+    brief_timing = cfg.get("brief_timeline")
+    if isinstance(brief_timing, dict):
+        start = float(brief_timing["transition"])
+        _vx20_add_window(times, start, start + 0.85, last_t)
 
     fixture_window = cfg.get("fixture_grid_window")
     if isinstance(fixture_window, dict):
@@ -26370,7 +26424,10 @@ async def _vx20_render_scene(page, job):
 
     await page.goto(html.resolve().as_uri(), wait_until="load", timeout=120000)
     await page.wait_for_function("window.__ready === true", timeout=60000)
-    await vx_apply_render_scale(page, W, H, DESIGN_W, DESIGN_H)
+    if key != "00_intro":
+        await vx_apply_render_scale(page, W, H, DESIGN_W, DESIGN_H)
+    else:
+        await page.add_style_tag(content="html,body{margin:0;width:100vw;height:100vh;overflow:hidden}*,*:before,*:after{transition:none!important;animation:none!important}")
 
     try:
         await page.evaluate("() => document.fonts.ready")
@@ -27254,6 +27311,7 @@ qa = {
     "video_codec": master_media["video_codec"],
     "audio_codec": master_media["audio_codec"],
     "assembly_mode": ASSEMBLY_MODE,
+    "opening_policy": "gameweek_brief",
     "full_scene_hash_qa": FULL_SCENE_HASH_QA,
     "master_reused": REUSE_MASTER,
     "combined_mp3_reused": REUSE_MP3,

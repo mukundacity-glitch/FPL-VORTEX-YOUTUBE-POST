@@ -83,7 +83,8 @@ class MarketDeskTests(unittest.TestCase):
         self.assertIn('segments = insert_market_segments(segments, VX_DAY1_MARKET_DESK)',source)
         self.assertIn('s.id === item.segment_id && t >= s.t0 && t < s.t1',source)
         self.assertIn('window.VXPlayerCard.mount(hw, desk.card)',source)
-        self.assertIn('desk ? 0 : panelsP',source)
+        self.assertIn('desk ? 0 : scoreboardOpening ? 1 : panelsP',source)
+        self.assertIn('el.classList.contains("reviewPanel")',source)
         self.assertIn('snapshot_review_animation_segments(pkg["segments"])',source)
 
 if __name__=='__main__': unittest.main()

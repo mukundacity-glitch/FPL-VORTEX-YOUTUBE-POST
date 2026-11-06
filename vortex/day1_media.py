@@ -180,6 +180,7 @@ def _filter_graph(
     fps: Fraction,
     opening_duration: float,
     program_duration: float,
+    include_opening: bool = True,
 ) -> str:
     background_duration = program_duration - OUTRO_SECONDS
     if background_duration <= 0:
@@ -210,8 +211,7 @@ def _filter_graph(
         "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
     )
 
-    return ";".join(
-        (
+    chains = [
             f"[0:v]trim=duration={opening_text},setpts=PTS-STARTPTS,"
             f"{video_chain}[opening_video]",
             f"[0:a]{audio_format},asetpts=PTS-STARTPTS,"
@@ -260,8 +260,12 @@ def _filter_graph(
             "asetpts=PTS-STARTPTS[program_audio]",
             "[opening_video][opening_audio][program_video][program_audio]"
             "concat=n=2:v=1:a=1[final_video][final_audio]",
-        )
-    )
+    ]
+    if not include_opening:
+        # Keep input numbering stable; input zero is unused and never concatenated.
+        chains = chains[2:-1]
+        chains.extend(("[program_video]null[final_video]", "[program_audio]anull[final_audio]"))
+    return ";".join(chains)
 
 
 def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
@@ -313,7 +317,8 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
             "Day 1 QA says media was integrated, but the final MP4 hash changed"
         )
 
-    opening = _required_file(asset_dir / OPENING_NAME)
+    include_opening = existing_qa.get("opening_policy") != "gameweek_brief"
+    opening = _required_file(asset_dir / OPENING_NAME) if include_opening else final_mp4
     background = _required_file(asset_dir / BACKGROUND_NAME)
     outro = _required_file(asset_dir / OUTRO_NAME)
 
@@ -329,12 +334,12 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
     _stream(background_probe, "audio")
     _stream(outro_probe, "audio")
 
-    opening_duration = _duration(opening_probe)
+    opening_duration = _duration(opening_probe) if include_opening else 0.0
     program_duration = _duration(program_probe)
     background_source_duration = _duration(background_probe)
     outro_source_duration = _duration(outro_probe)
 
-    if opening_duration <= 0.5:
+    if include_opening and opening_duration <= 0.5:
         raise RuntimeError("opening.mp4 is too short")
     if program_duration <= OUTRO_SECONDS + 0.5:
         raise RuntimeError("The rendered program is too short for a six-second outro")
@@ -366,6 +371,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
         fps=fps,
         opening_duration=opening_duration,
         program_duration=program_duration,
+        include_opening=include_opening,
     )
 
     staging_dir = Path(
@@ -477,10 +483,11 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
         "asset_folder_id": os.environ.get("DAY1_ASSET_FOLDER_ID"),
         "logo_used": False,
         "opening": {
-            "name": opening.name,
-            "sha256": _sha256(opening),
+            "name": opening.name if include_opening else "The Gameweek Brief (integrated)",
+            "prepended": include_opening,
+            "sha256": _sha256(opening) if include_opening else None,
             "duration": opening_duration,
-            "original_audio_preserved": True,
+            "original_audio_preserved": include_opening,
             "timeline_start": 0.0,
             "timeline_end": opening_duration,
         },
@@ -503,7 +510,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
         },
         "mix": {
             "strategy": "voice_anchored_loudness_plus_sidechain_ducking",
-            "opening_audio_untouched": True,
+            "opening_audio_untouched": include_opening,
             "voice_target_lufs": VOICE_TARGET_LUFS,
             "voice_true_peak_dbtp": VOICE_TRUE_PEAK_DBTP,
             "music_base_lufs": MUSIC_BASE_LUFS,
@@ -537,7 +544,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
 
     scene_order = list(existing_qa.get("scene_order") or [])
     scene_keys = list(existing_qa.get("scene_keys") or [])
-    if not scene_keys or scene_keys[0] != "opening_video":
+    if include_opening and (not scene_keys or scene_keys[0] != "opening_video"):
         scene_keys.insert(0, "opening_video")
         scene_order.insert(0, "OPENING VIDEO")
 
@@ -570,7 +577,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
     _remove_stale_combined_files(mp3_dir, "*COMBINED*.mp3", combined_mp3)
 
     print("[DAY 1 MEDIA] PASS")
-    print(f"[DAY 1 MEDIA] Opening: {opening.name} ({opening_duration:.3f}s)")
+    print(f"[DAY 1 MEDIA] Opening: {opening.name} ({opening_duration:.3f}s)" if include_opening else "[DAY 1 MEDIA] The Gameweek Brief is integrated; no external intro prepended")
     print(
         "[DAY 1 MEDIA] Voice-first mix: "
         f"Ryan {VOICE_TARGET_LUFS:.1f} LUFS / "
@@ -578,7 +585,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
         f"duck {DUCK_RATIO:.1f}:1, "
         f"{DUCK_ATTACK_MS:.0f}ms attack, {DUCK_RELEASE_MS:.0f}ms release"
     )
-    print("[DAY 1 MEDIA] opening.mp4 audio preserved and excluded from music bed")
+    print("[DAY 1 MEDIA] opening.mp4 audio preserved and excluded from music bed" if include_opening else "[DAY 1 MEDIA] Music begins with the integrated programme opening")
     print(f"[DAY 1 MEDIA] Outro music: final {OUTRO_SECONDS:.3f}s only")
     print(f"[DAY 1 MEDIA] Final video: {final_mp4}")
     return report
