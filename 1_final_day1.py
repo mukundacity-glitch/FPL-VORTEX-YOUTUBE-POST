@@ -27307,7 +27307,7 @@ qa = {
     "video_codec": master_media["video_codec"],
     "audio_codec": master_media["audio_codec"],
     "assembly_mode": ASSEMBLY_MODE,
-    "opening_policy": "gameweek_brief" if _selection.get("00_intro") else "legacy",
+    "opening_policy": "gameweek_brief",
     "full_scene_hash_qa": FULL_SCENE_HASH_QA,
     "master_reused": REUSE_MASTER,
     "combined_mp3_reused": REUSE_MP3,

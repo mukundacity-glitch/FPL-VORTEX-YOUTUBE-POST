@@ -510,7 +510,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
         },
         "mix": {
             "strategy": "voice_anchored_loudness_plus_sidechain_ducking",
-            "opening_audio_untouched": True,
+            "opening_audio_untouched": include_opening,
             "voice_target_lufs": VOICE_TARGET_LUFS,
             "voice_true_peak_dbtp": VOICE_TRUE_PEAK_DBTP,
             "music_base_lufs": MUSIC_BASE_LUFS,
@@ -577,7 +577,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
     _remove_stale_combined_files(mp3_dir, "*COMBINED*.mp3", combined_mp3)
 
     print("[DAY 1 MEDIA] PASS")
-    print(f"[DAY 1 MEDIA] Opening: {opening.name} ({opening_duration:.3f}s)")
+    print(f"[DAY 1 MEDIA] Opening: {opening.name} ({opening_duration:.3f}s)" if include_opening else "[DAY 1 MEDIA] The Gameweek Brief is integrated; no external intro prepended")
     print(
         "[DAY 1 MEDIA] Voice-first mix: "
         f"Ryan {VOICE_TARGET_LUFS:.1f} LUFS / "
@@ -585,7 +585,7 @@ def integrate_media(output_root: Path, asset_dir: Path) -> dict[str, Any]:
         f"duck {DUCK_RATIO:.1f}:1, "
         f"{DUCK_ATTACK_MS:.0f}ms attack, {DUCK_RELEASE_MS:.0f}ms release"
     )
-    print("[DAY 1 MEDIA] opening.mp4 audio preserved and excluded from music bed")
+    print("[DAY 1 MEDIA] opening.mp4 audio preserved and excluded from music bed" if include_opening else "[DAY 1 MEDIA] Music begins with the integrated programme opening")
     print(f"[DAY 1 MEDIA] Outro music: final {OUTRO_SECONDS:.3f}s only")
     print(f"[DAY 1 MEDIA] Final video: {final_mp4}")
     return report

@@ -38,6 +38,10 @@ class BriefBrowser(unittest.TestCase):
                 page=self.page(width,height)
                 self.assertEqual(page.locator('.agenda-card').count(),5)
                 self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'),width)
+                screenshots=os.environ.get('DAY1_BRIEF_SCREENSHOT_DIR')
+                if screenshots:
+                    folder=Path(screenshots);folder.mkdir(parents=True,exist_ok=True)
+                    page.screenshot(path=str(folder/f'brief-{width}.png'),full_page=True)
                 for card in page.locator('.agenda-card').all():
                     box=card.bounding_box()
                     self.assertGreaterEqual(box['x'],0)

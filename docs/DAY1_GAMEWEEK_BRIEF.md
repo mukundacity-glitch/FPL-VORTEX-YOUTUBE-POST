@@ -42,7 +42,8 @@ Let’s review the Gameweek, and decide what matters next.
 
 Preferred ident order: analytical hook → brand → title → five agenda cards →
 review. Actual timings come from WordBoundary events, not estimated timestamps.
-The opening must measure 35–40 seconds. Overlong audio stops with an instruction
+The opening must measure 35–40 seconds. A real Ryan test of the production wording
+measured 39.0 seconds at +0%, with the review handoff beginning at 35.025 seconds. Overlong audio stops with an instruction
 to shorten text; Ryan is never accelerated. A short scoreboard hold may pad a
 shorter read to the target. A production run writes:
 

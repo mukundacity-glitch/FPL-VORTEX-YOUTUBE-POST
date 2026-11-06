@@ -117,7 +117,7 @@ jobs:
         run: |
           python tools/hero_card_audit/build_harness.py hero-card-qa
           python tools/hero_card_audit/audit.py hero-card-qa
-          python -m unittest discover -s tests -p 'test_day1_brief_browser.py' -v
+          DAY1_BRIEF_SCREENSHOT_DIR=hero-card-qa python -m unittest discover -s tests -p 'test_day1_brief_browser.py' -v
       - name: Save layout evidence
         if: always()
         uses: actions/upload-artifact@v4
