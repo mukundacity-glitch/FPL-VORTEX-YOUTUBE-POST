@@ -15125,6 +15125,10 @@ else:
     from vortex.day1_brief import build_brief, badge
     _review_brief = build_brief(GW_REVIEW, next_gw=int(NEXT_GW))
     _source_label = badge(_review_brief["reviewSource"])
+    # Retain the original C/VC decision flags; the scoreboard uses the actual
+    # applied multiplier when the vice-captain was promoted after a non-appearance.
+    html = html.replace("starters.find(p=>p.captain)||starters[0]",
+        "data.players.find(p=>Number(p.multiplier)>1)||starters.find(p=>p.captain)")
     html = html.replace("`LIVE PUBLIC FPL API • ENTRY ${CONFIG.teamId}`", json.dumps(_source_label))
     # Inject the already-fetched canonical Python snapshot.
     _live_json = json.dumps(LIVE_REVIEW_DATA, ensure_ascii=False).replace("</", "<\\/")

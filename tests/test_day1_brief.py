@@ -57,6 +57,18 @@ class BriefFacts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"disagree"):
             self.build(data)
 
+    def test_effective_vice_captain_promotion_and_triple_captain(self):
+        data=snapshot()
+        data["picks"]["picks"][0]["multiplier"]=0
+        data["picks"]["picks"][1].update(multiplier=2,is_vice_captain=True)
+        data["history"]["current"][-1]["points"]=6
+        data["picks"]["entry_history"]["points"]=6
+        self.assertEqual(self.build(data)["scoreboard"]["Captain points (applied)"]["value"],6)
+        data["picks"]["picks"][1]["multiplier"]=3
+        data["history"]["current"][-1]["points"]=9
+        data["picks"]["entry_history"]["points"]=9
+        self.assertEqual(self.build(data)["scoreboard"]["Captain points (applied)"]["value"],9)
+
     def test_wrong_gameweek_is_rejected(self):
         data=snapshot();data["gw"]=10
         with self.assertRaisesRegex(ValueError,"inconsistent"):
@@ -207,6 +219,7 @@ class BriefProduction(unittest.TestCase):
         self.assertIn('"brief_timeline": cfg.get("brief_timeline")',source)
         self.assertIn('profile["rate"] = "+0%"',source)
         self.assertIn('el.classList.contains("reviewPanel")',source)
+        self.assertIn('data.players.find(p=>Number(p.multiplier)>1)',source)
         self.assertIn('"retrievedAt": datetime.now(timezone.utc).isoformat()',source)
 
 

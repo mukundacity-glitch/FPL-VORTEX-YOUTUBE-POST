@@ -107,9 +107,10 @@ def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
     if recorded is not None and gross is not None and recorded not in {gross, net}:
         raise ValueError("Presenter points do not reconcile with applied player points")
     old_rank, rank = previous.get("overall_rank"), current.get("overall_rank")
-    captain = next((p for p in picks if p.get("is_captain")), None)
-    # Applied captain return is zero when the original captain did not play;
-    # vice-captain promotion remains represented by the official multipliers.
+    # Official multipliers include vice-captain promotion and triple captain;
+    # the originally selected captain flag alone is not the applied outcome.
+    captain = next((p for p in picks if (p.get("multiplier") or 0) > 1), None)
+    captain = captain or next((p for p in picks if p.get("is_captain")), None)
     captain_points = (stats[captain["element"]]["total_points"] * captain["multiplier"]
                       if captain and complete else None)
     bench = [p for p in picks if p.get("position", 0) > 11]
