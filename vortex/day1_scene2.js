@@ -29,7 +29,7 @@
       <h2>${esc(player.name)} <span class="accent">/ THE EVIDENCE</span></h2>
       <div class="player-context">${esc(player.club)} <b>•</b> ${esc(player.position)} <b>•</b> Completed Gameweek ${review.gameweek}</div>
       <div class="stat-grid">${stat('points','GAMEWEEK POINTS',f.total_points)}${stat('goals','GOALS',f.goals_scored)}${stat('assists','ASSISTS',f.assists)}${stat('minutes','MINUTES PLAYED',f.minutes)}${stat('xg','GAMEWEEK xG',xg)}${stat('xa','GAMEWEEK xA',xa)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','OFFICIAL OVERALL FDR',first?`${text(first.fdr)} / 5`:'N/A')}</div>
-      <div class="evidence-note"><b>RECENT STARTING EVIDENCE</b><br>${esc(recent)}. Expected minutes N/A.</div>
+      <div class="evidence-note"><b>RECENT STARTING EVIDENCE</b><br>${esc(recent)}.<br>${esc(player.minutesAssessment.label)} · ${esc(player.minutesAssessment.confidence)} confidence · editorial estimate. Expected minutes N/A.</div>
       <div class="availability ${f.status==='a'?'':'flagged'}"><b>${f.status==='a'?'FPL AVAILABILITY':'AVAILABILITY CHECK'}</b> · ${esc(news)}</div>
       <div class="fixture-context">Hero Card metrics are season-to-date. Right panel xG/xA are Gameweek totals. FDR is official overall difficulty, not a probability. Split attack/defence model N/A.</div>
       <div class="verdict ${player.verdict==='MONITOR'?'monitor':''}"><strong>${esc(player.verdict)}</strong><span>${esc(player.reason)}</span></div>

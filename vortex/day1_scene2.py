@@ -173,6 +173,11 @@ def build_player(identity, stats, summary, meta, boot, fixtures, gw, next_gw, st
     starts = values['recent_starts']['value']
     available = identity.get('status') == 'a'
     verdict = 'HOLD' if available and starts is not None and starts >= 4 and outlook else 'MONITOR'
+    minutes_assessment = dict(label='Likely starter' if available and starts is not None and starts >= 4 else 'Starting place uncertain',
+                              confidence='medium' if available and starts is not None and starts >= 4 else 'low',
+                              dataStatus='EDITORIAL ESTIMATE', source=[meta['bootstrap'], meta['summary']],
+                              methodologyVersion='Recent five-GW starts plus FPL status v1',
+                              limitation='No manager-confirmed lineup. Expected minutes unavailable.')
     reason = ('Recent starts support holding for existing owners. Recheck team news before the deadline.'
               if verdict == 'HOLD' else 'Resolve the availability or starting-minutes uncertainty before a transfer.')
     if not available:
@@ -199,7 +204,7 @@ def build_player(identity, stats, summary, meta, boot, fixtures, gw, next_gw, st
                                fixdiff=f['fdr'], badge=f['badge']) for f in outlook])
     return dict(id=identity['id'], name=identity['web_name'], club=team['name'], position=positions[identity['element_type']],
                 story=story, fields=values, fixtures=outlook, card=card, verdict=verdict, reason=reason,
-                photoSources=original_photo_urls(identity), cardSource=meta['bootstrap'],
+                photoSources=original_photo_urls(identity), cardSource=meta['bootstrap'], minutesAssessment=minutes_assessment,
                 verdictStatus='FPL VORTEX editorial judgement; conditional',
                 limitations=['Shots, big chances and tactical role are not verified by these endpoints.',
                              'Expected minutes unavailable. Official status a is not a club-confirmed fitness statement.',
@@ -247,20 +252,23 @@ def player_script(player, gw, index):
                      f'For a lower-owned return, look at {player["name"]}.',
                      f'The decision to check carefully is {player["name"]}.']
     opening = introductions[min(index, 4)]
-    result = f'{f["total_points"]} points, {f["goals_scored"]} goals and {f["assists"]} assists, across {f["minutes"]} minutes.'
+    unit = lambda value, singular: f'{value} {singular}' + ('' if value == 1 else 's')
+    result = f'{unit(f["total_points"], "point")}, {unit(f["goals_scored"], "goal")} and {unit(f["assists"], "assist")}, across {f["minutes"]} minutes.'
     xg, xa = f['expected_goals'], f['expected_assists']
     underlying = (f'Expected goals were {xg:.2f}, and expected assists {xa:.2f}.' if xg is not None and xa is not None
                   else 'The underlying numbers are incomplete, so they cannot settle the transfer decision.')
     recent_xg = f['recent_xg']
     recent_xa = f['recent_xa']
     interpretations = [
-        f"The return includes {f['clean_sheets']} clean sheets and {f['bonus']} bonus points. Repeated starts are the stronger evidence for holding than assuming another goal.",
+        f"The return includes {unit(f['clean_sheets'], 'clean sheet')} and {f['bonus']} bonus points. Repeated starts are the stronger evidence for holding than assuming another goal.",
         ('The goal and assist returns outpaced the expected attacking involvement this week. Treat that as a reason to check the longer sample, not chase the score.' if xg is not None and xa is not None and f['goals_scored'] + f['assists'] > xg + xa + .5 else 'The attacking return adds evidence, but the next opponent and repeated minutes still decide the transfer.'),
         (f"Across the last five Gameweeks, expected goals total {recent_xg:.2f}. That wider opportunity matters more than reacting to a single blank." if recent_xg is not None else 'A single low return cannot establish a decline. The longer underlying sample is unavailable.'),
         (f"Current ownership is {f['selected_by_percent']} percent. With {f['recent_starts']} starts in the last five Gameweeks, minutes deserve checking before the low ownership." if f['recent_starts'] is not None else 'Low ownership does not establish a secure starting role. Recent starts are unavailable.'),
         (f"The last five Gameweeks total {f['recent_minutes']} minutes. An attractive opponent does not remove uncertainty over the next start." if f['recent_minutes'] is not None else 'Recent minutes are unavailable. Check the next starting role before acting on the fixture.')]
     minutes = (f'The last five Gameweeks contain {f["recent_starts"]} starts.' if f['recent_starts'] is not None
                else 'Recent starting evidence is incomplete.')
+    if index == 3:
+        minutes = ''
     availability = '' if f['status'] == 'a' else 'Check the current FPL availability flag.'
     next_fixture = player['fixtures'][0] if player['fixtures'] else None
     fixture = (f'Next is {next_fixture["opponentName"]}, {"at home" if next_fixture["venue"] == "H" else "away"}.'
@@ -400,6 +408,9 @@ def render_times(segments, fps=30):
             times.update(round(min(b, a + i / fps), 6) for i in range(math.ceil((b - a) * fps)))
         for cue in s['captions']:
             times.update((round(cue['start'], 6), round(cue['end'], 6)))
+        verdict = s['cues'].get('verdict')
+        if s['kind'] == 'player' and verdict is not None:
+            times.update(round(verdict - .15 + i / fps, 6) for i in range(math.ceil(.65 * fps)))
         for cue in s['cues'].values():
             times.update((round(cue, 6), round(cue + 1.4, 6)))
         times.add(round(start + .01, 6))
@@ -413,6 +424,7 @@ def make_original_bed(output, duration, segments):
     rate = 48000
     samples = array.array('h')
     accents = [s['t0'] + .15 for s in segments if s['kind'] in ('chapter', 'player', 'next')]
+    accents += [s['cues']['verdict'] for s in segments if s['kind'] == 'player' and 'verdict' in s['cues']]
     for i in range(math.ceil(duration * rate)):
         t = i / rate
         envelope = min(1, t / 2, (duration - t) / 2)
