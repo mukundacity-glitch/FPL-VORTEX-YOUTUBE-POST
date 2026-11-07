@@ -42,6 +42,16 @@ class BriefFacts(unittest.TestCase):
     def build(self, data=None, **kw):
         return build_brief(data or snapshot(),next_gw=10,now=NOW,**kw)
 
+    def test_season_follows_official_event_deadlines_and_requires_provenance(self):
+        data=snapshot()
+        data['bootstrap']['events'][0]['deadline_time']='2026-08-15T10:00:00Z'
+        self.assertEqual(self.build(data)['season']['value'],'2026/27')
+        data['bootstrap']['events'][0]['deadline_time']='2027-05-15T10:00:00Z'
+        self.assertEqual(self.build(data)['season']['value'],'2026/27')
+        data['provenance'].pop('bootstrap')
+        self.assertEqual(format_datum(self.build(data)['season']),'Not verified')
+        self.assertEqual(format_datum(self.build()['season']),'Unavailable')
+
     def test_actual_applied_points_hits_and_rank_direction(self):
         board=self.build()["scoreboard"]
         self.assertEqual(board["Before deductions"]["value"],16)

@@ -37,6 +37,8 @@ class BriefBrowser(unittest.TestCase):
             with self.subTest(width=width):
                 page=self.page(width,height)
                 self.assertEqual(page.locator('.agenda-card').count(),5)
+                self.assertTrue(page.get_by_role('img',name='Premier League',exact=True).is_visible())
+                self.assertIn('SEASON',page.locator('.season-label').inner_text())
                 self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'),width)
                 screenshots=os.environ.get('DAY1_BRIEF_SCREENSHOT_DIR')
                 if screenshots:
