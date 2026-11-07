@@ -25,16 +25,16 @@
     const upcoming=`${first.opponent} (${first.venue})`;
     const recent=`${text(f.recent_starts)} starts · ${text(f.recent_minutes)} minutes · last five completed GWs`;
     const involvement=f.recent_xg==null||f.recent_xa==null?'N/A':(f.recent_xg+f.recent_xa).toFixed(2);
-    const minutesLabel=m.expectedMinutes==null?'STARTING CONFIDENCE':'EXPECTED MINUTES';
+    const minutesLabel=m.expectedMinutes==null?'STARTING CONFIDENCE · EST.':'EXPECTED MINUTES';
     const minutes=m.expectedMinutes==null
-      ? `${player.minutesAssessment.confidence} (estimate)`
+      ? player.minutesAssessment.confidence
       : Math.round(m.expectedMinutes);
     const availability=f.status==='a'?'Available':f.news||'Availability uncertain';
     return `<section class="spotlight"><div class="spotlight-hero" aria-label="Original FPL VORTEX Hero Card"></div><div class="analytics">
       <div class="scene-label">${esc(player.decisionLabel)} · GW${review.nextGameweek} DECISION</div>
       <h2>${esc(player.name)} <span class="accent">/ THE EVIDENCE</span></h2>
       <div class="player-context">${esc(player.club)} • ${esc(player.position)} • £${m.price.toFixed(1)}m • ${m.ownership}% owned</div>
-      <div class="stat-grid">${stat('xpts',`xPTS · ${esc(m.projectionSource)}`,m.xpts.toFixed(1))}${stat('starts','RECENT STARTS',f.recent_starts)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','FIXTURE DIFFICULTY',`${text(first.fdr)} / 5`)}${stat('minutes',minutesLabel,minutes)}${stat('form','FPL FORM',m.form)}${stat('xgi','xG + xA · LAST 5 GW',involvement)}${stat('points',`GW${review.gameweek} POINTS`,f.total_points)}</div>
+      <div class="stat-grid">${stat('xpts',`xPTS · ${esc(m.projectionSource)}`,m.xpts.toFixed(1))}${stat('starts','STARTS · LAST FIVE GWs',f.recent_starts)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','FIXTURE DIFFICULTY',`${text(first.fdr)} / 5`)}${stat('minutes',minutesLabel,minutes)}${stat('form','FPL FORM',m.form)}${stat('xgi','xG + xA · LAST 5 GW',involvement)}${stat('points',`GW${review.gameweek} POINTS`,f.total_points)}</div>
       <div class="evidence-note"><b>${esc(f.status==='a'?'STARTING EVIDENCE':player.decisionLabel)}</b><br>${esc(f.status==='a'?recent+' · '+availability:availability)}</div>
       <div class="verdict ${player.verdict==='MONITOR'?'monitor':''}"><strong>YOUR MOVE</strong><span>${esc(player.reason)}</span></div>
     </div></section>`;
