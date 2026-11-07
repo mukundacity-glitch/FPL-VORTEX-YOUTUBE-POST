@@ -163,10 +163,15 @@ def build_player(identity, stats, summary, meta, boot, fixtures, gw, next_gw, st
                        identity['team'] in (f.get('team_h'), f.get('team_a'))],
                       key=lambda f: (f['event'], f.get('kickoff_time') or ''))[:5]
     outlook = []
+    own_strength = 'defence' if identity['element_type'] in (1, 2) else 'attack'
+    other_strength = 'attack' if own_strength == 'defence' else 'defence'
     for fixture in upcoming:
         home = fixture['team_h'] == identity['team']
         opponent = teams[fixture['team_a'] if home else fixture['team_h']]
-        outlook.append(dict(gw=fixture['event'], opponent=opponent['short_name'],
+        own_rating = number(team.get(f'strength_{own_strength}_{"home" if home else "away"}'))
+        other_rating = number(opponent.get(f'strength_{other_strength}_{"away" if home else "home"}'))
+        strength_edge = (own_rating - other_rating) / 200 if own_rating is not None and other_rating is not None else 0
+        outlook.append(dict(strengthEdge=strength_edge, gw=fixture['event'], opponent=opponent['short_name'],
                             opponentName=opponent['name'], venue='H' if home else 'A',
                             fdr=fixture.get('team_h_difficulty' if home else 'team_a_difficulty'),
                             source=meta['fixtures'], status='Official overall FDR, 1–5; not a probability',
@@ -300,12 +305,14 @@ def market_shortlist(leaders, candidates, next_gw):
             role = min(starts, 5) / 5 if projected_minutes is None else min(projected_minutes, 90) / 90
             involvement = min(3, (f['recent_xg'] or 0) + (f['recent_xa'] or 0))
             relevance = min(m['ownership'], 50) / 25 + .35 * math.log1p(abs(net) / 1000)
+            form_weight = 0 if m['projectionSource'] == 'FPL ep_next' and xpts == form else .6
+            strength_edge = max(-1, min(1, fixture['strengthEdge']))
             if direction == 'in':
-                score = xpts + .6 * form + 3 * role + (5 - fdr) + involvement + relevance + xpts / m['price']
+                score = xpts + form_weight * form + 3 * role + (5 - fdr) + involvement + relevance + xpts / m['price'] + .5 * strength_edge
             else:
                 score = (8 if f['status'] in ('i', 's', 'u') else 4 if flagged else 0)
-                score += (7 - xpts) + .6 * (7 - form) + 2 * (1 - role) + fdr + relevance
-                score += m['price'] / 5 - .4 * involvement
+                score += (7 - xpts) + form_weight * (7 - form) + 2 * (1 - role) + fdr + relevance
+                score += m['price'] / 5 - .4 * involvement - .5 * strength_edge
             m.update(rank=rank, net=net, direction=direction, nextFixture=fixture, score=round(score, 3))
             scored.append(player)
         ordered = sorted(scored, key=lambda p: (-p['market']['score'], p['market']['rank']))
@@ -364,7 +371,7 @@ def player_script(player, gw, index):
         involvement = f['recent_xg'] + f['recent_xa']
         evidence += f' His expected goal involvement over that spell was {involvement:.2f}.'
     return (f'{player["name"]}. Net transfers {move}, {abs(m["net"]):,}. '
-            f'{projection} puts him at {m["xpts"]:.1f} expected points against {fx["opponentName"]} {venue}, '
+            f'{projection} lists {m["xpts"]:.1f} expected points. Next is {fx["opponentName"]} {venue}, '
             f'with a difficulty rating of {fx["fdr"]}. {evidence} '
             f'{player["verdict"].title()}. {player["reason"]}')
 
