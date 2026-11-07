@@ -23754,6 +23754,10 @@ output.serve_kernel_port_as_iframe(
 
 if not globals().get("SLIDE_SELECTION", {}).get("gw_review", True):
     print("⏭️ GW REVIEW skipped by Cell 0.")
+elif globals().get("VORTEX_SCENE2_ENABLED", True):
+    from vortex.day1_scene2 import production_entry
+    GW_REVIEW_SCENE2_MP4 = production_entry(globals())
+    print("✅ Scene 2 verified Hero Spotlight review:", GW_REVIEW_SCENE2_MP4)
 else:
     from pathlib import Path
     import hashlib

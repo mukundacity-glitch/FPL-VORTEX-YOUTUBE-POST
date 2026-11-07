@@ -1,0 +1,45 @@
+/* Scene 2 owns the central stage. The approved opening header/footer stay intact. */
+@font-face{font-family:Inter;src:url(data:font/ttf;base64,__INTER_FONT__) format('truetype');font-weight:100 900;font-display:block}
+html,body{width:100%;height:100%;overflow:hidden}
+body{background:#090e1d}
+#scene2{position:fixed;inset:0;pointer-events:none;z-index:3}
+#scene2-content{position:absolute;left:4vw;right:4vw;top:20vh;bottom:29vh;color:#fff}
+#scene2 h1,#scene2 h2,#scene2 h3{font-family:'Vortex Display',Arial,sans-serif;margin:0;letter-spacing:.02em}
+#scene2 .accent{color:#70e0ee}#scene2 .positive{color:#8de3bb}#scene2 .purple{color:#a78bfa}
+.chapter{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:16px}
+.chapter-label,.scene-label{font:600 17px/1.4 Inter,Arial,sans-serif;letter-spacing:.14em;color:#70e0ee}
+.chapter h1{font-size:108px;line-height:1;white-space:nowrap}.chapter h2{font-size:76px;color:#70e0ee;line-height:1}
+.chapter p{font:500 23px/1.4 Inter,Arial,sans-serif;letter-spacing:.05em;margin:8px 0}
+.chapter-line{height:3px;width:72%;background:linear-gradient(90deg,#70e0ee,#70e0ee00);transform-origin:left}
+.scene-heading{font-size:58px;white-space:nowrap;line-height:1.1}.overview .scene-label{margin-bottom:12px}
+.overview-panels{display:grid;grid-template-columns:repeat(3,1fr);gap:25px;margin-top:42px}
+.overview-panel{border:1px solid #395970;border-radius:12px;background:linear-gradient(130deg,#151d34,#0c1324);padding:35px 32px;min-height:230px}
+.overview-panel label{font:600 20px/1.3 Inter,Arial,sans-serif;letter-spacing:.06em;color:#d1d2df;display:block}
+.overview-panel strong{display:block;font:600 100px/1.3 'Vortex Display',sans-serif;color:#70e0ee}
+.overview-panel:nth-child(2) strong{color:#8de3bb}.overview-panel:nth-child(3) strong{color:#a78bfa}
+.scene-note{font:400 15px/1.5 Inter,Arial,sans-serif;color:#c1c4d3;margin-top:22px}
+.spotlight{position:absolute;inset:0}.spotlight-hero{position:absolute;top:0;bottom:0;width:43%;left:28%;transform-origin:center}
+.analytics{position:absolute;left:46%;right:0;top:0;bottom:0;display:flex;flex-direction:column;gap:14px;padding:2px 0 0 12px}
+.analytics .scene-label{font-size:13px;letter-spacing:.12em}.analytics h2{font-size:48px;line-height:1;white-space:nowrap}
+.player-context{font:500 16px/1.3 Inter,sans-serif;color:#c9c8d6}.player-context b{color:#70e0ee;font-weight:500}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.analytics-stat{border:1px solid #395068;border-radius:7px;padding:12px 13px;background:#111b2e;min-height:84px;transition:none}
+.analytics-stat span{display:block;font:500 11px/1.4 Inter,sans-serif;letter-spacing:.06em;color:#c5c8d4}
+.analytics-stat strong{display:block;font:600 36px/1.15 'Vortex Display',sans-serif;color:#fff;margin-top:6px}
+.analytics-stat.active{border-color:#70e0ee;background:#172e42;box-shadow:inset 0 0 14px #70e0ee14}
+.analytics-stat.active strong{color:#70e0ee}
+.evidence-note{padding:12px 16px;border-left:3px solid #a78bfa;background:#131a2d;font:400 15px/1.45 Inter,sans-serif;color:#e0deea}
+.evidence-note b{color:#bca9ff;font-weight:600}.availability{font:400 13px/1.45 Inter,sans-serif;color:#bdc4d0}
+.availability b{color:#8de3bb}.availability.flagged b{color:#ff9aaf}
+.verdict{display:flex;align-items:center;gap:18px;margin-top:auto;padding:13px 16px;border:1px solid #70e0ee70;border-radius:7px;background:#102936}
+.verdict strong{font:600 34px/1 'Vortex Display',sans-serif;letter-spacing:.04em;color:#8de3bb}.verdict.monitor strong{color:#ffd169}
+.verdict span{font:400 13px/1.45 Inter,sans-serif;color:#d3dde3}
+.fixture-context{font:400 11px/1.4 Inter,sans-serif;color:#b8c1ce}
+.lessons{height:100%;display:flex;flex-direction:column;justify-content:center;gap:28px}
+.lesson-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.lesson{border:1px solid #395970;border-top:3px solid #70e0ee;border-radius:9px;background:#121b2e;padding:26px}
+.lesson:nth-child(2){border-top-color:#a78bfa}.lesson:nth-child(3){border-top-color:#8de3bb}
+.lesson h3{font-size:34px;white-space:nowrap}.lesson p{font:400 19px/1.5 Inter,sans-serif;color:#c8cbd6}.lesson strong{font:500 17px/1.5 Inter,sans-serif;color:#fff}
+.next-chapter{height:100%;display:flex;flex-direction:column;justify-content:center;gap:24px}.next-chapter h1{font-size:96px;white-space:nowrap}.next-chapter p{font:500 26px/1.5 Inter,sans-serif;color:#d0d2df}
+#opening-match{position:fixed;inset:0;width:100%;height:100%;z-index:50;object-fit:contain;pointer-events:none}
+@media(prefers-reduced-motion:reduce){#scene2 *{transition:none!important}}
