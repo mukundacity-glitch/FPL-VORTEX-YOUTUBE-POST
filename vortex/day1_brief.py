@@ -291,12 +291,20 @@ def caption_cues(words):
 def render_brief(brief, *, logo_html="", cards=(), timeline=None, review_uri=None):
     """One responsive HTML surface, deterministic __seek for the existing 4K renderer."""
     template = Path(__file__).with_name("day1_brief.html").read_text(encoding="utf-8")
+    import base64
+    font_path = Path(__file__).resolve().parents[1] / "day2/assets/BarlowCondensed-SemiBold.ttf"
+    template = template.replace("__DISPLAY_FONT__", base64.b64encode(font_path.read_bytes()).decode())
+
+    def emphasized_title(title):
+        lead, _, last = title.rpartition(" ")
+        return escape(lead) + ' <em>' + escape(last) + '</em>'
+
     metrics = "".join(
         '<article class="metric"><span>'+escape(label)+'</span><strong>'+escape(format_datum(item))+
         '</strong><small>'+escape(badge(item))+'</small></article>' for label, item in brief["scoreboard"].items())
     agenda = "".join('<button class="agenda-card" data-index="'+str(i)+'" type="button">'
-        '<span class="number">'+f"{i+1:02}"+'</span><span><strong>'+escape(c["title"])+
-        '</strong><small>'+escape(c["subtitle"])+'</small></span><span class="arrow" aria-hidden="true">↗</span></button>'
+        '<span class="number">'+f"{i+1:02}"+'</span><span class="agenda-copy"><strong>'+emphasized_title(c["title"])+
+        '</strong><small><b>Episode focus</b> · '+escape(c["subtitle"])+'</small></span><span class="arrow" aria-hidden="true">↗</span></button>'
         for i, c in enumerate(cards))
     player_rows = []
     for player in brief["players"]:
