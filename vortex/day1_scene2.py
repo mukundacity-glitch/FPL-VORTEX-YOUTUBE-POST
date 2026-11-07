@@ -288,19 +288,43 @@ def scripts_for(review):
     for index, player in enumerate(review['players']):
         segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'], minimum=0,
                              text=player_script(player, gw, index)))
-    starts = [(p['name'], p['fields']['recent_starts']['value']) for p in review['players']]
-    reliable = max((row for row in starts if row[1] is not None), key=lambda row: row[1], default=None)
-    first = review['players'][0]
-    lessons = [dict(heading='MINUTES AND ROLE', explanation=(f'{reliable[0]} made {reliable[1]} starts across the last five Gameweeks.' if reliable else 'Recent starts are not fully verified.'),
-                    implication='Use repeated starting evidence. Recheck the team news.'),
-               dict(heading='UNDERLYING PERFORMANCE', explanation=f'{first["name"]} returned {first["fields"]["total_points"]["value"]} points in this Gameweek.',
-                    implication='Compare the return with the verified chance data before chasing it.'),
-               dict(heading='NEXT-FIXTURE OPPORTUNITY', explanation='Upcoming opponents and home/away status are verified in each player panel.',
-                    implication='Use the official overall FDR as a broad guide. It is not a probability.')]
-    review['takeaways'] = lessons
+    players = review['players']
+    minutes_case = min(players, key=lambda p: p['fields']['minutes']['value'])
+    minutes_played = minutes_case['fields']['minutes']['value']
+    chance_cases = [p for p in players if all(p['fields'][key]['value'] is not None for key in ('expected_goals', 'expected_assists'))]
+
+    def attacking_gap(player):
+        values = player['fields']
+        return (values['goals_scored']['value'] + values['assists']['value']
+                - values['expected_goals']['value'] - values['expected_assists']['value'])
+
+    chance_case = max(chance_cases, key=attacking_gap, default=None)
+    chance_explanation = 'The underlying sample is incomplete for these players.'
+    chance_voice = 'Use verified chance data to put returns in context.'
+    if chance_case:
+        values = chance_case['fields']
+        returns = values['goals_scored']['value'] + values['assists']['value']
+        xgi = values['expected_goals']['value'] + values['expected_assists']['value']
+        chance_explanation = f'{chance_case["name"]} recorded {returns} attacking returns against {xgi:.2f} expected goal involvements.'
+        chance_voice = (f'{chance_case["name"]} returned more than his expected involvement this week.'
+                        if attacking_gap(chance_case) > 0 else f'{chance_case["name"]} shows why chances and returns need separate readings.')
+    fixture_case = next((p for p in players if p['verdict'] == 'HOLD' and p['fixtures']), None)
+    fixture_explanation = 'Check each verified upcoming opponent and venue before making a move.'
+    fixture_voice = 'Check the fixture alongside the starting evidence.'
+    if fixture_case:
+        fixture = fixture_case['fixtures'][0]
+        venue = 'at home' if fixture['venue'] == 'H' else 'away'
+        fixture_explanation = f'{fixture_case["name"]} faces {fixture["opponentName"]} {venue}. Official overall FDR {display(fixture["fdr"])}.'
+        fixture_voice = f'For {fixture_case["name"]}, {fixture["opponentName"]} {venue} is the next fixture to assess.'
+    review['takeaways'] = [
+        dict(heading='MINUTES AND ROLE', explanation=f'{minutes_case["name"]} played {minutes_played} minutes in Gameweek {gw}.',
+             implication='Check repeated starts before backing the fixture.'),
+        dict(heading='UNDERLYING PERFORMANCE', explanation=chance_explanation,
+             implication='Keep a single return in the context of the longer sample.'),
+        dict(heading='NEXT-FIXTURE OPPORTUNITY', explanation=fixture_explanation,
+             implication='Combine the fixture with availability and starting evidence.')]
     segments.append(dict(id='takeaways', kind='takeaways', minimum=12,
-        text='Three lessons. Start with repeated minutes, then check whether the chances support the return. Finally, look ahead to the opponents. '
-             'A strong score is evidence to investigate. It is not, by itself, a transfer instruction.'))
+        text=f'Three lessons. {minutes_case["name"]} shows why the starting role matters. {chance_voice} {fixture_voice} Check all three before using a transfer.'))
     segments.append(dict(id='next', kind='next', minimum=4,
                          text='Next, players and fixtures. Who deserves your attention now?'))
     return segments

@@ -98,8 +98,10 @@
       hero.style.opacity=entrance*exit;
       hero.style.transform=reduced?'none':`translateY(${(1-entrance)*20}px) scale(${.94+.06*entrance})`;
       const panel=content.querySelector('.analytics');
-      panel.style.opacity=expand*exit;
-      panel.style.transform=reduced?'none':`translateX(${(1-expand)*25}px)`;
+      const clear=hero.getBoundingClientRect().right<=content.getBoundingClientRect().left+panel.offsetLeft;
+      const panelReveal=clear?ease((expand-.56)/.44):0;
+      panel.style.opacity=panelReveal*exit;
+      panel.style.transform=reduced?'none':`translateX(${(1-panelReveal)*25}px)`;
       content.querySelectorAll('[data-stat]').forEach(el=>{
         const at=segment.cues[el.dataset.stat];
         el.classList.toggle('active',at!==undefined&&t>=at-.12&&t<at+1.4);
