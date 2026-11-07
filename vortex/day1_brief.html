@@ -92,7 +92,7 @@ window.__seek=function(t){
  const current=runtime.cards.reduce((n,at,i)=>t>=at?i:n,-1);
  cards.forEach((card,i)=>{const p=ease(runtime.cards[i]);card.style.opacity=1;card.classList.toggle('active',i===current);card.style.transform=reduced?'none':`translateX(${i===current?p*3:0}px)`});
  const transition=Math.max(0,Math.min(1,(t-runtime.transition)/.8));
- $('.handoff').style.display=transition>0?'block':'none';$('.handoff').style.opacity=transition;
+ $('.handoff').style.display=frame&&transition>0?'block':'none';$('.handoff').style.opacity=transition;
  if(frame&&frame.contentWindow&&frame.contentWindow.__seek){frame.style.width='3840px';frame.style.height='2160px';frame.style.transformOrigin='0 0';frame.style.transform=`scale(${innerWidth/3840},${innerHeight/2160})`;frame.contentWindow.__seek(0)}
  const words=(BRIEF.words||[]).filter(w=>t>=Number(w.start)&&t<Number(w.end));
  $('.captions span').textContent=words.map(w=>w.text).join(' ');$('.captions').style.display=words.length?'block':'none';

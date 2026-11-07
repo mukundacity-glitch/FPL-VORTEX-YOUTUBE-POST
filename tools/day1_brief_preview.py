@@ -103,15 +103,8 @@ async def main():
     timeline = build_timeline(words,duration=duration,phrase_span=namespace["vx_phrase_span"],cards=cards)
     logo_file = ROOT/"tools/preview_assets/vortex-lion-reference.jpg"
     logo = '<img alt="FPL VORTEX lion from the supplied master slide" src="data:image/jpeg;base64,'+base64.b64encode(logo_file.read_bytes()).decode()+'">'
-    review = render_brief(brief,logo_html=logo,cards=cards)
-    review = review.replace("</body>",'''<script>
-    document.querySelector('.broadcast').style.display='none';
-    document.querySelector('.controls').style.display='none';
-    document.querySelector('.review .kicker').textContent='VERIFIED SNAPSHOT — FULL REVIEW CONTINUES IN PRODUCTION';
-    window.__seek=function(){};window.__ready=true;
-    </script></body>''')
-    uri = "data:text/html;base64,"+base64.b64encode(review.encode()).decode()
-    page_html = render_brief(brief,logo_html=logo,cards=cards,timeline=timeline,review_uri=uri)
+    # The approval file covers the opening only. Production supplies its actual review URI.
+    page_html = render_brief(brief,logo_html=logo,cards=cards,timeline=timeline)
     page_html = page_html.replace("</body>","<script>window.__setBriefTimeline("+json.dumps(timeline)+","+json.dumps(caption_cues(words))+");</script></body>")
     html_path=output/"opening.html";html_path.write_text(page_html)
     frames=output/"frames";frames.mkdir(exist_ok=True)
