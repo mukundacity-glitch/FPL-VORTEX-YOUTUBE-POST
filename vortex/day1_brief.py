@@ -5,6 +5,7 @@ The caller supplies the canonical snapshot and its actual endpoint retrieval tim
 """
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
 from html import escape
 import json
@@ -88,6 +89,12 @@ def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
         return datum(value, source=provenance.get("source"),
                      retrieved_at=provenance.get("retrievedAt"), gameweek=gw,
                      now=now, methodology=methodology, status=status)
+
+    deadlines = [_time(e.get("deadline_time")) for e in events.values()]
+    first_deadline = min((stamp for stamp in deadlines if stamp), default=None)
+    season_start = (first_deadline.year if first_deadline.month >= 7 else first_deadline.year - 1) if first_deadline else None
+    season = official(f"{season_start}/{str(season_start + 1)[-2:]}" if season_start else None,
+                      "bootstrap", methodology="FPL event deadline season, July rollover v1")
 
     history = snapshot.get("history") or {}
     current = next((h for h in history.get("current", []) if h.get("event") == gw), {})
@@ -210,7 +217,7 @@ def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
             projections[key]["value"] = None
             projections[key]["freshnessStatus"] = "unavailable"
         projections[key]["missingLabel"] = missing
-    return dict(version=VERSION, reviewGW=gw, nextGW=next_gw, status=status,
+    return dict(version=VERSION, reviewGW=gw, nextGW=next_gw, status=status, season=season,
                 generatedAt=now.astimezone(EASTERN).isoformat(), scoreboard=scoreboard,
                 players=players, projections=projections, personalTeamAvailable=bool(current and picks),
                 modelDataAvailable=any(p["fields"]["xPts"]["freshnessStatus"] == "fresh" for p in players),
@@ -291,12 +298,23 @@ def caption_cues(words):
 def render_brief(brief, *, logo_html="", cards=(), timeline=None, review_uri=None):
     """One responsive HTML surface, deterministic __seek for the existing 4K renderer."""
     template = Path(__file__).with_name("day1_brief.html").read_text(encoding="utf-8")
+    font_path = Path(__file__).resolve().parents[1] / "day2/assets/BarlowCondensed-SemiBold.ttf"
+    template = template.replace("__DISPLAY_FONT__", base64.b64encode(font_path.read_bytes()).decode())
+
+    # Unmodified negative logo from the Premier League editorial logo site.
+    # https://logo.premierleague.com/img/lion-light.svg
+    league_logo = base64.b64encode(Path(__file__).with_name("premier-league-white.svg").read_bytes()).decode()
+
+    def emphasized_title(title):
+        lead, _, last = title.rpartition(" ")
+        return escape(lead) + ' <em>' + escape(last) + '</em>'
+
     metrics = "".join(
         '<article class="metric"><span>'+escape(label)+'</span><strong>'+escape(format_datum(item))+
         '</strong><small>'+escape(badge(item))+'</small></article>' for label, item in brief["scoreboard"].items())
     agenda = "".join('<button class="agenda-card" data-index="'+str(i)+'" type="button">'
-        '<span class="number">'+f"{i+1:02}"+'</span><span><strong>'+escape(c["title"])+
-        '</strong><small>'+escape(c["subtitle"])+'</small></span><span class="arrow" aria-hidden="true">↗</span></button>'
+        '<span class="number">'+f"{i+1:02}"+'</span><span class="agenda-copy"><strong>'+emphasized_title(c["title"])+
+        '</strong><small><b>Episode focus</b> · '+escape(c["subtitle"])+'</small></span><span class="arrow" aria-hidden="true">↗</span></button>'
         for i, c in enumerate(cards))
     player_rows = []
     for player in brief["players"]:
@@ -311,6 +329,8 @@ def render_brief(brief, *, logo_html="", cards=(), timeline=None, review_uri=Non
     payload = json.dumps(dict(brief=brief, timeline=timeline, reviewUri=review_uri), ensure_ascii=False).replace("<", "\\u003c")
     for key, value in {"LOGO": logo_html, "AGENDA": agenda, "METRICS": metrics,
                        "GW": str(brief["reviewGW"]), "NEXT": str(brief["nextGW"]),
+                       "PL_LOGO": league_logo,
+                       "SEASON": escape(format_datum(brief.get("season") or datum(None))),
                        "STATUS": escape(brief["status"]), "STAMP": escape(badge(brief["reviewSource"])),
                        "PLAYERS": "".join(player_rows), "PAYLOAD": payload}.items():
         template = template.replace("__"+key+"__", value)

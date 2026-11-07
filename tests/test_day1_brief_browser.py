@@ -37,6 +37,8 @@ class BriefBrowser(unittest.TestCase):
             with self.subTest(width=width):
                 page=self.page(width,height)
                 self.assertEqual(page.locator('.agenda-card').count(),5)
+                self.assertTrue(page.get_by_role('img',name='Premier League',exact=True).is_visible())
+                self.assertIn('SEASON',page.locator('.season-label').inner_text())
                 self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'),width)
                 screenshots=os.environ.get('DAY1_BRIEF_SCREENSHOT_DIR')
                 if screenshots:
@@ -47,6 +49,40 @@ class BriefBrowser(unittest.TestCase):
                     self.assertGreaterEqual(box['x'],0)
                     self.assertLessEqual(box['x']+box['width'],width)
                     self.assertTrue(card.evaluate('(e)=>e.scrollWidth<=e.clientWidth'))
+
+    def test_single_line_titles_and_visible_opening_throughout(self):
+        timeline=dict(hook=0,brand=4,title=9,cards=[14,17,20,23,26],transition=35,end=39)
+        for width,height in ((3840,2160),(1920,1080),(390,844),(320,740)):
+            page=self.page(width,height,timeline=timeline)
+            page.evaluate('document.fonts.ready')
+            for heading in page.locator('.title-row h1,.agenda-card strong').all():
+                self.assertEqual(heading.evaluate('(e)=>getComputedStyle(e).whiteSpace'),'nowrap')
+                self.assertTrue(heading.evaluate('(e)=>e.scrollWidth<=e.clientWidth'))
+            page.evaluate('(t)=>window.__setBriefTimeline(t,[])',timeline)
+            for second in (0,3,8,13,22,30,34):
+                page.evaluate('t=>window.__seek(t)',second)
+                for element in page.locator('.brand,.title-row,.agenda-card,.source').all():
+                    self.assertEqual(element.evaluate('(e)=>getComputedStyle(e).opacity'),'1')
+            if width>=1920:
+                footer=page.locator('.source').bounding_box()
+                self.assertLessEqual(footer['y']+footer['height'],height)
+
+    def test_reference_footer_is_complete_from_frame_zero(self):
+        page=self.page(timeline=dict(hook=0,brand=4,title=9,cards=[14,17,20,23,26],transition=35,end=39))
+        page.evaluate('t=>window.__setBriefTimeline(t,[])',dict(hook=0,brand=4,title=9,cards=[14,17,20,23,26],transition=35,end=39))
+        for second in (0,5,10,18,27,34,38.9):
+            page.evaluate('t=>window.__seek(t)',second)
+            footer=page.locator('.source')
+            for text in ('@FPLVORTEX','@FPLVORTEXM','t.me/FPLVortexDailyBot','@fplvortex',
+                         'VERIFY MINUTES • FIXTURES • PLAYER FORM BEFORE TRANSFERS'):
+                self.assertIn(text,footer.inner_text())
+            for logo in ('YouTube logo','X logo','Telegram logo','Discord logo'):
+                self.assertTrue(footer.get_by_role('img',name=logo,exact=True).is_visible())
+            for item in footer.locator('.social-item').all():
+                self.assertTrue(item.evaluate('(e)=>e.scrollWidth<=e.clientWidth'))
+            box=footer.bounding_box()
+            self.assertLessEqual(box['y']+box['height'],1080)
+            self.assertGreater(box['y'],page.locator('.agendaWrap').bounding_box()['y']+page.locator('.agendaWrap').bounding_box()['height'])
 
     def test_keyboard_agenda_goes_to_real_review_and_no_motion_autoplays(self):
         page=self.page(390,844,reduced=True)
@@ -65,11 +101,11 @@ class BriefBrowser(unittest.TestCase):
         page.wait_for_function('window.__ready===true')
         page.evaluate('(t)=>window.__setBriefTimeline(t,[])',timeline)
         page.evaluate('window.__seek(0)')
-        self.assertEqual(page.locator('.brand').evaluate('(e)=>getComputedStyle(e).opacity'),'0')
+        self.assertEqual(page.locator('.brand').evaluate('(e)=>getComputedStyle(e).opacity'),'1')
         page.evaluate('window.__seek(37.9)')
         self.assertEqual(page.locator('.handoff').evaluate('(e)=>getComputedStyle(e).opacity'),'1')
         self.assertEqual(page.evaluate('document.querySelector("iframe").contentDocument.body.dataset.seek'),'0')
-        self.assertEqual(page.locator('.agenda-card.active').inner_text().splitlines()[1],'CAPTAINCY AND FINAL XI')
+        self.assertEqual(page.locator('.agenda-card.active strong').inner_text(),'CAPTAINCY AND FINAL XI')
 
 
 if __name__=='__main__':unittest.main()
