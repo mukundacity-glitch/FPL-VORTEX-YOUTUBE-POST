@@ -328,7 +328,10 @@ def render_scene(review, segments, logo_html):
     original = original_card_literals()
     css = (ROOT / 'vortex/day1_scene2.css').read_text().replace('__INTER_FONT__', base64.b64encode((ROOT / 'day2/assets/Inter.ttf').read_bytes()).decode())
     runtime = (ROOT / 'vortex/day1_scene2.js').read_text()
-    payload = json.dumps(dict(review=review, segments=segments, cardCss=original['PLAYER_CARD_CSS']), ensure_ascii=False).replace('<', '\\u003c')
+    payload = json.dumps(dict(review={k: v for k, v in review.items() if k != 'brief'}, segments=segments, cardCss=original['PLAYER_CARD_CSS']), ensure_ascii=False).replace('<', '\\u003c')
+    head = base[:base.index('<main>')]
+    broadcast = re.search(r'<section class="broadcast".*?</section>', base, flags=re.S).group(0)
+    base = head + '<main>' + broadcast + '</main><div class="captions"><span></span></div></body></html>'
     content = '<div id="scene2" aria-label="Gameweek Review"><div id="scene2-content"></div></div>'
     base = base.replace('</head>', '<style>' + css + '</style></head>')
     base = base.replace('</body>', content + original['PLAYER_CARD_JS'] + '<script>const SCENE2=' + payload + ';\n' + runtime + '</script></body>')
@@ -479,18 +482,19 @@ async def produce(output, *, logo_html=None, opening_frame=None):
         await page.goto(page_path.as_uri(), wait_until='load')
         await page.evaluate('document.fonts.ready')
         await page.wait_for_function('window.__ready===true')
+        await page.screenshot(path=str(output / 'first-frame.png'))
+        for s in segments:
+            await page.evaluate('t=>window.__seek(t)', min(s['t1'] - .7, s['t0'] + 4))
+            state = await page.evaluate('window.__scene2Audit()')
+            qa.append(state)
+            await page.screenshot(path=str(output / (s['id'] + '.png')))
+            if state['overlapsBranding'] or state['overflowingText'] or state['missingImage']:
+                raise ValueError(f'Scene 2 visual QA failed: {qa[-1]}')
         for i, t in enumerate(times):
             await page.evaluate('t=>window.__seek(t)', t)
             await page.screenshot(path=str(frames / f'{i:05d}.jpg'), type='jpeg', quality=94)
             if i % 150 == 0:
                 print(f'Captured Scene 2 {i}/{len(times)}', flush=True)
-        for s in segments:
-            await page.evaluate('t=>window.__seek(t)', min(s['t1'] - .7, s['t0'] + 4))
-            state = await page.evaluate('window.__scene2Audit()')
-            qa.append(dict(segment=s['id'], **state))
-            await page.screenshot(path=str(output / (s['id'] + '.png')))
-            if state['overlapsBranding'] or state['overflowingText'] or state['missingImage']:
-                raise ValueError(f'Scene 2 visual QA failed: {qa[-1]}')
         await browser.close()
     concat = output / 'frames.ffconcat'
     lines = ['ffconcat version 1.0']
@@ -521,7 +525,7 @@ async def produce(output, *, logo_html=None, opening_frame=None):
     if peak is None or peak > -0.1:
         raise ValueError('Scene 2 audio clipping/measurement gate failed')
     temporary.replace(target)
-    (output / 'verified-player-data.json').write_text(json.dumps(review, ensure_ascii=False, indent=2))
+    (output / 'verified-player-data.json').write_text(json.dumps({k: v for k, v in review.items() if k != 'brief'}, ensure_ascii=False, indent=2))
     (output / 'narration-scripts.json').write_text(json.dumps(segments, ensure_ascii=False, indent=2))
     for segment in segments:
         if segment['kind'] == 'player':
@@ -554,8 +558,28 @@ def production_entry(namespace):
     destination = Path(namespace.get('MP4_DIR', '/content/FPL_VORTEX_FIRST_DAY_WORK/mp4')) / 'gw_review.mp4'
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = destination.with_name('.scene2-staging.mp4')
-    shutil.copyfile(mp4, staging)
+    width = int(namespace.get('VIDEO_WIDTH', 3840))
+    height = int(namespace.get('VIDEO_HEIGHT', 2160))
+    fps = int(namespace.get('VIDEO_FPS', 24))
+    if (width, height, fps) == (1920, 1080, 30):
+        shutil.copyfile(mp4, staging)
+    else:
+        subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', str(mp4),
+                        '-vf', f'scale={width}:{height}:flags=lanczos,fps={fps}',
+                        '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p',
+                        '-c:a', 'aac', '-ar', '48000', '-b:a', '192k', '-movflags', '+faststart', str(staging)], check=True)
+    media = probe(staging)
+    video = next(stream for stream in media['streams'] if stream['codec_type'] == 'video')
+    if (video['width'], video['height']) != (width, height):
+        raise ValueError('Scene 2 master-assembly geometry failed')
     staging.replace(destination)
+    html_dir = Path(namespace.get('HTML_WORK_DIR', '/content/FPL_VORTEX_FIRST_DAY_WORK/html'))
+    html_dir.mkdir(parents=True, exist_ok=True)
+    poster = 'data:image/png;base64,' + base64.b64encode((output / 'first-frame.png').read_bytes()).decode()
+    # The approved opening's existing handoff receives the new Scene 2 first
+    # frame at any canvas size. The opening component and timing are untouched.
+    (html_dir / 'gw_review_scene_4k_animated.html').write_text(
+        '<html><body style="margin:0;background:#090e1d"><img alt="Gameweek Review" style="width:100vw;height:100vh;object-fit:contain" src="' + poster + '"><script>window.__ready=true;window.__seek=()=>{}</script></body></html>')
     data_dir = Path(namespace['DATA_DIR'])
     for name in ('verified-player-data.json', 'narration-scripts.json', 'qa-results.json', 'D1_02_Gameweek_Review.vtt'):
         shutil.copyfile(output / name, data_dir / ('scene2-' + name))

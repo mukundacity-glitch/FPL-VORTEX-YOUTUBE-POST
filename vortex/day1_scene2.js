@@ -117,10 +117,10 @@
     const stage=content.getBoundingClientRect();
     const card=cardRoot?.querySelector('.vx-player-card');
     const images=cardRoot?[...cardRoot.querySelectorAll('img')]:[];
-    const textNodes=[...content.querySelectorAll('h1,h2,h3,.analytics-stat,.verdict,.lesson')];
+    const textNodes=[...content.querySelectorAll('h1,h2,h3,.analytics-stat,.analytics,.verdict,.lesson')];
     return {segment:mounted,playerId:Number(card?.dataset.playerId||0),
       overlapsBranding:stage.top<header.bottom||stage.bottom>footer.top,
-      overflowingText:textNodes.filter(e=>e.scrollWidth>e.clientWidth+1).map(e=>e.textContent),
+      overflowingText:textNodes.filter(e=>e.scrollWidth>e.clientWidth+1||e.scrollHeight>e.clientHeight+1).map(e=>e.textContent),
       missingImage:images.some(i=>!i.complete||i.naturalWidth===0),
       originalCardVersion:card?window.VXPlayerCard.version:null,
       footerVisible:footer.bottom<=innerHeight,season:document.querySelector('.season-label').textContent};
