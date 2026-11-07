@@ -9,6 +9,7 @@ import argparse
 import ast
 import asyncio
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from html import escape
 import hashlib
@@ -211,26 +212,54 @@ def build_player(identity, stats, summary, meta, boot, fixtures, gw, next_gw, st
                              'FDR is the official overall rating. Split attack/defence model unavailable.'])
 
 
-def collect_review():
+def collect_review(projections=()):
     boot, boot_meta = fetch_json('/bootstrap-static/')
     fixtures, fixture_meta = fetch_json('/fixtures/')
     gw = completed_gameweek(boot, fixtures)
     next_event = next((e for e in boot['events'] if e.get('is_next')), None)
     if not next_event:
-        raise ValueError('No verified upcoming FPL Gameweek. No future fixture recommendation will be invented.')
+        raise ValueError('No verified upcoming FPL Gameweek.')
     next_gw = next_event['id']
+    model = {row['player_id']: row for row in projections if row['gameweek'] == next_gw}
     live, live_meta = fetch_json(f'/event/{gw}/live/')
-    selected = select_players(boot, live)
-    players = []
-    for selected_player in selected:
-        pid = selected_player['id']
-        identity = next(p for p in boot['elements'] if p['id'] == pid)
-        summary, summary_meta = fetch_json(f'/element-summary/{pid}/')
-        players.append(build_player(identity, selected_player, summary,
+    stats = {row['id']: row['stats'] for row in live['elements']}
+    leaders = {}
+    for direction in ('in', 'out'):
+        key = f'transfers_{direction}_event'
+        leaders[direction] = sorted(
+            (p for p in boot['elements'] if p['id'] in stats and p.get(key, 0) > 0),
+            key=lambda p: -p[key])[:12]
+    pool = {p['id']: p for rows in leaders.values() for p in rows}
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        summaries = dict(zip(pool, executor.map(lambda pid: fetch_json(f'/element-summary/{pid}/'), pool)))
+    candidates = {}
+    for pid, identity in pool.items():
+        summary, summary_meta = summaries[pid]
+        player = build_player(identity, stats[pid], summary,
             dict(bootstrap=boot_meta, fixtures=fixture_meta, live=live_meta, summary=summary_meta),
-            boot, fixtures, gw, next_gw, selected_player['story']))
-    if len(players) < 3:
-        raise ValueError('Fewer than three distinct verified player stories. Review generation requires editorial review.')
+            boot, fixtures, gw, next_gw, '')
+        projection = model.get(pid, {})
+        xpts = number(projection.get('gameweek_expected_points'))
+        source = 'VORTEX Phase 10' if xpts is not None else 'FPL ep_next'
+        if xpts is None:
+            xpts = number(identity.get('ep_next'))
+        if re.match(r'^[A-Z]\.', player['name']):
+            player['name'] = identity['first_name'].split()[0] + ' ' + identity['second_name'].split()[-1]
+        player['market'] = dict(
+            incoming=identity['transfers_in_event'], outgoing=identity['transfers_out_event'],
+            ownership=float(identity['selected_by_percent']), price=identity['now_cost'] / 10,
+            form=number(identity.get('form')), xpts=xpts, projectionSource=source,
+            expectedMinutes=number(projection.get('expected_minutes')),
+            source=boot_meta, modelSnapshot=projection.get('modelSnapshot'))
+        candidates[pid] = player
+    players, ranking = market_shortlist(leaders, candidates, next_gw)
+    leader = candidates[leaders['in'][0]['id']]
+    skipped = None
+    if all(p['id'] != leader['id'] for p in players):
+        fixture = next((f for f in leader['fixtures'] if f['gw'] == next_gw), None)
+        if fixture and fixture['fdr'] in (4, 5):
+            skipped = f'{leader["name"]} leads purchases, but faces {fixture["opponentName"]} at FDR {fixture["fdr"]}. The shortlist favors stronger overall cases.'
+
     review_fixtures = [f for f in fixtures if f.get('event') == gw]
     scoreboard = dict(completed=field(len(review_fixtures), fixture_meta, gw),
                       goals=field(sum(f['team_h_score'] + f['team_a_score'] for f in review_fixtures), fixture_meta, gw),
@@ -238,94 +267,127 @@ def collect_review():
     snapshot = dict(gw=gw, status='FINAL', bootstrap=boot, fixtures=fixtures, live=live,
                     provenance=dict(bootstrap=boot_meta, fixtures=fixture_meta, live=live_meta))
     return dict(version=VERSION, gameweek=gw, nextGameweek=next_gw, status='FINAL', players=players,
-                overview=scoreboard, sourceMetadata=dict(bootstrap=boot_meta, fixtures=fixture_meta, live=live_meta),
+                overview=scoreboard, skippedBuyLeader=skipped, sourceMetadata=dict(bootstrap=boot_meta, fixtures=fixture_meta, live=live_meta),
                 brief=build_brief(snapshot, next_gw=next_gw),
-                selectionMethod='Distinct standout, contribution, premium, low-ownership and minutes/availability stories v1')
+                selectionMethod='Top 12 by each transfer direction, then ranked by decision evidence', marketRanking=ranking)
+
+
+def market_shortlist(leaders, candidates, next_gw):
+    """Rank each transfer direction independently, with availability a hard buy filter."""
+    selected, ranking = [], {}
+    for direction, rows in leaders.items():
+        scored = []
+        for rank, identity in enumerate(rows, 1):
+            player = candidates[identity['id']]
+            m = player['market']
+            f = {key: item['value'] for key, item in player['fields'].items()}
+            fixture = next((row for row in player['fixtures'] if row['gw'] == next_gw), None)
+            fdr = number(fixture['fdr']) if fixture else None
+            starts = f['recent_starts'] or 0
+            form = m['form'] or 0
+            xpts = m['xpts']
+            net = m['incoming'] - m['outgoing']
+            flagged = f['status'] != 'a'
+            if m['ownership'] < 5 or not fixture or fdr is None or xpts is None:
+                continue
+            if direction == 'in' and (flagged or starts < 3 or net <= 0):
+                continue
+            if direction == 'out' and net >= 0:
+                continue
+            if direction == 'out' and not flagged and (starts < 3 or f['recent_minutes'] is None):
+                continue
+            projected_minutes = m['expectedMinutes']
+            role = min(starts, 5) / 5 if projected_minutes is None else min(projected_minutes, 90) / 90
+            involvement = min(3, (f['recent_xg'] or 0) + (f['recent_xa'] or 0))
+            relevance = min(m['ownership'], 50) / 25 + .35 * math.log1p(abs(net) / 1000)
+            if direction == 'in':
+                score = xpts + .6 * form + 3 * role + (5 - fdr) + involvement + relevance + xpts / m['price']
+            else:
+                score = (8 if f['status'] in ('i', 's', 'u') else 4 if flagged else 0)
+                score += (7 - xpts) + .6 * (7 - form) + 2 * (1 - role) + fdr + relevance
+                score += m['price'] / 5 - .4 * involvement
+            m.update(rank=rank, net=net, direction=direction, nextFixture=fixture, score=round(score, 3))
+            scored.append(player)
+        ordered = sorted(scored, key=lambda p: (-p['market']['score'], p['market']['rank']))
+        ranking[direction] = [dict(name=p['name'], **p['market']) for p in ordered]
+        for player in ordered:
+            if player in selected:
+                continue
+            m = player['market']
+            status = player['fields']['status']['value']
+            if direction == 'in':
+                verdict = 'BUY' if m['xpts'] >= 4 and m['nextFixture']['fdr'] <= 3 else 'MONITOR'
+            elif status in ('i', 's', 'u'):
+                verdict = 'SELL'
+            elif status != 'a':
+                verdict = 'MONITOR'
+            else:
+                verdict = 'HOLD' if m['xpts'] >= 4 or m['nextFixture']['fdr'] <= 2 else 'SELL'
+            player.update(story=f'PLAYER {direction.upper()}', verdict=verdict,
+                          reason=market_reason(player, verdict))
+            selected.append(player)
+            if sum(p['story'] == f'PLAYER {direction.upper()}' for p in selected) == 2:
+                break
+    if len(selected) != 4:
+        raise ValueError('Insufficient verified evidence for two players in and two players out.')
+    return selected, ranking
+
+
+def market_reason(player, verdict):
+    m = player['market']
+    f = {key: item['value'] for key, item in player['fields'].items()}
+    if verdict == 'BUY':
+        return 'Recent starts and the fixture support demand. Check the team sheet before committing.'
+    if verdict == 'SELL' and f['status'] in ('i', 's', 'u'):
+        return f['news'] or 'Official availability flag weakens the case for keeping this player.'
+    if verdict == 'SELL':
+        return 'The low projection and fixture difficulty support selling if you have a credible replacement.'
+    if verdict == 'HOLD':
+        return 'The fixture or projection still supports holding despite the sales.'
+    return 'Wait for confirmed availability or a clearer starting role before moving.'
 
 
 def player_script(player, gw, index):
+    m = player['market']
     f = {key: item['value'] for key, item in player['fields'].items()}
-    index = ['GAMEWEEK STANDOUT', 'SECOND MAJOR PERFORMER', 'PREMIUM UNDER SCRUTINY', 'SURPRISE RETURN', 'IMPORTANT MINUTES / AVAILABILITY CHECK'].index(player['story'])
-    introductions = [f'The Gameweek standout is {player["name"]}.',
-                     f'Another major contribution came from {player["name"]}.',
-                     f'The premium decision is {player["name"]}.',
-                     f'For a lower-owned return, look at {player["name"]}.',
-                     f'The decision to check carefully is {player["name"]}.']
-    opening = introductions[min(index, 4)]
-    unit = lambda value, singular: f'{value} {singular}' + ('' if value == 1 else 's')
-    result = f'{unit(f["total_points"], "point")}, {unit(f["goals_scored"], "goal")} and {unit(f["assists"], "assist")}, across {f["minutes"]} minutes.'
-    xg, xa = f['expected_goals'], f['expected_assists']
-    underlying = (f'Expected goals were {xg:.2f}, and expected assists {xa:.2f}.' if xg is not None and xa is not None
-                  else 'The underlying numbers are incomplete, so they cannot settle the transfer decision.')
-    recent_xg = f['recent_xg']
-    recent_xa = f['recent_xa']
-    interpretations = [
-        f"The return includes {unit(f['clean_sheets'], 'clean sheet')} and {f['bonus']} bonus points. Repeated starts are the stronger evidence for holding than assuming another goal.",
-        ('The goal and assist returns outpaced the expected attacking involvement this week. Treat that as a reason to check the longer sample, not chase the score.' if xg is not None and xa is not None and f['goals_scored'] + f['assists'] > xg + xa + .5 else 'The attacking return adds evidence, but the next opponent and repeated minutes still decide the transfer.'),
-        (f"Across the last five Gameweeks, expected goals total {recent_xg:.2f}. That wider opportunity matters more than reacting to a single blank." if recent_xg is not None else 'A single low return cannot establish a decline. The longer underlying sample is unavailable.'),
-        (f"Current ownership is {f['selected_by_percent']} percent. With {f['recent_starts']} starts in the last five Gameweeks, minutes deserve checking before the low ownership." if f['recent_starts'] is not None else 'Low ownership does not establish a secure starting role. Recent starts are unavailable.'),
-        (f"The last five Gameweeks total {f['recent_minutes']} minutes. An attractive opponent does not remove uncertainty over the next start." if f['recent_minutes'] is not None else 'Recent minutes are unavailable. Check the next starting role before acting on the fixture.')]
-    minutes = (f'The last five Gameweeks contain {f["recent_starts"]} starts.' if f['recent_starts'] is not None
-               else 'Recent starting evidence is incomplete.')
-    if index == 3:
-        minutes = ''
-    availability = '' if f['status'] == 'a' else 'Check the current FPL availability flag.'
-    next_fixture = player['fixtures'][0] if player['fixtures'] else None
-    fixture = (f'Next is {next_fixture["opponentName"]}, {"at home" if next_fixture["venue"] == "H" else "away"}.'
-               if next_fixture else 'The next fixture is not verified.')
-    verdict = ('Hold for existing owners, subject to final team news.' if player['verdict'] == 'HOLD'
-               else 'Monitor. Resolve the minutes or fitness question before making the move.')
-    return ' '.join(part for part in (opening, result, underlying, interpretations[min(index, 4)], minutes, availability, fixture, verdict) if part)
+    fx = m['nextFixture']
+    move = 'in' if m['net'] > 0 else 'out'
+    venue = 'at home' if fx['venue'] == 'H' else 'away'
+    projection = 'The Vortex model' if m['projectionSource'] == 'VORTEX Phase 10' else 'The official FPL estimate'
+    role = f'{f["recent_starts"]} starts over the last five completed gameweeks.'
+    if m['expectedMinutes'] is not None:
+        role = f'{m["expectedMinutes"]:.0f} projected minutes, with ' + role
+    evidence = f'He has {role}' if f['recent_starts'] is not None else 'The recent starting record is incomplete.'
+    if f['status'] != 'a':
+        evidence = 'His official availability flag is the main decision factor.'
+    elif f['recent_xg'] is not None and f['recent_xa'] is not None:
+        involvement = f['recent_xg'] + f['recent_xa']
+        evidence += f' His expected goal involvement over that spell was {involvement:.2f}.'
+    return (f'{player["name"]}. Net transfers {move}, {abs(m["net"]):,}. '
+            f'{projection} puts him at {m["xpts"]:.1f} expected points against {fx["opponentName"]} {venue}, '
+            f'with a difficulty rating of {fx["fdr"]}. {evidence} '
+            f'{player["verdict"].title()}. {player["reason"]}')
 
 
 def scripts_for(review):
     gw = review['gameweek']
     o = review['overview']
-    segments = [dict(id='chapter', kind='chapter', text='Gameweek review. The real story.', minimum=5),
-                dict(id='overview', kind='overview', minimum=10,
+    segments = [dict(id='chapter', kind='chapter', text='Gameweek review. The real story.', minimum=3),
+                dict(id='overview', kind='overview', minimum=0,
                      text=f'Gameweek {gw} is complete. {o["completed"]["value"]} fixtures produced {o["goals"]["value"]} goals. '
                           f'The highest individual FPL return was {o["topPoints"]["value"]} points. Now, which performances should change the next decision?')]
+    if review.get('skippedBuyLeader'):
+        segments[-1]['text'] += ' ' + review['skippedBuyLeader']
     for index, player in enumerate(review['players']):
-        segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'], minimum=0,
+        segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'], minimum=0, verdict=player['verdict'],
                              text=player_script(player, gw, index)))
-    players = review['players']
-    minutes_case = min(players, key=lambda p: p['fields']['minutes']['value'])
-    minutes_played = minutes_case['fields']['minutes']['value']
-    chance_cases = [p for p in players if all(p['fields'][key]['value'] is not None for key in ('expected_goals', 'expected_assists'))]
-
-    def attacking_gap(player):
-        values = player['fields']
-        return (values['goals_scored']['value'] + values['assists']['value']
-                - values['expected_goals']['value'] - values['expected_assists']['value'])
-
-    chance_case = max(chance_cases, key=attacking_gap, default=None)
-    chance_explanation = 'The underlying sample is incomplete for these players.'
-    chance_voice = 'Use verified chance data to put returns in context.'
-    if chance_case:
-        values = chance_case['fields']
-        returns = values['goals_scored']['value'] + values['assists']['value']
-        xgi = values['expected_goals']['value'] + values['expected_assists']['value']
-        chance_explanation = f'{chance_case["name"]} recorded {returns} attacking returns against {xgi:.2f} expected goal involvements.'
-        chance_voice = (f'{chance_case["name"]} returned more than his expected involvement this week.'
-                        if attacking_gap(chance_case) > 0 else f'{chance_case["name"]} shows why chances and returns need separate readings.')
-    fixture_case = next((p for p in players if p['verdict'] == 'HOLD' and p['fixtures']), None)
-    fixture_explanation = 'Check each verified upcoming opponent and venue before making a move.'
-    fixture_voice = 'Check the fixture alongside the starting evidence.'
-    if fixture_case:
-        fixture = fixture_case['fixtures'][0]
-        venue = 'at home' if fixture['venue'] == 'H' else 'away'
-        fixture_explanation = f'{fixture_case["name"]} faces {fixture["opponentName"]} {venue}. Official overall FDR {display(fixture["fdr"])}.'
-        fixture_voice = f'For {fixture_case["name"]}, {fixture["opponentName"]} {venue} is the next fixture to assess.'
     review['takeaways'] = [
-        dict(heading='MINUTES AND ROLE', explanation=f'{minutes_case["name"]} played {minutes_played} minutes in Gameweek {gw}.',
-             implication='Check repeated starts before backing the fixture.'),
-        dict(heading='UNDERLYING PERFORMANCE', explanation=chance_explanation,
-             implication='Keep a single return in the context of the longer sample.'),
-        dict(heading='NEXT-FIXTURE OPPORTUNITY', explanation=fixture_explanation,
-             implication='Combine the fixture with availability and starting evidence.')]
-    segments.append(dict(id='takeaways', kind='takeaways', minimum=12,
-        text=f'Three lessons. {minutes_case["name"]} shows why the starting role matters. {chance_voice} {fixture_voice} Check all three before using a transfer.'))
-    segments.append(dict(id='next', kind='next', minimum=4,
+        dict(heading='BUY CASE', explanation='Look for a useful projection, a credible starting role and a workable fixture.', implication='Compare the strongest alternatives at your budget.'),
+        dict(heading='SELL CASE', explanation='Availability and the next fixture can justify a move.', implication='Weigh the replacement against the cost of the transfer.'),
+        dict(heading='TEAM NEWS', explanation='Resolve any outstanding fitness or lineup questions before the deadline.', implication='Keep a fallback if a starter is uncertain.')]
+    segments.append(dict(id='takeaways', kind='takeaways', minimum=0,
+        text='Before the deadline, compare the points upside of your replacement, check the starting evidence, and leave room to react to team news.'))
+    segments.append(dict(id='next', kind='next', minimum=0,
                          text='Next, players and fixtures. Who deserves your attention now?'))
     return segments
 
@@ -387,12 +449,20 @@ def local_asset(url, cache, *, required=True):
 
 async def narrate(segments, output):
     import edge_tts
+    settings = {}
+    for node in ast.parse((ROOT / '1_final_day1.py').read_text()).body:
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id in ('VOICE', 'MOODS'):
+            settings[node.targets[0].id] = ast.literal_eval(node.value)
     offset = 0.0
     paths = []
     for index, segment in enumerate(segments):
         audio = bytearray()
         words = []
-        async for chunk in edge_tts.Communicate(segment['text'], 'en-GB-RyanNeural', rate='+0%', pitch='-4Hz', boundary='WordBoundary').stream():
+        mood = {'chapter': 'intro', 'overview': 'key_stat', 'next': 'outro'}.get(segment['kind'], 'analysis')
+        if segment.get('verdict') == 'MONITOR':
+            mood = 'warning'
+        async for chunk in edge_tts.Communicate(segment['text'], settings['VOICE'],
+                                                 **settings['MOODS'][mood], boundary='WordBoundary').stream():
             if chunk['type'] == 'audio':
                 audio.extend(chunk['data'])
             elif chunk['type'] == 'WordBoundary':
@@ -400,7 +470,7 @@ async def narrate(segments, output):
         path = output / f'speech-{index}.mp3'
         path.write_bytes(audio)
         duration = float(probe(path)['format']['duration'])
-        duration = max(duration + .25, segment['minimum'])
+        duration = max(duration, segment['minimum'])
         wav = output / f'speech-{index}.wav'
         subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', str(path), '-af', 'apad', '-t', str(duration),
                         '-ar', '48000', '-ac', '1', str(wav)], check=True)
@@ -408,7 +478,7 @@ async def narrate(segments, output):
         segment.update(t0=round(offset, 6), t1=round(offset + duration, 6), words=words,
                        captions=[dict(start=offset + c['start'], end=offset + c['end'], text=c['text']) for c in caption_cues(words)])
         cues = {}
-        for key, phrase in dict(points='points', goals='goals', assists='assists', minutes='minutes', xg='Expected goals', xa='expected assists', next='Next is', verdict=segment.get('verdict', 'Hold' if 'Hold for' in segment['text'] else 'Monitor')).items():
+        for key, phrase in dict(xpts='expected points', movement='net transfers', fdr='difficulty rating', verdict=segment.get('verdict', 'Hold' if 'Hold for' in segment['text'] else 'Monitor')).items():
             needles = [phrase.lower().split()]
             if key in ('points', 'goals', 'assists', 'minutes'):
                 needles.append([phrase.lower().rstrip('s')])
@@ -416,7 +486,7 @@ async def narrate(segments, output):
             match = next((i for i in range(len(tokens)) if any(tokens[i:i + len(needle)] == needle for needle in needles)), None)
             if match is not None:
                 cues[key] = offset + words[match]['start']
-        if segment['kind'] == 'player' and not {'points', 'goals', 'assists', 'minutes', 'verdict'} <= cues.keys():
+        if segment['kind'] == 'player' and not {'xpts', 'movement', 'verdict'} <= cues.keys():
             raise ValueError(f'Incomplete measured statistic cues for {segment["id"]}')
         segment['cues'] = cues
         offset += duration
@@ -469,13 +539,14 @@ def make_original_bed(output, duration, segments, include_music=True):
     return path
 
 
-async def produce(output, *, logo_html=None, opening_frame=None, include_music=True):
+async def produce(output, *, logo_html=None, opening_frame=None, include_music=True, projections=()):
     from playwright.async_api import async_playwright
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     cache = output / 'asset-cache'
     cache.mkdir(exist_ok=True)
-    review = collect_review()
+    review = collect_review(projections)
+    (output / 'shortlist.json').write_text(json.dumps([{k:v for k,v in p.items() if k != 'card'} for p in review['players']], ensure_ascii=False, indent=2))
     for player in review['players']:
         card = player['card']
         portrait = ''
@@ -584,6 +655,13 @@ def production_entry(namespace):
     # The notebook runner can already have an asyncio loop. A subprocess owns this
     # render so nested event-loop behavior cannot corrupt the notebook session.
     command = [__import__('sys').executable, '-m', 'vortex.day1_scene2', '--output', str(output), '--logo-html', str(logo_file), '--existing-master-music']
+    model = namespace.get('phase10_player_gameweek_expected_points')
+    if model is not None and not model.empty:
+        model_file = output / 'scene2-projections.json'
+        rows = model[['player_id', 'gameweek', 'gameweek_expected_points', 'expected_minutes']].copy()
+        rows['modelSnapshot'] = str(namespace.get('data_snapshot_timestamp') or 'Current production run')
+        rows.to_json(model_file, orient='records')
+        command.extend(['--projections', str(model_file)])
     subprocess.run(command, check=True, cwd=ROOT)
     mp4 = output / 'D1_02_Gameweek_Review.mp4'
     destination = Path(namespace.get('MP4_DIR', '/content/FPL_VORTEX_FIRST_DAY_WORK/mp4')) / 'gw_review.mp4'
@@ -621,12 +699,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', default='scene2-output')
     parser.add_argument('--opening-frame')
+    parser.add_argument('--projections', type=Path)
     parser.add_argument('--logo-html')
     parser.add_argument('--existing-master-music', action='store_true')
     args = parser.parse_args()
     asyncio.run(produce(args.output, opening_frame=args.opening_frame,
                         logo_html=Path(args.logo_html).read_text() if args.logo_html else None,
-                        include_music=not args.existing_master_music))
+                        include_music=not args.existing_master_music,
+                        projections=json.loads(args.projections.read_text()) if args.projections else ()))
 
 
 if __name__ == '__main__':

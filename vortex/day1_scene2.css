@@ -43,3 +43,38 @@ body{background:#090e1d}
 .next-chapter{height:100%;display:flex;flex-direction:column;justify-content:center;gap:24px}.next-chapter h1{font-size:96px;white-space:nowrap}.next-chapter p{font:500 26px/1.5 Inter,sans-serif;color:#d0d2df}
 #opening-match{position:fixed;inset:0;width:100%;height:100%;z-index:50;object-fit:contain;pointer-events:none}
 @media(prefers-reduced-motion:reduce){#scene2 *{transition:none!important}}
+
+/* Use the broadcast canvas for larger editorial content and a dedicated caption lane. */
+body.video .broadcast > header{height:12vh;padding-block:0}
+body.video .brand-logo{height:10vh}
+body.video .source{left:3vw;right:3vw;bottom:1.3vh}
+body.video .captions{bottom:15%;left:12%;right:12%}
+body.video .captions span{font-size:28px;padding:4px 12px}
+#scene2-content{left:3vw;right:3vw;top:15.6vh;bottom:20vh}
+.chapter,.next-chapter{gap:19px;padding:40px 58px;border:1px solid #354e68;border-radius:24px;background:linear-gradient(120deg,#142c44,#11172b 72%)}
+.chapter h1,.next-chapter h1{font-size:116px}
+.chapter p,.next-chapter p{font-size:30px}
+.scene-heading{font-size:72px}
+.overview,.lessons{height:100%;display:flex;flex-direction:column;justify-content:center;gap:26px}
+.overview-panels{margin-top:0;gap:22px}
+.overview-panel{min-height:300px;padding:34px 30px;border-top:3px solid #70e0ee}
+.overview-panel label{font-size:25px}
+.overview-panel strong{font-size:140px}
+.scene-note{font-size:22px;margin:0}
+.analytics{left:32%;gap:14px;padding:0 0 0 20px}
+.analytics .scene-label{font-size:18px}
+.analytics h2{font-size:62px}
+.player-context{font-size:21px}
+.stat-grid{gap:12px}
+.analytics-stat{min-height:104px;padding:12px 15px}
+.analytics-stat span{font-size:16px;letter-spacing:.015em}
+.analytics-stat strong{font-size:43px}
+.evidence-note{font-size:20px;padding:13px 16px}
+.verdict{padding:14px 17px;margin-top:0}
+.verdict strong{font-size:40px}
+.verdict span{font-size:20px}
+.lesson-grid{gap:20px}
+.lesson{min-height:260px;padding:29px}
+.lesson h3{font-size:43px;white-space:normal}
+.lesson p{font-size:26px;line-height:1.35}
+.lesson strong{font-size:23px;line-height:1.35}

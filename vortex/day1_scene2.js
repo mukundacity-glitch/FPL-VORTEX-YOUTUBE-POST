@@ -20,20 +20,18 @@
   }
   function playerMarkup(player){
     const f=Object.fromEntries(Object.entries(player.fields).map(([key,item])=>[key,item.value]));
-    const first=player.fixtures[0];
-    const upcoming=first?`${first.opponent} (${first.venue})`:'N/A';
-    const recent=f.recent_starts===null?'Recent starts unavailable':`${f.recent_starts} starts · ${text(f.recent_minutes)} minutes · last five GW`;
-    const news=f.status==='a'?'Listed available in the official FPL snapshot. Final club team news may change the decision.':(f.news||'Check the official availability flag before the deadline.');
-    const xg=f.expected_goals===null?'N/A':Number(f.expected_goals).toFixed(2);
-    const xa=f.expected_assists===null?'N/A':Number(f.expected_assists).toFixed(2);
+    const m=player.market;
+    const first=m.nextFixture;
+    const upcoming=`${first.opponent} (${first.venue})`;
+    const recent=`${text(f.recent_starts)} starts · ${text(f.recent_minutes)} minutes · last five completed GWs`;
+    const involvement=f.recent_xg==null||f.recent_xa==null?'N/A':(f.recent_xg+f.recent_xa).toFixed(2);
+    const movement=`${m.net>0?'+':'−'}${Math.abs(m.net).toLocaleString('en-GB')}`;
     return `<section class="spotlight"><div class="spotlight-hero" aria-label="Original FPL VORTEX Hero Card"></div><div class="analytics">
-      <div class="scene-label">${esc(player.story)} · GW${review.gameweek}</div>
+      <div class="scene-label">${esc(player.story)} · GW${review.nextGameweek} DECISION</div>
       <h2>${esc(player.name)} <span class="accent">/ THE EVIDENCE</span></h2>
-      <div class="player-context">${esc(player.club)} <b>•</b> ${esc(player.position)} <b>•</b> Completed Gameweek ${review.gameweek} <b>•</b> ${f.starts===null?'Start status N/A':f.starts===0?'Substitute':`${f.starts} ${f.starts===1?'start':'starts'}`}</div>
-      <div class="stat-grid">${stat('points','GAMEWEEK POINTS',f.total_points)}${stat('goals','GOALS',f.goals_scored)}${stat('assists','ASSISTS',f.assists)}${stat('minutes','MINUTES PLAYED',f.minutes)}${stat('xg','GAMEWEEK xG',xg)}${stat('xa','GAMEWEEK xA',xa)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','OFFICIAL OVERALL FDR',first?`${text(first.fdr)} / 5`:'N/A')}</div>
-      <div class="evidence-note"><b>RECENT STARTING EVIDENCE</b><br>${esc(recent)}.<br>${esc(player.minutesAssessment.label)} · ${esc(player.minutesAssessment.confidence)} confidence · editorial estimate. Expected minutes N/A.</div>
-      <div class="availability ${f.status==='a'?'':'flagged'}"><b>${f.status==='a'?'FPL AVAILABILITY':'AVAILABILITY CHECK'}</b> · ${esc(news)}</div>
-      <div class="fixture-context">Hero Card metrics are season-to-date. Right panel xG/xA are Gameweek totals. FDR is official overall difficulty, not a probability. Split attack/defence model N/A.</div>
+      <div class="player-context">${esc(player.club)} • ${esc(player.position)} • £${m.price.toFixed(1)}m • ${m.ownership}% owned</div>
+      <div class="stat-grid">${stat('xpts',`xPTS · ${esc(m.projectionSource)}`,m.xpts.toFixed(1))}${stat('movement','NET TRANSFERS',movement)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','OFFICIAL FDR',`${text(first.fdr)} / 5`)}${stat('minutes','EXPECTED MINUTES',m.expectedMinutes==null?'N/A':Math.round(m.expectedMinutes))}${stat('form','FPL FORM',m.form)}${stat('xgi','xG + xA · LAST 5 GW',involvement)}${stat('points',`GW${review.gameweek} POINTS`,f.total_points)}</div>
+      <div class="evidence-note"><b>STARTING EVIDENCE</b><br>${esc(recent)} · ${esc(f.status==='a'?'Listed available by FPL':f.news||'FPL availability flag')}</div>
       <div class="verdict ${player.verdict==='MONITOR'?'monitor':''}"><strong>${esc(player.verdict)}</strong><span>${esc(player.reason)}</span></div>
     </div></section>`;
   }
@@ -44,7 +42,7 @@
     if(segment.kind==='chapter'){
       content.innerHTML='<section class="chapter"><div class="chapter-label">CHAPTER 01</div><div class="chapter-line"></div><h1>GAMEWEEK <span class="accent">REVIEW</span></h1><h2>THE REAL STORY</h2><p>THE RETURNS. THE SURPRISES. THE DECISIONS THAT MATTER.</p></section>';
     }else if(segment.kind==='overview'){
-      content.innerHTML=`<section class="overview"><div class="scene-label">GW${review.gameweek} · FINAL OFFICIAL RESULTS</div><h1 class="scene-heading">THE GAMEWEEK <span class="accent">AT A GLANCE</span></h1><div class="overview-panels">${[['completed','MATCHES COMPLETED'],['goals','TOTAL GOALS'],['topPoints','TOP FPL SCORE']].map(([key,label])=>`<article class="overview-panel" data-value="${review.overview[key].value}"><label>${label}</label><strong>${review.overview[key].value}</strong></article>`).join('')}</div><p class="scene-note">Individual player FPL points. Every fixture in this review Gameweek is complete and data-checked. Current availability and next fixtures use the timestamp shown.</p></section>`;
+      content.innerHTML=`<section class="overview"><div class="scene-label">GW${review.gameweek} · FINAL OFFICIAL RESULTS</div><h1 class="scene-heading">THE GAMEWEEK <span class="accent">AT A GLANCE</span></h1><div class="overview-panels">${[['completed','MATCHES COMPLETED'],['goals','TOTAL GOALS'],['topPoints','TOP FPL SCORE']].map(([key,label])=>`<article class="overview-panel" data-value="${review.overview[key].value}"><label>${label}</label><strong>${review.overview[key].value}</strong></article>`).join('')}</div><p class="scene-note">${esc(review.skippedBuyLeader || 'Final results for the completed Gameweek. Transfer decisions use the current official snapshot.')}</p></section>`;
     }else if(segment.kind==='player'){
       const player=review.players.find(p=>p.id===segment.player_id);
       content.innerHTML=playerMarkup(player);
@@ -90,16 +88,15 @@
       });
     }else if(segment.kind==='player'){
       const entrance=reduced?1:ease(local/1.3);
-      const expand=reduced?1:ease((local-1.4)/.85);
       const exit=reduced?1:ease(remaining/.55);
       const hero=content.querySelector('.spotlight-hero');
-      const leftCenter=content.clientWidth*(.5-.285*expand);
+      const leftCenter=hero.clientWidth/2;
       hero.style.left=`${leftCenter-hero.clientWidth/2}px`;
       hero.style.opacity=entrance*exit;
       hero.style.transform=reduced?'none':`translateY(${(1-entrance)*20}px) scale(${.94+.06*entrance})`;
       const panel=content.querySelector('.analytics');
       const clear=hero.getBoundingClientRect().right<=content.getBoundingClientRect().left+panel.offsetLeft;
-      const panelReveal=clear?ease((expand-.56)/.44):0;
+      const panelReveal=clear?ease(local/.55):0;
       panel.style.opacity=panelReveal*exit;
       panel.style.transform=reduced?'none':`translateX(${(1-panelReveal)*25}px)`;
       content.querySelectorAll('[data-stat]').forEach(el=>{
