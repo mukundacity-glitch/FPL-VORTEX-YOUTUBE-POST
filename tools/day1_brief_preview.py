@@ -123,7 +123,7 @@ async def main():
                 await page.screenshot(path=str(output/f"preview-{i}.png"))
             if i%120==0:print(f"Rendered {i}/{total} frames",flush=True)
         await browser.close()
-    target=output/"FPL_VORTEX_Day1_Updated_Opening.mp4"
+    target=output/"FPL_VORTEX_Day1_Reference_Footer_Opening.mp4"
     subprocess.run(["ffmpeg","-y","-v","error","-framerate",str(fps),"-i",str(frames/"frame_%06d.jpg"),
         "-i",str(audio_path),"-c:v","libx264","-preset","fast","-crf","19","-pix_fmt","yuv420p",
         "-c:a","aac","-b:a","192k","-t",str(total/fps),"-movflags","+faststart",str(target)],check=True)

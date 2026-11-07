@@ -23,12 +23,12 @@ header{display:flex;justify-content:space-between;align-items:center;gap:24px;po
 .edition{display:flex;align-items:center;gap:1.4vw;font:600 clamp(10px,.88vw,34px)/1.7 monospace;color:var(--muted);text-align:right}
 .edition b{color:#ffd169}.brand-bug{border:1px solid #70e0ee80;border-radius:50%;width:3.5vw;height:3.5vw;display:grid;place-items:center;color:var(--cyan);font:600 1.8vw 'Vortex Display',sans-serif}
 .kicker{color:var(--cyan);font:600 clamp(10px,.8vw,32px)/1.5 monospace;letter-spacing:.13em;text-transform:uppercase;margin:0 0 1vh}
-.title-row{display:block;position:relative;margin:2.7vh 0 2.4vh}
-.title-row h1{font:600 clamp(28px,5.3vw,204px)/1.05 'Vortex Display','Arial Narrow',sans-serif;letter-spacing:.015em;white-space:nowrap;margin:0}
+.title-row{display:block;position:relative;margin:2vh 0 1.8vh}
+.title-row h1{font:600 clamp(28px,4.8vw,185px)/1.05 'Vortex Display','Arial Narrow',sans-serif;letter-spacing:.015em;white-space:nowrap;margin:0}
 .title-row h1 em{color:#8de3bb;font-style:normal}
 .promise{font-size:clamp(12px,1.15vw,44px);line-height:1.4;color:var(--muted);margin:1vh 0 0}.promise b{color:#ffd169;font-weight:600}
 .agendaWrap{display:grid;grid-template-columns:1fr 1fr;gap:1.3vh 1.2vw;position:relative}
-.agenda-card{display:flex;align-items:center;gap:1.5vw;min-height:12.8vh;padding:1.6vh 1.7vw;border:1px solid #365169;border-radius:6px;background:linear-gradient(115deg,#101b30,#131424);color:var(--white);text-align:left;transition:border-color .3s,background .3s}
+.agenda-card{display:flex;align-items:center;gap:1.5vw;min-height:10.8vh;padding:1.6vh 1.7vw;border:1px solid #365169;border-radius:6px;background:linear-gradient(115deg,#101b30,#131424);color:var(--white);text-align:left;transition:border-color .3s,background .3s}
 .agenda-card:first-child{grid-column:1/-1}.agenda-copy{min-width:0}
 .agenda-card strong{display:block;font:600 clamp(17px,1.85vw,72px)/1.15 'Vortex Display',sans-serif;letter-spacing:.015em;white-space:nowrap}
 .agenda-card strong em{font-style:normal;color:#ffd169}
@@ -36,17 +36,43 @@ header{display:flex;justify-content:space-between;align-items:center;gap:24px;po
 .number{font:500 clamp(20px,1.9vw,74px)/1 monospace;color:var(--cyan)}
 .arrow{margin-left:auto;color:var(--cyan);font-size:clamp(24px,1.8vw,70px)}
 .agenda-card.active{border-color:#ffd169;background:linear-gradient(115deg,#1b2b40,#1c2033);box-shadow:inset 4px 0 #ffd169}
-.source{position:relative;border-top:1px solid #70e0ee70;margin-top:2vh;padding-top:1.3vh;font:500 clamp(10px,.7vw,28px)/1.5 monospace;color:var(--muted)}
-.source-line,.social-line{display:flex;justify-content:space-between;gap:16px}.source-status{color:var(--amber)}
-.social-line{margin-top:1vh;color:var(--white);font:600 clamp(12px,1.05vw,40px)/1.4 'Vortex Display',sans-serif;letter-spacing:.05em}.social-line b{color:#ffd169}.social-line em{color:var(--cyan);font-style:normal}
+.source {
+  position:relative; margin-top:7.2vh; color:var(--white);
+  font-family:Arial,sans-serif;
+}
+.source-line {display:flex;justify-content:space-between;gap:16px;margin-bottom:.7vh;font:500 clamp(9px,.64vw,25px)/1.4 monospace;color:var(--muted)}
+.source-status {color:var(--amber)}
+.decision-strip {
+  display:flex;align-items:center;justify-content:space-between;gap:1.5vw;
+  padding:.6vh 1.3vw;border:1px solid var(--cyan);border-radius:8px;
+  background:linear-gradient(180deg,#0c2337,#05101d);box-shadow:0 0 9px #00bfff28;
+  font-size:clamp(12px,1.38vw,53px);font-weight:700;letter-spacing:.02em;
+}
+.decision-strip b {color:#ffda58;font-style:italic;white-space:nowrap}
+.decision-strip span {white-space:nowrap}
+.social-line {
+  display:grid;grid-template-columns:1.05fr 1.05fr 1.45fr 1.3fr;align-items:stretch;
+  margin-top:.7vh;padding:.65vh 0;border-top:2px solid #eeba58;
+  background:linear-gradient(180deg,#07131f,#02060d);box-shadow:0 -3px 12px #ffb32924;
+}
+.social-item {display:flex;align-items:center;gap:1vw;min-width:0;padding:.35vh 1.4vw;border-right:2px solid #e7c060;color:#fff;text-decoration:none;font-size:clamp(12px,1.42vw,55px);letter-spacing:.025em;white-space:nowrap}
+.social-item:last-child {border-right:0}
+.social-item svg {display:block;width:3vw;height:3vw;flex-shrink:0}
+.social-copy {min-width:0}.social-copy small {display:block;color:var(--cyan);font-size:clamp(9px,.82vw,32px);line-height:1.1;font-weight:700;letter-spacing:.09em}
+.social-copy span {display:block;line-height:1.3}
+.community {border:1px solid var(--cyan);border-radius:8px;margin:.1vh .1vw;padding:.35vh .8vw;font-size:clamp(12px,1.3vw,50px)}
+.community svg {width:2.1vw;height:2.1vw}
 .hook{display:none}
 .review{padding:7vh 6vw;background:var(--black);position:relative}.review h2{font-size:clamp(32px,4vw,154px);letter-spacing:-.04em;margin:0 0 3vh}.review .score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.metric{padding:24px;border:1px solid var(--line);background:var(--night)}.metric span{display:block;color:var(--muted);font-size:clamp(14px,1.1vw,42px)}.metric strong{display:block;font:600 clamp(34px,3vw,116px)/1.5 monospace}.metric small{display:block;color:var(--muted);font-size:clamp(11px,.65vw,25px);line-height:1.5;overflow-wrap:anywhere}.limitations{color:var(--muted);line-height:1.8;font-size:clamp(13px,1vw,38px)}.player-table{overflow:auto;margin:32px 0}table{border-collapse:collapse;width:100%;min-width:900px;text-align:left}th,td{padding:16px;border-bottom:1px solid var(--line);vertical-align:top}td small{display:block;font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px}thead th{color:var(--cyan)}.controls{display:flex;gap:14px;margin:24px 0}.controls button,.review a{color:var(--white);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 18px;text-decoration:none}.handoff{display:none;position:fixed;inset:0;z-index:8;background:var(--night)}.handoff iframe{border:0;width:100%;height:100%;pointer-events:none}.captions{display:none;position:fixed;bottom:4%;left:15%;right:15%;z-index:20;text-align:center;pointer-events:none}.captions span{font-size:clamp(16px,1.35vw,52px);background:#07070deb;padding:8px 18px;box-decoration-break:clone;line-height:1.6}
-body.video .broadcast{width:100vw;height:100vh;min-height:0}body.video .review,body.video .controls{display:none}body.video .captions{display:block;bottom:1.4%;left:8%;right:8%}body.video .source{margin-bottom:7vh}
+body.video .broadcast{width:100vw;height:100vh;min-height:0}body.video .review,body.video .controls{display:none}body.video .captions{display:block;bottom:21%;left:8%;right:8%}body.video .source{position:absolute;left:4vw;right:4vw;bottom:2vh;margin:0}
 @media(max-width:650px){
  .broadcast{padding:20px 16px}.brand{gap:8px}.brand-logo{width:45px;height:66px}.wordmark{font-size:26px}.edition{font-size:9px;gap:6px}.brand-bug{width:25px;height:25px;font-size:15px}
  .title-row{margin:28px 0 22px}.title-row h1{font-size:8.8vw;letter-spacing:0}.kicker{font-size:8px;letter-spacing:.06em}.promise{font-size:13px}
  .agendaWrap{grid-template-columns:1fr;gap:10px}.agenda-card:first-child{grid-column:auto}.agenda-card{padding:16px 12px;gap:12px;min-height:92px}.agenda-card strong{font-size:5.2vw}.agenda-card small{font-size:11px}.arrow{font-size:22px}
- .source-line,.social-line{flex-wrap:wrap;gap:6px}.source{font-size:9px}.social-line{font-size:13px}.source-line>span:last-child{display:none}
+ .source{margin-top:62px}.source-line{font-size:9px;flex-wrap:wrap;gap:6px}.source-line>span:last-child{display:none}
+ .decision-strip{display:block;padding:8px 10px;font-size:11px}.decision-strip span{display:block;white-space:normal;margin-top:4px;line-height:1.4}
+ .social-line{grid-template-columns:1fr 1fr;gap:7px;padding:8px 0}.social-item{font-size:13px;padding:6px;gap:8px;border:0;letter-spacing:0}.social-item svg{width:24px;height:24px}.community{margin:0;border-radius:5px;padding:6px;grid-column:1/-1}.community svg{width:18px;height:18px}.social-copy small{font-size:9px}.community .social-copy span{font-size:10px}
+ body.video .source{position:relative;left:auto;right:auto;bottom:auto;margin-top:62px}
  .review{padding:40px 20px}.review .score-grid{grid-template-columns:1fr 1fr}.metric{padding:16px}
  body.video .broadcast{height:auto;min-height:100vh}body.video .captions{left:5%;right:5%;bottom:1%}
 }
@@ -58,7 +84,24 @@ body.video .broadcast{width:100vw;height:100vh;min-height:0}body.video .review,b
 <header><div class="brand"><div class="brand-logo">__LOGO__</div><span class="wordmark">FPL <em>VORTEX</em></span></div><div class="edition"><span>GW__GW__ REVIEW <b>→</b> GW__NEXT__ PLAN<br>__STATUS__</span><span class="brand-bug" aria-label="FPL VORTEX">FV</span></div></header>
 <div class="title-row"><div><p class="kicker">The evidence. The decisions. The next move.</p><h1>THE GAMEWEEK <em>BRIEF</em></h1></div><p class="promise">The points are only the start. <b>What matters next?</b></p></div>
 <nav class="agendaWrap" aria-label="Episode agenda">__AGENDA__</nav>
-<footer class="source"><div class="source-line"><span>OFFICIAL FPL · <span class="source-status">__STAMP__</span></span><span>THE EVIDENCE · THE DECISIONS · THE NEXT MOVE</span></div><div class="social-line"><span><b>YOUTUBE</b> @FPLVORTEX</span><span><em>𝕏</em> @FPLVORTEXM</span><span>FPL <em>VORTEX</em> · THE GAMEWEEK BRIEF</span></div></footer>
+<footer class="source" aria-label="FPL VORTEX decision and social channels">
+ <div class="source-line"><span>OFFICIAL FPL · <span class="source-status">__STAMP__</span></span><span>THE GAMEWEEK BRIEF · GW__GW__ REVIEW → GW__NEXT__ PLAN</span></div>
+ <div class="decision-strip"><b>FPL VORTEX • DECISION</b><span>VERIFY MINUTES • FIXTURES • PLAYER FORM BEFORE TRANSFERS</span></div>
+ <div class="social-line">
+  <a class="social-item" href="https://www.youtube.com/@FPLVORTEX" aria-label="YouTube @FPLVORTEX">
+   <svg viewBox="0 0 64 44" role="img" aria-label="YouTube logo"><rect x="1" y="1" width="62" height="42" rx="11" fill="#ff0800"/><path d="M26 11 44 22 26 33Z" fill="white"/></svg><span>@FPLVORTEX</span>
+  </a>
+  <a class="social-item" href="https://x.com/FPLVORTEXM" aria-label="X @FPLVORTEXM">
+   <svg viewBox="0 0 24 24" role="img" aria-label="X logo"><path d="M18.9 1.2h3.2l-7 8 8.3 13.6h-6.5l-5.1-8.3-7.3 8.3H1.3l8-9.2L1.4 1.2h6.7l4.6 7.5 6.2-7.5ZM17.8 21h1.8L7 3H5.1l12.7 18Z" fill="white"/></svg><span>@FPLVORTEXM</span>
+  </a>
+  <a class="social-item community" href="https://t.me/FPLVortexDailyBot" aria-label="Telegram t.me/FPLVortexDailyBot">
+   <svg viewBox="0 0 24 24" role="img" aria-label="Telegram logo"><circle cx="12" cy="12" r="12" fill="#29b6d6"/><path d="m5 11 14-5-3 13-5-4-3 2 1-5 7-4-9 5Z" fill="white"/></svg><span class="social-copy"><small>TELEGRAM</small><span>t.me/FPLVortexDailyBot</span></span>
+  </a>
+  <div class="social-item community" aria-label="Discord @fplvortex">
+   <svg viewBox="0 0 24 24" role="img" aria-label="Discord logo"><path fill="#fff" d="M20.3 4.4a20 20 0 0 0-4.9-1.5l-.6 1.2a18 18 0 0 0-5.6 0l-.6-1.2a20 20 0 0 0-4.9 1.5C.6 9 .1 13.5.4 17.9a20 20 0 0 0 6 3l1.2-2a13 13 0 0 1-1.9-.9l.5-.4a14 14 0 0 0 11.6 0l.5.4-1.9.9 1.2 2a20 20 0 0 0 6-3c.5-5.1-.8-9.5-3.3-13.5ZM8.3 15c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7.4 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg><span class="social-copy"><small>DISCORD</small><span>@fplvortex</span></span>
+  </div>
+ </div>
+</footer>
 <div class="hook"><small>THE POINTS ARE ONLY THE START</small><p>What created the points?<br>What changes next?</p></div>
 </section>
 <section class="review" id="gameweek-review" aria-labelledby="review-heading" tabindex="-1">
