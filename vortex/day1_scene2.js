@@ -7,6 +7,8 @@
   const text=value=>value===null||value===undefined?'N/A':String(value);
   const ease=value=>1-Math.pow(1-Math.max(0,Math.min(1,value)),3);
   const cueWords=segments.flatMap(s=>s.captions);
+  // Native Cell 16 slot: 1202 + 30 + 12 wide, 1642 + 4 + 3 high.
+  const nativeCard={width:1244,height:1649};
   let mounted=null;
   let cardRoot=null;
   document.body.classList.add('video');
@@ -27,7 +29,7 @@
     return `<section class="spotlight"><div class="spotlight-hero" aria-label="Original FPL VORTEX Hero Card"></div><div class="analytics">
       <div class="scene-label">${esc(player.story)} · GW${review.gameweek}</div>
       <h2>${esc(player.name)} <span class="accent">/ THE EVIDENCE</span></h2>
-      <div class="player-context">${esc(player.club)} <b>•</b> ${esc(player.position)} <b>•</b> Completed Gameweek ${review.gameweek}</div>
+      <div class="player-context">${esc(player.club)} <b>•</b> ${esc(player.position)} <b>•</b> Completed Gameweek ${review.gameweek} <b>•</b> ${f.starts===null?'Start status N/A':f.starts===0?'Substitute':`${f.starts} ${f.starts===1?'start':'starts'}`}</div>
       <div class="stat-grid">${stat('points','GAMEWEEK POINTS',f.total_points)}${stat('goals','GOALS',f.goals_scored)}${stat('assists','ASSISTS',f.assists)}${stat('minutes','MINUTES PLAYED',f.minutes)}${stat('xg','GAMEWEEK xG',xg)}${stat('xa','GAMEWEEK xA',xa)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','OFFICIAL OVERALL FDR',first?`${text(first.fdr)} / 5`:'N/A')}</div>
       <div class="evidence-note"><b>RECENT STARTING EVIDENCE</b><br>${esc(recent)}.<br>${esc(player.minutesAssessment.label)} · ${esc(player.minutesAssessment.confidence)} confidence · editorial estimate. Expected minutes N/A.</div>
       <div class="availability ${f.status==='a'?'':'flagged'}"><b>${f.status==='a'?'FPL AVAILABILITY':'AVAILABILITY CHECK'}</b> · ${esc(news)}</div>
@@ -49,7 +51,9 @@
       const host=content.querySelector('.spotlight-hero');
       const shadow=host.attachShadow({mode:'open'});
       // Original component CSS and DOM run in isolation from the broadcast shell.
-      shadow.innerHTML=SCENE2.cardCss+'<div id="card" style="width:100%;height:100%"></div>';
+      const scale=content.clientHeight/nativeCard.height;
+      host.style.width=`${nativeCard.width*scale}px`;
+      shadow.innerHTML=SCENE2.cardCss+`<div id="card" style="width:${nativeCard.width}px;height:${nativeCard.height}px;transform:scale(${scale});transform-origin:top left"></div>`;
       cardRoot=shadow.querySelector('#card');
       window.VXPlayerCard.mount(cardRoot,player.card);
     }else if(segment.kind==='takeaways'){
@@ -89,7 +93,8 @@
       const expand=reduced?1:ease((local-1.4)/.85);
       const exit=reduced?1:ease(remaining/.55);
       const hero=content.querySelector('.spotlight-hero');
-      hero.style.left=`${(1-expand)*28}%`;
+      const leftCenter=content.clientWidth*(.5-.285*expand);
+      hero.style.left=`${leftCenter-hero.clientWidth/2}px`;
       hero.style.opacity=entrance*exit;
       hero.style.transform=reduced?'none':`translateY(${(1-entrance)*20}px) scale(${.94+.06*entrance})`;
       const panel=content.querySelector('.analytics');
@@ -118,11 +123,14 @@
     const stage=content.getBoundingClientRect();
     const card=cardRoot?.querySelector('.vx-player-card');
     const images=cardRoot?[...cardRoot.querySelectorAll('img')]:[];
+    const tab=card?.querySelector('.pc-fixtures-tab')?.getBoundingClientRect();
+    const stats=card?[...card.querySelectorAll('.pc-banner,.pc-stat-row,.pc-stat-icon')]:[];
+    const cardInternalOverlap=!!tab&&stats.some(e=>e.getBoundingClientRect().bottom>tab.top+1);
     const textNodes=[...content.querySelectorAll('h1,h2,h3,.analytics-stat,.analytics,.verdict,.lesson')];
     return {segment:mounted,playerId:Number(card?.dataset.playerId||0),
       overlapsBranding:stage.top<header.bottom||stage.bottom>footer.top,
       overflowingText:textNodes.filter(e=>e.scrollWidth>e.clientWidth+1||e.scrollHeight>e.clientHeight+1).map(e=>e.textContent),
-      missingImage:images.some(i=>!i.complete||i.naturalWidth===0),
+      cardInternalOverlap,missingImage:images.some(i=>!i.complete||i.naturalWidth===0),
       originalCardVersion:card?window.VXPlayerCard.version:null,
       footerVisible:footer.bottom<=innerHeight,season:document.querySelector('.season-label').textContent};
   };

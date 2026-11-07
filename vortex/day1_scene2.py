@@ -198,7 +198,7 @@ def build_player(identity, stats, summary, meta, boot, fixtures, gw, next_gw, st
                 player_image=f'https://resources.premierleague.com/premierleague/photos/players/250x250/p{identity["code"]}.png',
                 price=f'£{identity["now_cost"] / 10:.1f}m' if identity.get('now_cost') is not None else 'N/A',
                 ownership=f'{identity["selected_by_percent"]}%' if identity.get('selected_by_percent') is not None else 'N/A',
-                season_label=season, verdict_sub=f'GW{gw} | {stats["total_points"]} PTS | {stats["minutes"]} MIN',
+                season_label=season,
                 display_stats=[dict(icon=i, label=l, value=display(v, 2)) for i, l, v in rows],
                 fixtures=[dict(gw=f['gw'], opponent=f['opponent'], venue=f['venue'], fdr_value=f['fdr'],
                                fixdiff=f['fdr'], badge=f['badge']) for f in outlook])
@@ -489,7 +489,7 @@ async def produce(output, *, logo_html=None, opening_frame=None, include_music=T
             state = await page.evaluate('window.__scene2Audit()')
             qa.append(state)
             await page.screenshot(path=str(output / (s['id'] + '.png')))
-        failures = [state for state in qa if state['overlapsBranding'] or state['overflowingText'] or state['missingImage']]
+        failures = [state for state in qa if state['overlapsBranding'] or state['overflowingText'] or state['missingImage'] or state['cardInternalOverlap']]
         if failures:
             (output / 'qa-results.json').write_text(json.dumps(dict(passed=False, visualChecks=qa), indent=2))
             raise ValueError(f'Scene 2 visual QA failed: {failures}')
@@ -512,14 +512,14 @@ async def produce(output, *, logo_html=None, opening_frame=None, include_music=T
     subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(concat),
         '-i', str(speech), '-i', str(bed), '-filter_complex',
         '[1:a]asplit=2[voice][control];[2:a][control]sidechaincompress=threshold=0.02:ratio=3:attack=20:release=300[bed];[voice][bed]amix=inputs=2:normalize=0,alimiter=limit=0.89[a]',
-        '-map', '0:v', '-map', '[a]', '-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
-        '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-t', str(duration), '-movflags', '+faststart', str(temporary)], check=True)
+        '-map', '0:v', '-map', '[a]', '-vf', 'fps=30,scale=out_range=tv,format=yuv420p', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-color_range', 'tv',
+        '-fps_mode', 'cfr', '-video_track_timescale', '30000', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-t', str(duration), '-movflags', '+faststart', str(temporary)], check=True)
     media = probe(temporary)
     video = next(s for s in media['streams'] if s['codec_type'] == 'video')
     audio = next(s for s in media['streams'] if s['codec_type'] == 'audio')
     if (video['width'], video['height'], video['r_frame_rate'], video['codec_name'], video['pix_fmt'],
         audio['codec_name'], audio['sample_rate']) != (1920, 1080, '30/1', 'h264', 'yuv420p', 'aac', '48000'):
-        raise ValueError('Scene 2 export specification failed')
+        raise ValueError(f'Scene 2 export specification failed: {video["width"]}x{video["height"]}, {video["r_frame_rate"]}, {video["codec_name"]}/{video["pix_fmt"]}, {audio["codec_name"]}/{audio["sample_rate"]}')
     subprocess.run(['ffmpeg', '-v', 'error', '-i', str(temporary), '-f', 'null', '-'], check=True)
     levels = subprocess.run(['ffmpeg', '-hide_banner', '-i', str(temporary), '-af', 'volumedetect', '-vn', '-sn', '-dn', '-f', 'null', '-'], capture_output=True, text=True, check=True).stderr
     peak_match = re.search(r'max_volume: ([+-]?[0-9.]+) dB', levels)
