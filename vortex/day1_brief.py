@@ -148,7 +148,7 @@ def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
         stamps = [_time(d["retrievedAt"]) for d in dependencies]
         if all(stamps):
             item["retrievedAt"] = min(stamps).isoformat()
-        item["source"] = "Official FPL event-live + presenter picks + history"
+        item["source"] = "FPL event-live + presenter picks + history"
         item["confidence"] = "sourced" if item["freshnessStatus"] == "fresh" else "unverified"
     players = []
     for pick in picks:
@@ -159,9 +159,9 @@ def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
             "minutes", "goals_scored", "assists", "clean_sheets", "saves", "bonus",
             "defensive_contribution", "defensive_contribution_points", "yellow_cards",
             "red_cards", "own_goals", "penalties_saved", "penalties_missed", "total_points")}
-        availability = {"a":"Available in official FPL snapshot", "d":"Doubtful — official FPL",
-                        "i":"Injured — official FPL", "s":"Suspended — official FPL",
-                        "u":"Unavailable — official FPL"}.get(identity.get("status"))
+        availability = {"a":"Available in FPL snapshot", "d":"Doubtful — FPL",
+                        "i":"Injured — FPL", "s":"Suspended — FPL",
+                        "u":"Unavailable — FPL"}.get(identity.get("status"))
         fields["availability"] = official(identity.get("news") or availability, "bootstrap")
         fields["ownership"] = official(identity.get("selected_by_percent"), "bootstrap")
         fields["availability"]["gameweek"] = next_gw

@@ -175,7 +175,7 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
             "CHAPTERS",
             *chapters,
             "",
-            "FPL VORTEX reviews the recorded squad using official FPL data and its existing VORTEX models. Live or provisional returns are identified in the review.",
+            "FPL VORTEX reviews the recorded squad using FPL data and its existing VORTEX models. Live or provisional returns are identified in the review.",
             "Transfer routes are conditional: current editable squad, bank and free transfers must be verified.",
             "Expected points and captaincy recommendations are forecasts, not guaranteed returns.",
             "",
