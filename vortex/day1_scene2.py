@@ -420,7 +420,7 @@ def render_times(segments, fps=30):
     return sorted(t for t in times if 0 <= t < segments[-1]['t1'])
 
 
-def make_original_bed(output, duration, segments):
+def make_original_bed(output, duration, segments, include_music=True):
     """An original quiet sustained pad and short accents. No third-party recording."""
     import array
     import wave
@@ -434,14 +434,14 @@ def make_original_bed(output, duration, segments):
         pad = sum(math.sin(2 * math.pi * f * t) for f in (220, 261.6256, 329.6276)) / 3
         accent = sum(math.sin(2 * math.pi * (650 * (t - a) - 500 * (t - a) ** 2)) * math.exp(-25 * (t - a))
                      for a in accents if 0 <= t - a < .22)
-        samples.append(int(32767 * (pad * .006 * max(0, envelope) + accent * .008)))
+        samples.append(int(32767 * (pad * (.006 if include_music else 0) * max(0, envelope) + accent * .008)))
     path = output / 'original-broadcast-bed.wav'
     with wave.open(str(path), 'wb') as handle:
         handle.setnchannels(1); handle.setsampwidth(2); handle.setframerate(rate); handle.writeframes(samples.tobytes())
     return path
 
 
-async def produce(output, *, logo_html=None, opening_frame=None):
+async def produce(output, *, logo_html=None, opening_frame=None, include_music=True):
     from playwright.async_api import async_playwright
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -485,11 +485,14 @@ async def produce(output, *, logo_html=None, opening_frame=None):
         await page.screenshot(path=str(output / 'first-frame.png'))
         for s in segments:
             await page.evaluate('t=>window.__seek(t)', min(s['t1'] - .7, s['t0'] + 4))
+            await page.wait_for_function('window.__scene2AssetsReady()')
             state = await page.evaluate('window.__scene2Audit()')
             qa.append(state)
             await page.screenshot(path=str(output / (s['id'] + '.png')))
-            if state['overlapsBranding'] or state['overflowingText'] or state['missingImage']:
-                raise ValueError(f'Scene 2 visual QA failed: {qa[-1]}')
+        failures = [state for state in qa if state['overlapsBranding'] or state['overflowingText'] or state['missingImage']]
+        if failures:
+            (output / 'qa-results.json').write_text(json.dumps(dict(passed=False, visualChecks=qa), indent=2))
+            raise ValueError(f'Scene 2 visual QA failed: {failures}')
         for i, t in enumerate(times):
             await page.evaluate('t=>window.__seek(t)', t)
             await page.screenshot(path=str(frames / f'{i:05d}.jpg'), type='jpeg', quality=94)
@@ -503,7 +506,7 @@ async def produce(output, *, logo_html=None, opening_frame=None):
         lines.extend([f"file '{frames / f'{i:05d}.jpg'}'", f'duration {end - t:.6f}'])
     lines.append(f"file '{frames / f'{len(times) - 1:05d}.jpg'}'")
     concat.write_text('\n'.join(lines))
-    bed = make_original_bed(output, duration, segments)
+    bed = make_original_bed(output, duration, segments, include_music=include_music)
     target = output / 'D1_02_Gameweek_Review.mp4'
     temporary = output / '.scene2-render.mp4'
     subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(concat),
@@ -536,7 +539,7 @@ async def produce(output, *, logo_html=None, opening_frame=None):
     report = dict(passed=True, version=VERSION, gameweek=review['gameweek'], duration=float(media['format']['duration']),
         sceneCount=len(segments), playerCount=len(review['players']), visualChecks=qa,
         originalHeroCardSHA256={k: hashlib.sha256(v.encode()).hexdigest() for k, v in original_card_literals().items()},
-        video=video, audio=audio, peakVolumeDb=peak, meanVolumeDb=float(mean_match.group(1)) if mean_match else None, dataStatus='FINAL', audioBed='Original synthesized pad and restrained accents, narration-ducked',
+        video=video, audio=audio, peakVolumeDb=peak, meanVolumeDb=float(mean_match.group(1)) if mean_match else None, dataStatus='FINAL', audioBed='Original synthesized pad and restrained accents, narration-ducked' if include_music else 'Restrained accents; existing Day 1 master supplies its confirmed music',
         limitations=['No press-conference feed, shots or tactical-role provider was available.',
                      'Expected minutes and split model FDR are unavailable. Verdicts remain conditional.'])
     (output / 'qa-results.json').write_text(json.dumps(report, indent=2))
@@ -552,7 +555,7 @@ def production_entry(namespace):
     logo_file.write_text(str(namespace['vortex_logo_html']))
     # The notebook runner can already have an asyncio loop. A subprocess owns this
     # render so nested event-loop behavior cannot corrupt the notebook session.
-    command = [__import__('sys').executable, '-m', 'vortex.day1_scene2', '--output', str(output), '--logo-html', str(logo_file)]
+    command = [__import__('sys').executable, '-m', 'vortex.day1_scene2', '--output', str(output), '--logo-html', str(logo_file), '--existing-master-music']
     subprocess.run(command, check=True, cwd=ROOT)
     mp4 = output / 'D1_02_Gameweek_Review.mp4'
     destination = Path(namespace.get('MP4_DIR', '/content/FPL_VORTEX_FIRST_DAY_WORK/mp4')) / 'gw_review.mp4'
@@ -591,9 +594,11 @@ def main():
     parser.add_argument('--output', default='scene2-output')
     parser.add_argument('--opening-frame')
     parser.add_argument('--logo-html')
+    parser.add_argument('--existing-master-music', action='store_true')
     args = parser.parse_args()
     asyncio.run(produce(args.output, opening_frame=args.opening_frame,
-                        logo_html=Path(args.logo_html).read_text() if args.logo_html else None))
+                        logo_html=Path(args.logo_html).read_text() if args.logo_html else None,
+                        include_music=not args.existing_master_music))
 
 
 if __name__ == '__main__':

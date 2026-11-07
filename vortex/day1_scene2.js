@@ -111,6 +111,7 @@
     document.querySelector('.captions span').textContent=cue?.text||'';
     document.querySelector('.captions').style.display=cue?'block':'none';
   };
+  window.__scene2AssetsReady=()=>!cardRoot||[...cardRoot.querySelectorAll('img')].every(i=>i.complete&&i.naturalWidth>0);
   window.__scene2Audit=function(){
     const footer=document.querySelector('.source').getBoundingClientRect();
     const header=document.querySelector('.broadcast>header').getBoundingClientRect();
