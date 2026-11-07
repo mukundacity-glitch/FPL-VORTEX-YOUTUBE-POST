@@ -408,12 +408,16 @@ async def narrate(segments, output):
         segment.update(t0=round(offset, 6), t1=round(offset + duration, 6), words=words,
                        captions=[dict(start=offset + c['start'], end=offset + c['end'], text=c['text']) for c in caption_cues(words)])
         cues = {}
-        for key, phrase in dict(points='points', goals='goals', assists='assists', minutes='minutes', xg='Expected goals', xa='expected assists', verdict=segment.get('verdict', 'Hold' if 'Hold for' in segment['text'] else 'Monitor')).items():
-            needle = phrase.lower().split()
+        for key, phrase in dict(points='points', goals='goals', assists='assists', minutes='minutes', xg='Expected goals', xa='expected assists', next='Next is', verdict=segment.get('verdict', 'Hold' if 'Hold for' in segment['text'] else 'Monitor')).items():
+            needles = [phrase.lower().split()]
+            if key in ('points', 'goals', 'assists', 'minutes'):
+                needles.append([phrase.lower().rstrip('s')])
             tokens = [re.sub(r'[^\w]', '', w['text']).lower() for w in words]
-            match = next((i for i in range(len(tokens)) if tokens[i:i + len(needle)] == needle), None)
+            match = next((i for i in range(len(tokens)) if any(tokens[i:i + len(needle)] == needle for needle in needles)), None)
             if match is not None:
                 cues[key] = offset + words[match]['start']
+        if segment['kind'] == 'player' and not {'points', 'goals', 'assists', 'minutes', 'verdict'} <= cues.keys():
+            raise ValueError(f'Incomplete measured statistic cues for {segment["id"]}')
         segment['cues'] = cues
         offset += duration
         print(f'Ryan timing ready {index + 1}/{len(segments)}', flush=True)
@@ -535,7 +539,7 @@ async def produce(output, *, logo_html=None, opening_frame=None, include_music=T
     temporary = output / '.scene2-render.mp4'
     subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(concat),
         '-i', str(speech), '-i', str(bed), '-filter_complex',
-        '[1:a]asplit=2[voice][control];[2:a][control]sidechaincompress=threshold=0.02:ratio=3:attack=20:release=300[bed];[voice][bed]amix=inputs=2:normalize=0,alimiter=limit=0.89[a]',
+        '[1:a]asplit=2[voice][control];[2:a][control]sidechaincompress=threshold=0.02:ratio=3:attack=20:release=300[bed];[voice][bed]amix=inputs=2:normalize=0,alimiter=limit=0.84:level=0[a]',
         '-map', '0:v', '-map', '[a]', '-vf', 'fps=30,scale=out_range=tv,format=yuv420p', '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-color_range', 'tv',
         '-fps_mode', 'cfr', '-video_track_timescale', '30000', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-t', str(duration), '-movflags', '+faststart', str(temporary)], check=True)
     media = probe(temporary)
