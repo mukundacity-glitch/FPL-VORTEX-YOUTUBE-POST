@@ -263,7 +263,7 @@ def collect_review(projections=()):
     if all(p['id'] != leader['id'] for p in players):
         fixture = next((f for f in leader['fixtures'] if f['gw'] == next_gw), None)
         if fixture and fixture['fdr'] in (4, 5):
-            skipped = f'{leader["name"]} leads purchases, but faces {fixture["opponentName"]} at FDR {fixture["fdr"]}. The shortlist favors stronger overall cases.'
+            skipped = f'Many managers are bringing in {leader["name"]}. The {fixture["opponentName"]} fixture rates {fixture["fdr"]} for difficulty, so the alternatives deserve a closer look.'
 
     review_fixtures = [f for f in fixtures if f.get('event') == gw]
     scoreboard = dict(completed=field(len(review_fixtures), fixture_meta, gw),
@@ -340,118 +340,108 @@ def market_shortlist(leaders, candidates, next_gw):
     return selected, ranking
 
 
+LINEUP_LINES = (
+    'Check the lineup before making the move.',
+    'Wait for confirmation that he starts.',
+    'Keep an eye on the final team update.',
+    'His minutes will become clearer before the deadline.',
+    'Make the decision once his fitness is confirmed.',
+)
+
+
 def market_reason(player, verdict):
-    m = player['market']
-    f = {key: item['value'] for key, item in player['fields'].items()}
+    status = player['fields']['status']['value']
     if verdict == 'BUY':
-        return 'Recent starts and the fixture support demand. Check the team sheet before committing.'
-    if verdict == 'SELL' and f['status'] in ('i', 's', 'u'):
-        return f['news'] or 'Official availability flag weakens the case for keeping this player.'
+        return 'Consider bringing him in. Recent starts and the fixture support the move.'
+    if verdict == 'SELL' and status in ('i', 's', 'u'):
+        return 'Move him out if you need a reliable starter in that squad place.'
     if verdict == 'SELL':
-        return 'The low projection and fixture difficulty support selling if you have a credible replacement.'
+        return 'Look for a replacement with a better projection and fixture.'
     if verdict == 'HOLD':
-        return 'The fixture or projection still supports holding despite the sales.'
-    return 'Wait for confirmed availability or a clearer starting role before moving.'
+        return 'Keep him if his role and fixture still work for your squad.'
+    return 'Wait for lineup confirmation before using a transfer.'
 
 
-def player_script(player, gw, index, top_projection=None):
-    m = player['market']
-    f = {key: item['value'] for key, item in player['fields'].items()}
-    fx = m['nextFixture']
-    verdict = player['verdict']
-    name = player['name']
-    move = 'in' if m['net'] > 0 else 'out'
-    venue = 'at home' if fx['venue'] == 'H' else 'away'
-    opponent = fx['opponentName'].replace("Nott'm", 'Nottingham')
-    projection = 'The Vortex model' if m['projectionSource'] == 'VORTEX Phase 10' else 'The official FPL estimate'
-    lead = [
-        f'Let’s start with {name}.',
-        f'Now let’s move to {name}.',
-        f'Now let’s look at the players managers are moving away from. First, {name}.',
-        f'Finally, we have {name}.',
-    ][index]
-    facts = (
-        f'{name} has {abs(m["net"]):,} net transfers {move}. '
-        f'{projection} puts him at {m["xpts"]:.1f} expected points for the next Gameweek. '
-        f'He faces {opponent} {venue}, with a fixture difficulty rating of {fx["fdr"]}.'
-    )
-    starts = f['recent_starts']
-    involvement = (f['recent_xg'] + f['recent_xa']
-                   if f['recent_xg'] is not None and f['recent_xa'] is not None else None)
-    role = f'He made {starts} starts across the last five completed Gameweeks.' if starts is not None else ''
-    if involvement is not None:
-        role += f' His expected goal involvement across that spell was {involvement:.2f}.'
-    if m['expectedMinutes'] is not None:
-        role += f' The model projects {m["expectedMinutes"]:.0f} minutes for the upcoming Gameweek.'
+def decision_label(player):
+    status = player['fields']['status']['value']
+    return {
+        'i': 'Injury concern',
+        's': 'Suspension',
+        'u': 'Unavailable',
+        'd': 'Fitness concern',
+    }.get(status, {
+        'BUY': 'Strong opportunity',
+        'SELL': 'Replacement worth considering',
+        'HOLD': 'Worth keeping',
+        'MONITOR': 'Minutes concern',
+    }[player['verdict']])
 
-    if verdict == 'BUY':
-        if m['xpts'] == top_projection:
-            reasoning = (
-                f'That is the highest projection in this shortlist. {role} '
-                'The starting record and the attacking numbers give us more to work with than one recent return. '
-                'My verdict is Buy. Check the final team news and see whether the move improves your starting eleven.'
-            )
-        else:
-            reasoning = (
-                f'The other important detail is his playing time. {role} '
-                'Those starts give the projection context. The fixture helps make the case for buying, '
-                'and the attacking numbers show what he has been involved in over a wider sample. '
-                'For me, the verdict is Buy, subject to team news. Check that he still looks likely to start before committing.'
-            )
-    elif verdict == 'SELL' and f['status'] in ('i', 's', 'u'):
-        news = f'FPL lists the following update: {f["news"].rstrip(".")}.' if f['news'] else 'FPL currently flags him as unavailable.'
-        zero = (' A zero projection here needs to be read in the context of that availability flag.'
-                if m['xpts'] == 0 else '')
-        reasoning = (
-            f'The main issue is availability. {news}{zero} '
-            'Check whether your bench can cover the absence and whether a reliable starter is available at your budget. '
-            'If you need that squad place to deliver minutes before the next deadline, the verdict is Sell. '
-            'Holding makes more sense if your bench can cover him and you can wait for a clearer update.'
-        )
+
+def player_script(player, index):
+    market = player['market']
+    fields = {key: item['value'] for key, item in player['fields'].items()}
+    fixture = market['nextFixture']
+    name, verdict = player['name'], player['verdict']
+    venue = 'at home' if fixture['venue'] == 'H' else 'away'
+    opponent = fixture['opponentName'].replace("Nott'm", 'Nottingham')
+    points = (f'The next Gameweek projection is {market["xpts"]:.1f} expected points. '
+              f'He faces {opponent} {venue}, with a fixture difficulty rating of {fixture["fdr"]}.')
+    starts = fields['recent_starts']
+    evidence = f'He started {starts} of the last five completed Gameweeks.' if starts is not None else ''
+    if fields['recent_xg'] is not None and fields['recent_xa'] is not None:
+        involvement = fields['recent_xg'] + fields['recent_xa']
+        evidence += f' His expected goal involvement over that spell was {involvement:.2f}.'
+    news = (fields['news'] or '').rstrip('.')
+    status = fields['status']
+    if status in ('i', 's', 'u'):
+        lead = f'{name} is {dict(i="injured", s="suspended", u="unavailable")[status]}.'
+        if news:
+            lead += f' {news.replace(" - ", ". ")}.'
+        decision = 'Move him out if you still have him and need a starter. Holding is reasonable if your bench can cover him.'
+        cue = 'move him out'
     elif verdict == 'MONITOR':
-        news = f'FPL lists the following update: {f["news"].rstrip(".")}.' if f['news'] else role
-        reasoning = (
-            f'The key issue is his availability and expected playing time. {news} '
-            'The projection and fixture are reasons to look for a replacement, but the next team update can change the decision. '
-            'My verdict is Monitor. If he is cleared and looks likely to start, holding could be reasonable. '
-            'If the concern persists or his minutes look restricted, selling is easier to justify when you have a stronger replacement.'
-        )
+        lead = f'{name} needs a closer look. '
+        lead += f'{news.replace(" - ", ". ")}.' if news else 'His starting role is uncertain.'
+        decision = 'Keeping him is reasonable if he is fit and likely to start. ' + LINEUP_LINES[4 if news else 1]
+        cue = 'keeping him'
+    elif verdict == 'BUY':
+        popularity = ('Many managers are bringing him into their teams.' if index == 0
+                      else 'Managers are turning to him ahead of the deadline.')
+        lead = f'{name} has a strong fixture opportunity. {popularity}'
+        decision = 'Consider bringing him in. ' + LINEUP_LINES[0 if index == 0 else 2]
+        cue = 'consider bringing'
     else:
-        reasoning = (
-            f'{role} The next fixture and the points projection matter when you decide whether to use a transfer. '
-            f'My verdict is {verdict.title()}. {player["reason"]} '
-            'Compare the replacement’s expected points and starting evidence before deciding.'
-        )
-    return ' '.join((lead, facts, reasoning))
+        lead = f'Look at {name}’s minutes and next opponent.'
+        decision = market_reason(player, verdict)
+        cue = 'look for a replacement' if verdict == 'SELL' else 'keep him'
+    return ' '.join(part for part in (lead, points, evidence if status == 'a' else '', decision) if part), cue
 
 
 def scripts_for(review):
     gw = review['gameweek']
-    o = review['overview']
+    totals = review['overview']
     segments = [
         dict(id='chapter', kind='chapter', minimum=3,
-             text=f'Gameweek {gw} is done, so let’s look beyond the points and focus on the decisions that could affect your FPL team before the next deadline.'),
+             text=f'Gameweek {gw} is complete. Let’s focus on the moves that can improve your squad.'),
         dict(id='overview', kind='overview', minimum=0,
-             text=f'We had {o["goals"]["value"]} goals across {o["completed"]["value"]} fixtures. '
-                  'The question now is which players deserve our attention based on transfers, expected points, minutes, fixtures, and team news. '
-                  'The transfer numbers show us who managers are considering. To make the decision, we need to see whether the role, fixture, and availability support the move.'),
+             text=f'We had {totals["goals"]["value"]} goals across {totals["completed"]["value"]} fixtures. '
+                  'Popular moves give us a shortlist. Minutes, fitness, and fixtures tell us whether they make sense.'),
     ]
     if review.get('skippedBuyLeader'):
         segments[-1]['text'] += ' ' + review['skippedBuyLeader']
-    top_projection = max(p['market']['xpts'] for p in review['players'])
     for index, player in enumerate(review['players']):
-        segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'], minimum=0,
-                             verdict=player['verdict'], text=player_script(player, gw, index, top_projection)))
+        player['decisionLabel'] = decision_label(player)
+        script, cue = player_script(player, index)
+        segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'],
+                             minimum=0, verdict=player['verdict'], decisionCue=cue, text=script))
     review['takeaways'] = [
-        dict(heading='BUY CASE', explanation='Look for a useful projection, a credible starting role and a workable fixture.', implication='Compare the strongest alternatives at your budget.'),
-        dict(heading='SELL CASE', explanation='Availability and the next fixture can justify a move.', implication='Weigh the replacement against the cost of the transfer.'),
-        dict(heading='TEAM NEWS', explanation='Resolve any outstanding fitness or lineup questions before the deadline.', implication='Keep a fallback if a starter is uncertain.')]
+        dict(heading='REPLACEMENT TARGETS', explanation='Look for recent starts and a fixture you can target.', implication='Compare expected points within your budget.'),
+        dict(heading='AVAILABILITY FIRST', explanation='Check whether the player can fill a place in your eleven.', implication='Use your bench cover and the return timeline to decide.'),
+        dict(heading='MINUTES RISK', explanation='A doubtful player can still be worth keeping.', implication='Reassess when you have clearer fitness and lineup information.')]
     segments.append(dict(id='takeaways', kind='takeaways', minimum=0,
-        text='So what can we take from these four players? ' +
-             ' '.join(f'{p["name"]} is a {p["verdict"].lower()}. {p["reason"]}' for p in review['players']) +
-             ' Transfer volume tells us which players to investigate. Before using a transfer, compare the replacement’s expected points and fixture with the player you’re selling. Check the latest injury information and starting evidence, and keep some flexibility for late team news.'))
+                         text='Compare the replacement’s expected points and fixture with what you already have. Check your bench cover before moving out a flagged player.'))
     segments.append(dict(id='next', kind='next', minimum=0,
-                         text='That’s it for this Gameweek review. Next, we’ll look at the fixture landscape and identify the teams and fixtures that deserve your attention.'))
+                         text='Next, let’s look at the fixtures and find where your squad can gain an edge.'))
     return segments
 
 
@@ -541,7 +531,9 @@ async def narrate(segments, output):
         segment.update(t0=round(offset, 6), t1=round(offset + duration, 6), words=words,
                        captions=[dict(start=offset + c['start'], end=offset + c['end'], text=c['text']) for c in caption_cues(words)])
         cues = {}
-        for key, phrase in dict(xpts='expected points', movement='net transfers', fdr='difficulty rating', verdict=segment.get('verdict', 'Hold' if 'Hold for' in segment['text'] else 'Monitor')).items():
+        for key, phrase in dict(xpts='expected points', fdr='difficulty rating', verdict=segment.get('decisionCue', '')).items():
+            if not phrase:
+                continue
             needles = [phrase.lower().split()]
             if key in ('points', 'goals', 'assists', 'minutes'):
                 needles.append([phrase.lower().rstrip('s')])
@@ -549,7 +541,7 @@ async def narrate(segments, output):
             match = next((i for i in range(len(tokens)) if any(tokens[i:i + len(needle)] == needle for needle in needles)), None)
             if match is not None:
                 cues[key] = offset + words[match]['start']
-        if segment['kind'] == 'player' and not {'xpts', 'movement', 'verdict'} <= cues.keys():
+        if segment['kind'] == 'player' and not {'xpts', 'verdict'} <= cues.keys():
             raise ValueError(f'Incomplete measured statistic cues for {segment["id"]}')
         segment['cues'] = cues
         offset += duration

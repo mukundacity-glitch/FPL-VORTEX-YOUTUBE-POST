@@ -25,14 +25,18 @@
     const upcoming=`${first.opponent} (${first.venue})`;
     const recent=`${text(f.recent_starts)} starts · ${text(f.recent_minutes)} minutes · last five completed GWs`;
     const involvement=f.recent_xg==null||f.recent_xa==null?'N/A':(f.recent_xg+f.recent_xa).toFixed(2);
-    const movement=`${m.net>0?'+':'−'}${Math.abs(m.net).toLocaleString('en-GB')}`;
+    const minutesLabel=m.expectedMinutes==null?'STARTING CONFIDENCE':'EXPECTED MINUTES';
+    const minutes=m.expectedMinutes==null
+      ? `${player.minutesAssessment.confidence} (estimate)`
+      : Math.round(m.expectedMinutes);
+    const availability=f.status==='a'?'Available':f.news||'Availability uncertain';
     return `<section class="spotlight"><div class="spotlight-hero" aria-label="Original FPL VORTEX Hero Card"></div><div class="analytics">
-      <div class="scene-label">${esc(player.story)} · GW${review.nextGameweek} DECISION</div>
+      <div class="scene-label">${esc(player.decisionLabel)} · GW${review.nextGameweek} DECISION</div>
       <h2>${esc(player.name)} <span class="accent">/ THE EVIDENCE</span></h2>
       <div class="player-context">${esc(player.club)} • ${esc(player.position)} • £${m.price.toFixed(1)}m • ${m.ownership}% owned</div>
-      <div class="stat-grid">${stat('xpts',`xPTS · ${esc(m.projectionSource)}`,m.xpts.toFixed(1))}${stat('movement','NET TRANSFERS',movement)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','OFFICIAL FDR',`${text(first.fdr)} / 5`)}${stat('minutes','EXPECTED MINUTES',m.expectedMinutes==null?'N/A':Math.round(m.expectedMinutes))}${stat('form','FPL FORM',m.form)}${stat('xgi','xG + xA · LAST 5 GW',involvement)}${stat('points',`GW${review.gameweek} POINTS`,f.total_points)}</div>
-      <div class="evidence-note"><b>STARTING EVIDENCE</b><br>${esc(recent)} · ${esc(f.status==='a'?'Listed available by FPL':f.news||'FPL availability flag')}</div>
-      <div class="verdict ${player.verdict==='MONITOR'?'monitor':''}"><strong>${esc(player.verdict)}</strong><span>${esc(player.reason)}</span></div>
+      <div class="stat-grid">${stat('xpts',`xPTS · ${esc(m.projectionSource)}`,m.xpts.toFixed(1))}${stat('starts','RECENT STARTS',f.recent_starts)}${stat('next','NEXT OPPONENT',upcoming)}${stat('fdr','FIXTURE DIFFICULTY',`${text(first.fdr)} / 5`)}${stat('minutes',minutesLabel,minutes)}${stat('form','FPL FORM',m.form)}${stat('xgi','xG + xA · LAST 5 GW',involvement)}${stat('points',`GW${review.gameweek} POINTS`,f.total_points)}</div>
+      <div class="evidence-note"><b>${esc(f.status==='a'?'STARTING EVIDENCE':player.decisionLabel)}</b><br>${esc(f.status==='a'?recent+' · '+availability:availability)}</div>
+      <div class="verdict ${player.verdict==='MONITOR'?'monitor':''}"><strong>YOUR MOVE</strong><span>${esc(player.reason)}</span></div>
     </div></section>`;
   }
   function mount(segment){
@@ -42,7 +46,7 @@
     if(segment.kind==='chapter'){
       content.innerHTML='<section class="chapter"><div class="chapter-label">CHAPTER 01</div><div class="chapter-line"></div><h1>GAMEWEEK <span class="accent">REVIEW</span></h1><h2>THE REAL STORY</h2><p>THE RETURNS. THE SURPRISES. THE DECISIONS THAT MATTER.</p></section>';
     }else if(segment.kind==='overview'){
-      content.innerHTML=`<section class="overview"><div class="scene-label">GW${review.gameweek} · FINAL OFFICIAL RESULTS</div><h1 class="scene-heading">THE GAMEWEEK <span class="accent">AT A GLANCE</span></h1><div class="overview-panels">${[['completed','MATCHES COMPLETED'],['goals','TOTAL GOALS'],['topPoints','TOP FPL SCORE']].map(([key,label])=>`<article class="overview-panel" data-value="${review.overview[key].value}"><label>${label}</label><strong>${review.overview[key].value}</strong></article>`).join('')}</div><p class="scene-note">${esc(review.skippedBuyLeader || 'Final results for the completed Gameweek. Transfer decisions use the current official snapshot.')}</p></section>`;
+      content.innerHTML=`<section class="overview"><div class="scene-label">GW${review.gameweek} · FINAL RESULTS</div><h1 class="scene-heading">THE GAMEWEEK <span class="accent">AT A GLANCE</span></h1><div class="overview-panels">${[['completed','MATCHES COMPLETED'],['goals','TOTAL GOALS'],['topPoints','TOP FPL SCORE']].map(([key,label])=>`<article class="overview-panel" data-value="${review.overview[key].value}"><label>${label}</label><strong>${review.overview[key].value}</strong></article>`).join('')}</div><p class="scene-note">${esc(review.skippedBuyLeader || 'Final results for the completed Gameweek. Use the next fixture and starting evidence to plan your move.')}</p></section>`;
     }else if(segment.kind==='player'){
       const player=review.players.find(p=>p.id===segment.player_id);
       content.innerHTML=playerMarkup(player);
