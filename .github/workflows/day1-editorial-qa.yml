@@ -122,6 +122,8 @@ jobs:
           DAY1_BRIEF_SCREENSHOT_DIR=hero-card-qa python -m unittest discover -s tests -p 'test_day1_brief_browser.py' -v
       - name: Render requested opening MP4 preview
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
           python -m pip install "edge-tts>=7,<8"
           python tools/day1_brief_preview.py brief-preview
       - name: Save requested opening MP4 preview
