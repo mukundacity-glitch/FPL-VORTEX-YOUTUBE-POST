@@ -358,44 +358,93 @@ def player_script(player, gw, index):
     m = player['market']
     f = {key: item['value'] for key, item in player['fields'].items()}
     fx = m['nextFixture']
+    verdict = player['verdict']
+    name = player['name']
     move = 'in' if m['net'] > 0 else 'out'
     venue = 'at home' if fx['venue'] == 'H' else 'away'
+    opponent = fx['opponentName'].replace("Nott'm", 'Nottingham')
     projection = 'The Vortex model' if m['projectionSource'] == 'VORTEX Phase 10' else 'The official FPL estimate'
-    role = f'{f["recent_starts"]} starts over the last five completed gameweeks.'
+    lead = [
+        f'Let’s start with {name}.',
+        f'Now let’s move to {name}.',
+        f'Now let’s look at the players managers are moving away from. First, {name}.',
+        f'Finally, we have {name}.',
+    ][index]
+    facts = (
+        f'{name} has {abs(m["net"]):,} net transfers {move}. '
+        f'{projection} puts him at {m["xpts"]:.1f} expected points for the next Gameweek. '
+        f'He faces {opponent} {venue}, with a fixture difficulty rating of {fx["fdr"]}.'
+    )
+    starts = f['recent_starts']
+    involvement = (f['recent_xg'] + f['recent_xa']
+                   if f['recent_xg'] is not None and f['recent_xa'] is not None else None)
+    role = f'He made {starts} starts across the last five completed Gameweeks.' if starts is not None else ''
+    if involvement is not None:
+        role += f' His expected goal involvement across that spell was {involvement:.2f}.'
     if m['expectedMinutes'] is not None:
-        role = f'{m["expectedMinutes"]:.0f} projected minutes, with ' + role
-    evidence = f'He has {role}' if f['recent_starts'] is not None else 'The recent starting record is incomplete.'
-    if f['status'] != 'a':
-        evidence = 'His official availability flag is the main decision factor.'
-    elif f['recent_xg'] is not None and f['recent_xa'] is not None:
-        involvement = f['recent_xg'] + f['recent_xa']
-        evidence += f' His expected goal involvement over that spell was {involvement:.2f}.'
-    return (f'{player["name"]}. Net transfers {move}, {abs(m["net"]):,}. '
-            f'{projection} lists {m["xpts"]:.1f} expected points. Next is {fx["opponentName"]} {venue}, '
-            f'with a difficulty rating of {fx["fdr"]}. {evidence} '
-            f'{player["verdict"].title()}. {player["reason"]}')
+        role += f' The model projects {m["expectedMinutes"]:.0f} minutes for the upcoming Gameweek.'
+
+    if verdict == 'BUY':
+        reasoning = (
+            f'The other important detail is his playing time. {role} '
+            'That combination gives us evidence of a regular role and attacking involvement. '
+            'The home or away split and the difficulty rating help put the projection in context. '
+            'For me, the verdict is Buy. Check the final team news before committing, and compare '
+            'his projection with the player you would move out. The transfer has to improve your team.'
+        )
+    elif verdict == 'SELL' and f['status'] in ('i', 's', 'u'):
+        news = f'FPL lists the following update: {f["news"].rstrip(".")}.' if f['news'] else 'FPL currently flags him as unavailable.'
+        zero = (' A zero projection here needs to be read in the context of that availability flag.'
+                if m['xpts'] == 0 else '')
+        reasoning = (
+            f'The main issue is availability. {news}{zero} '
+            'Check whether your bench can cover the absence and whether a reliable starter is available at your budget. '
+            'If you need that squad place to deliver minutes before the next deadline, the verdict is Sell. '
+            'Holding makes more sense if your bench can cover him and you can wait for a clearer update.'
+        )
+    elif verdict == 'MONITOR':
+        news = f'FPL lists the following update: {f["news"].rstrip(".")}.' if f['news'] else role
+        reasoning = (
+            f'The key issue is his availability and expected playing time. {news} '
+            'The projection and fixture are reasons to look for a replacement, but the next team update can change the decision. '
+            'My verdict is Monitor. If he is cleared and looks likely to start, holding could be reasonable. '
+            'If the concern persists or his minutes look restricted, selling is easier to justify when you have a stronger replacement.'
+        )
+    else:
+        reasoning = (
+            f'{role} The next fixture and the points projection matter when you decide whether to use a transfer. '
+            f'My verdict is {verdict.title()}. {player["reason"]} '
+            'Compare the replacement’s expected points and starting evidence before deciding.'
+        )
+    return ' '.join((lead, facts, reasoning))
 
 
 def scripts_for(review):
     gw = review['gameweek']
     o = review['overview']
-    segments = [dict(id='chapter', kind='chapter', text='Gameweek review. The real story.', minimum=3),
-                dict(id='overview', kind='overview', minimum=0,
-                     text=f'Gameweek {gw} is complete. {o["completed"]["value"]} fixtures produced {o["goals"]["value"]} goals. '
-                          f'The highest individual FPL return was {o["topPoints"]["value"]} points. Now, which performances should change the next decision?')]
+    segments = [
+        dict(id='chapter', kind='chapter', minimum=3,
+             text=f'Gameweek {gw} is done, so let’s look beyond the points and focus on the decisions that could affect your FPL team before the next deadline.'),
+        dict(id='overview', kind='overview', minimum=0,
+             text=f'We had {o["goals"]["value"]} goals across {o["completed"]["value"]} fixtures. '
+                  'The question now is which players deserve our attention based on transfers, expected points, minutes, fixtures, and team news. '
+                  'The transfer numbers show us who managers are considering. To make the decision, we need to see whether the role, fixture, and availability support the move.'),
+    ]
     if review.get('skippedBuyLeader'):
         segments[-1]['text'] += ' ' + review['skippedBuyLeader']
     for index, player in enumerate(review['players']):
-        segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'], minimum=0, verdict=player['verdict'],
-                             text=player_script(player, gw, index)))
+        segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'], minimum=0,
+                             verdict=player['verdict'], text=player_script(player, gw, index)))
     review['takeaways'] = [
         dict(heading='BUY CASE', explanation='Look for a useful projection, a credible starting role and a workable fixture.', implication='Compare the strongest alternatives at your budget.'),
         dict(heading='SELL CASE', explanation='Availability and the next fixture can justify a move.', implication='Weigh the replacement against the cost of the transfer.'),
         dict(heading='TEAM NEWS', explanation='Resolve any outstanding fitness or lineup questions before the deadline.', implication='Keep a fallback if a starter is uncertain.')]
     segments.append(dict(id='takeaways', kind='takeaways', minimum=0,
-        text='Before the deadline, compare the points upside of your replacement, check the starting evidence, and leave room to react to team news.'))
+        text='So what can we take from these four players? ' +
+             ' '.join(f'{p["name"]} is a {p["verdict"].lower()}. {p["reason"]}' for p in review['players']) +
+             ' Transfer volume tells us which players to investigate. Before using a transfer, compare the replacement’s expected points and fixture with the player you’re selling. Check the latest injury information and starting evidence, and keep some flexibility for late team news.'))
     segments.append(dict(id='next', kind='next', minimum=0,
-                         text='Next, players and fixtures. Who deserves your attention now?'))
+                         text='That’s it for this Gameweek review. Next, we’ll look at the fixture landscape and identify the teams and fixtures that deserve your attention.'))
     return segments
 
 
