@@ -28,6 +28,8 @@ on:
       - "tests/test_day1_soft_duration.py"
       - "day3/transfer_desk.py"
       - "tools/hero_card_audit/**"
+      - "tools/day1_brief_preview.py"
+      - "tools/preview_assets/**"
       - ".github/workflows/day-1.yml"
       - ".github/workflows/day1-editorial-qa.yml"
   push:
@@ -118,6 +120,21 @@ jobs:
           python tools/hero_card_audit/build_harness.py hero-card-qa
           python tools/hero_card_audit/audit.py hero-card-qa
           DAY1_BRIEF_SCREENSHOT_DIR=hero-card-qa python -m unittest discover -s tests -p 'test_day1_brief_browser.py' -v
+      - name: Render requested opening MP4 preview
+        run: |
+          python -m pip install "edge-tts>=7,<8"
+          python tools/day1_brief_preview.py brief-preview
+      - name: Save requested opening MP4 preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: day1-opening-mp4-preview
+          path: |
+            brief-preview/*.mp4
+            brief-preview/preview-*.png
+            brief-preview/opening.vtt
+            brief-preview/render-report.json
+          retention-days: 7
       - name: Save layout evidence
         if: always()
         uses: actions/upload-artifact@v4
