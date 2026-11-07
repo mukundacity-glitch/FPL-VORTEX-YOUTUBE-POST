@@ -354,7 +354,7 @@ def market_reason(player, verdict):
     return 'Wait for confirmed availability or a clearer starting role before moving.'
 
 
-def player_script(player, gw, index):
+def player_script(player, gw, index, top_projection=None):
     m = player['market']
     f = {key: item['value'] for key, item in player['fields'].items()}
     fx = m['nextFixture']
@@ -385,13 +385,19 @@ def player_script(player, gw, index):
         role += f' The model projects {m["expectedMinutes"]:.0f} minutes for the upcoming Gameweek.'
 
     if verdict == 'BUY':
-        reasoning = (
-            f'The other important detail is his playing time. {role} '
-            'That combination gives us evidence of a regular role and attacking involvement. '
-            'The home or away split and the difficulty rating help put the projection in context. '
-            'For me, the verdict is Buy. Check the final team news before committing, and compare '
-            'his projection with the player you would move out. The transfer has to improve your team.'
-        )
+        if m['xpts'] == top_projection:
+            reasoning = (
+                f'That is the highest projection in this shortlist. {role} '
+                'The starting record and the attacking numbers give us more to work with than one recent return. '
+                'My verdict is Buy. Check the final team news and see whether the move improves your starting eleven.'
+            )
+        else:
+            reasoning = (
+                f'The other important detail is his playing time. {role} '
+                'Those starts give the projection context. The fixture helps make the case for buying, '
+                'and the attacking numbers show what he has been involved in over a wider sample. '
+                'For me, the verdict is Buy, subject to team news. Check that he still looks likely to start before committing.'
+            )
     elif verdict == 'SELL' and f['status'] in ('i', 's', 'u'):
         news = f'FPL lists the following update: {f["news"].rstrip(".")}.' if f['news'] else 'FPL currently flags him as unavailable.'
         zero = (' A zero projection here needs to be read in the context of that availability flag.'
@@ -432,9 +438,10 @@ def scripts_for(review):
     ]
     if review.get('skippedBuyLeader'):
         segments[-1]['text'] += ' ' + review['skippedBuyLeader']
+    top_projection = max(p['market']['xpts'] for p in review['players'])
     for index, player in enumerate(review['players']):
         segments.append(dict(id=f'player_{player["id"]}', kind='player', player_id=player['id'], minimum=0,
-                             verdict=player['verdict'], text=player_script(player, gw, index)))
+                             verdict=player['verdict'], text=player_script(player, gw, index, top_projection)))
     review['takeaways'] = [
         dict(heading='BUY CASE', explanation='Look for a useful projection, a credible starting role and a workable fixture.', implication='Compare the strongest alternatives at your budget.'),
         dict(heading='SELL CASE', explanation='Availability and the next fixture can justify a move.', implication='Weigh the replacement against the cost of the transfer.'),
