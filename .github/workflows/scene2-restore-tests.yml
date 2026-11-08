@@ -2,6 +2,8 @@ name: Scene 2 Restoration Tests
 on:
   pull_request:
     paths:
+      - '1_final_day1.py'
+      - 'tests/test_day1_scene2_renderer_integration.py'
       - 'vortex/day1_scene2_restore.py'
       - 'vortex/day1_scene2_runtime.js'
       - 'vortex/day1_scene2_data_panels.js'
@@ -20,6 +22,8 @@ jobs:
           python-version: '3.11'
       - name: Scene 2 Python contract
         run: python -m unittest discover -s tests -p 'test_day1_scene2_restore.py' -v
+      - name: Original full Day 1 renderer integration
+        run: python -m unittest discover -s tests -p 'test_day1_scene2_renderer_integration.py' -v
       - name: JavaScript syntax
         run: |
           node --check vortex/day1_scene2_runtime.js
