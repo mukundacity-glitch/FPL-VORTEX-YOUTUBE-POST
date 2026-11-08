@@ -63,10 +63,13 @@ def build_scene2_manifest(
         for field in ("id", "name", "position", "gw_points", "minutes", "club"):
             if field not in p or p[field] is None or p[field] == "":
                 raise ValueError(f"Missing verified {field} for player {p['id']}")
-        _number(p["gw_points"], f"points {p['id']}")
+        if not isinstance(p["gw_points"], (int, float)) or not math.isfinite(float(p["gw_points"])):
+            raise ValueError(f"Invalid actual points for player {p['id']}")
         _number(p["minutes"], f"minutes {p['id']}")
         if "slot" not in p:
             raise ValueError(f"Missing original formation/bench slot for {p['id']}")
+    if len({str(p["slot"]) for p in squad}) != 15:
+        raise ValueError("Original pitch and bench slots must be unique")
     if len(narration) != 15 or [beat.get("player_id") for beat in narration] != ids:
         raise ValueError("Narration must contain one ordered beat for each of the 15 players")
 
