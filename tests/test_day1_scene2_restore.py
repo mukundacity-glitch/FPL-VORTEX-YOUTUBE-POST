@@ -58,6 +58,17 @@ class Scene2RestorationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unverified"):
             build_scene2_manifest(**data)
 
+    def test_negative_player_points_allowed(self):
+        data = episode()
+        data["starters"][0]["gw_points"] = -1
+        self.assertEqual(build_scene2_manifest(**data)["players"][0]["actual_points"], -1)
+
+    def test_duplicate_pitch_slot_rejected(self):
+        data = episode()
+        data["bench"][0]["slot"] = data["starters"][0]["slot"]
+        with self.assertRaisesRegex(ValueError, "slots must be unique"):
+            build_scene2_manifest(**data)
+
     def test_down_rank_red_and_missing_rank_unavailable(self):
         data = episode()
         data["rank_movement"] = dict(previous=100, current=200)
