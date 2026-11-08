@@ -48,7 +48,7 @@ class Scene2RendererIntegrationTests(unittest.TestCase):
 
     def test_extracted_review_js_parses_in_node(self):
         js=script_literal("JS").replace("__VX_DATA__","{}")
-        js=re.sub(r'^<script[^>]*>\s*','',js).replace("</script>","")
+        js=re.sub(r'^\s*<script[^>]*>\s*','',js).replace("</script>","")
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"scene2-review.js"
             path.write_text(js,encoding="utf-8")
