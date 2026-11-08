@@ -18424,6 +18424,16 @@ function buildReview(){
 
     const players=$v("#players");
     players.innerHTML=VX.starters.map(p=>pitchCard(p)).join("");
+    // The original football pitch remains authoritative. Each reviewed card
+    // lands in its original formation slot only after its spoken explanation.
+    // The flight overlay uses the SAME VXPlayerCard runtime as the left Hero.
+    const existingFlight=$v("#vxHeroFlight");
+    if(existingFlight) existingFlight.remove();
+    const flight=document.createElement("div");
+    flight.id="vxHeroFlight";
+    flight.style.cssText="position:fixed;z-index:98;pointer-events:none;opacity:0;transform-origin:top left;will-change:transform,opacity;visibility:hidden;";
+    document.body.appendChild(flight);
+    window.__vxFlightPlayer=null;
 
     const left=$v(".left");
 
@@ -18513,12 +18523,10 @@ window.__seek=function(t){
 
         if(!el) return;
 
-        const p=ease(
-          (t-s.reveal_at)/Number(timing.entrance_duration||.42)
-        );
-
+        const end=Number(s.speech_end_at ?? s.t1);
+        const flightSeconds=Number(timing.hero_to_pitch_duration||.56);
+        const p=ease((t-end-flightSeconds)/Number(timing.entrance_duration||.42));
         el.style.opacity=p;
-
         el.style.transform=
           `translate(-50%,-50%) scale(${.70+.30*p})`;
 
@@ -18543,10 +18551,9 @@ window.__seek=function(t){
         const el=$v(`#vxb_${s.player_id}`);
         if(!el) return;
 
-        const p=ease(
-          (t-s.reveal_at)/Number(timing.entrance_duration||.42)
-        );
-
+        const end=Number(s.speech_end_at ?? s.t1);
+        const flightSeconds=Number(timing.hero_to_pitch_duration||.56);
+        const p=ease((t-end-flightSeconds)/Number(timing.entrance_duration||.42));
         el.style.opacity=p;
         el.style.transform=
           `translateY(${(1-p)*30}px) scale(${.85+.15*p})`;
@@ -18554,15 +18561,13 @@ window.__seek=function(t){
 
     /* ---------- TEMP HERO ---------- */
 
+    // All fifteen players, including four substitutes, have a full-sized
+    // LEFT Hero Card while their named narration is being spoken.
     const heroSeg = VX.segments
-      .filter(
-        s =>
-          s.player_id &&
-          s.kind==="starter" &&
-          t >= s.hero_on &&
-          t < s.hero_off
-      )
-      .sort((a,b)=>Number(b.hero_on)-Number(a.hero_on))[0];
+      .filter(s => s.player_id && (s.kind==="starter" || s.kind==="bench") &&
+        t >= Number(s.hero_on ?? s.reveal_at) &&
+        t < Number(s.speech_end_at ?? s.t1))
+      .sort((a,b)=>Number(b.reveal_at)-Number(a.reveal_at))[0];
 
     const desk = (VX.market_cards || []).find(item => VX.segments.some(
       s => s.id === item.segment_id && t >= s.t0 && t < s.t1));
@@ -18588,16 +18593,10 @@ window.__seek=function(t){
             }
 
             const ein=ease(
-              (t-heroSeg.hero_on)/Number(timing.hero_fade_in||.32)
+              (t-Number(heroSeg.hero_on ?? heroSeg.reveal_at))/Number(timing.hero_fade_in||.32)
             );
-
-            const eout=t < heroSeg.hero_exit_at
-              ? 1
-              : 1-ease(
-                  (t-heroSeg.hero_exit_at) /
-                  Math.max(.01,heroSeg.hero_off-heroSeg.hero_exit_at)
-                );
-
+            const spokenEnd=Number(heroSeg.speech_end_at ?? heroSeg.t1);
+            const eout=1-ease((t-(spokenEnd-.12))/.12);
             const vis=Math.min(ein,eout);
 
             hw.style.opacity=vis;
@@ -18620,6 +18619,38 @@ window.__seek=function(t){
     else{
         hw.style.opacity=0;
     }
+    /* ---------- HERO CARD FLIES TO ORIGINAL PITCH/BENCH SLOT ---------- */
+    const flightSeconds=Number(timing.hero_to_pitch_duration||.56);
+    const flying=VX.segments.find(s => s.player_id &&
+      t >= Number(s.speech_end_at ?? s.t1) &&
+      t < Number(s.speech_end_at ?? s.t1)+flightSeconds);
+    const flightEl=$v("#vxHeroFlight");
+    if(flying && !desk){
+        const p=[...VX.starters,...VX.bench].find(x=>x.id===flying.player_id);
+        const dest=$v(flying.kind==="bench"
+          ? `#vxb_${flying.player_id}` : `#vxp_${flying.player_id}`);
+        if(!p || !dest) throw new Error("Original Hero Card flight destination missing");
+        if(window.__vxFlightPlayer!==p.id){
+            window.VXPlayerCard.mount(flightEl,p.card||p);
+            window.__vxFlightPlayer=p.id;
+        }
+        const from=hw.getBoundingClientRect(), to=dest.getBoundingClientRect();
+        const q=ease((t-Number(flying.speech_end_at ?? flying.t1))/flightSeconds);
+        flightEl.style.visibility="visible";
+        flightEl.style.width=from.width+"px";
+        flightEl.style.height=from.height+"px";
+        flightEl.style.left=from.left+"px";
+        flightEl.style.top=from.top+"px";
+        flightEl.style.transform=`translate(${(to.left-from.left)*q}px,${(to.top-from.top)*q}px) scale(${1+(to.width/Math.max(1,from.width)-1)*q},${1+(to.height/Math.max(1,from.height)-1)*q})`;
+        flightEl.style.opacity=String(q>.88 ? Math.max(0,(1-q)/.12):1);
+    }else{
+        flightEl.style.visibility="hidden";
+        flightEl.style.opacity=0;
+    }
+    document.documentElement.dataset.vxSquadSettled=String(
+      VX.segments.filter(s=>s.player_id && t >=
+        Number(s.speech_end_at ?? s.t1)+flightSeconds).length
+    );
     if(desk) benchPanel.style.setProperty("opacity",0,"important");
     $v("#pitchGW").textContent=desk
       ? `NEXT GAMEWEEK • ${desk.action} WATCHLIST`
@@ -18725,6 +18756,8 @@ window.__auditLayout=function(t){
       title:Number($v(".pitchHeader")?.style.opacity||0),
       pitch:Number($v(".pitch")?.style.opacity||0),
       hero:Number($v("#vxHeroWrap")?.style.opacity||0),
+      heroFlight:Number($v("#vxHeroFlight")?.style.opacity||0),
+      settledSquad:Number(document.documentElement.dataset.vxSquadSettled||0),
       cardPlayerId:Number($v("#vxHeroWrap .vx-player-card")?.dataset.playerId||0),
       benchCards:[...document.querySelectorAll(".benchPanel .mini")]
         .filter(x=>Number(x.style.opacity)>.5).length,
