@@ -33,7 +33,7 @@ class Scene2RestorationTests(unittest.TestCase):
             self.assertEqual(player["hero_component"], "VXPlayerCard")
             self.assertTrue(player["left_hero_enter"] <
                             player["pitch_flight_start"] <
-                            player["pitch_arrival"] <= player["narration_end"])
+                            player["narration_end"] < player["pitch_arrival"])
             self.assertTrue(player["persist_in_pitch"])
         self.assertEqual(len([p for p in manifest["players"] if p["role"] == "starter"]), 11)
         self.assertEqual(len([p for p in manifest["players"] if p["role"] == "bench"]), 4)
