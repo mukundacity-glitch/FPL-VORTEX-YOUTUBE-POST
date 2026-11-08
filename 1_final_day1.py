@@ -18630,11 +18630,16 @@ window.__seek=function(t){
         const dest=$v(flying.kind==="bench"
           ? `#vxb_${flying.player_id}` : `#vxp_${flying.player_id}`);
         if(!p || !dest) throw new Error("Original Hero Card flight destination missing");
+        const from=hw.getBoundingClientRect(), to=dest.getBoundingClientRect();
         if(window.__vxFlightPlayer!==p.id){
-            window.VXPlayerCard.mount(flightEl,p.card||p);
+            // Set exact source dimensions BEFORE mounting so VXPlayerCard
+            // measures correct text/portrait geometry on first seek frame.
+            flightEl.style.width=from.width+"px";
+            flightEl.style.height=from.height+"px";
+            const mounted=window.VXPlayerCard.mount(flightEl,p.card||p);
+            if(window.VXPlayerCard.fitText) window.VXPlayerCard.fitText(mounted);
             window.__vxFlightPlayer=p.id;
         }
-        const from=hw.getBoundingClientRect(), to=dest.getBoundingClientRect();
         const q=ease((t-Number(flying.speech_end_at ?? flying.t1))/flightSeconds);
         flightEl.style.visibility="visible";
         flightEl.style.width=from.width+"px";
