@@ -6,7 +6,6 @@ identities, results and narration timing must originate in the episode snapshot.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 import math
 
@@ -43,9 +42,9 @@ def build_scene2_manifest(
 ) -> dict[str, Any]:
     """Produce the exact cue map for the existing pitch/hero runtime.
 
-    The original Hero Card is first shown in the LEFT spotlight. During the
-    player's narrated beat it animates INTO the assigned pitch or bench slot
-    and stays there. Unlike a standard pop-out animation this is progressive
+    The original Hero Card is first shown in the LEFT spotlight. AFTER the
+    player's explanation is complete, it animates INTO the assigned pitch or
+    bench slot and stays there. Unlike a standard pop-out animation this is progressive
     squad assembly. All cue times are measured narration times, not guesses.
     """
     if not 1 <= gameweek <= 38:
@@ -83,8 +82,8 @@ def build_scene2_manifest(
         # The original Hero Card is visible before the move, and stays
         # permanently in its formation slot after arrival.
         introduction = min(0.8, length * 0.18)
-        flight = min(0.85, length * 0.18)
-        arrival = min(end, start + introduction + flight)
+        flight = 0.7
+        arrival = end + flight
         player_beats.append({
             "player_id": p["id"],
             "name": p["name"],
@@ -92,8 +91,8 @@ def build_scene2_manifest(
             "slot": p["slot"],
             "hero_component": "VXPlayerCard",
             "left_hero_enter": start,
-            "left_hero_exit": start + introduction,
-            "pitch_flight_start": start + introduction,
+            "left_hero_exit": end,
+            "pitch_flight_start": end,
             "pitch_arrival": arrival,
             "points_reveal": min(end, start + min(2.0, length * 0.42)),
             "narration_start": start,
