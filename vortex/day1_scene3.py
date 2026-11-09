@@ -211,7 +211,8 @@ def timing(beats, words, span, normalize):
 
 def render_html(scene, cues, captions, original_css, original_js, logo, handoff=None):
     css = (ROOT / "day1_scene3.css").read_text()
-    js = (ROOT / "day1_scene3.js").read_text()
+    market = "targets" in scene
+    js = (ROOT / ("day1_scene3_market.js" if market else "day1_scene3.js")).read_text()
     for family, asset in (("Inter", ROOT.parent / "day2/assets/Inter.ttf"),
                           ("Rajdhani", ROOT / "scene3_assets/rajdhani-bold.woff2"),
                           ("Sora", ROOT / "scene3_assets/sora-semibold.woff2")):
@@ -224,8 +225,61 @@ def render_html(scene, cues, captions, original_css, original_js, logo, handoff=
         uri = base64.b64encode(handoff.read_bytes()).decode()
         prior = f'<img class="vx-s3-handoff" src="data:image/png;base64,{uri}" alt="">'
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Day 1 · Players &amp; Fixtures</title><style>{css}</style></head>'
-            f'<body><main class="vx-s3"><header class="vx-s3-header"><div class="vx-s3-brand">{logo}<span>FPL VORTEX</span></div>'
+            f'<body><main class="vx-s3{" vx-s3-market" if market else ""}"><header class="vx-s3-header"><div class="vx-s3-brand">{logo}<span>FPL VORTEX</span></div>'
             f'<span>CHAPTER 03 · PLAYERS &amp; FIXTURES · GW{scene["gw"]}</span></header>'
             f'<div class="vx-s3-stage"></div><div class="vx-s3-scanner"></div><div class="vx-s3-caption"></div>{prior}'
             f'<footer>THE ROAD AHEAD <span>FPL DATA · {escape(scene["stamp"])}</span></footer></main>'
             f'{original_js}<script>const S3={payload};\n{js}</script></body></html>')
+
+
+def market_board(gw, fixtures, teams, model, market, stamp, source="Vortex bookmaker benchmark"):
+    """Rank a single upcoming GW by unrounded attacking FDR, independent of odds."""
+    fixtures_by_id = {f["id"]: f for f in fixtures if f.get("event") == gw}
+    odds_by_id = {int(row["fixture_id"]): row for row in market}
+    candidates = []
+    for rating in model:
+        f = fixtures_by_id.get(int(rating["fixture_id"]))
+        value = number(rating.get("attack_fdr_model"))
+        if f is None or value is None or not 1 <= value <= 5:
+            continue
+        team_id = int(rating["team_id"])
+        if team_id not in (f["team_h"], f["team_a"]):
+            continue
+        home = f["team_h"] == team_id
+        side = "home" if home else "away"
+        odds = odds_by_id.get(f["id"], {})
+        def probability(metric):
+            p = number(odds.get(f"market_{side}_{metric}_probability"))
+            return p if p is not None and 0 <= p <= 1 else None
+        candidates.append(dict(fdr=value, **tile_rating(value), team=teams[team_id],
+            opponent=teams[f["team_a"] if home else f["team_h"]], venue="H" if home else "A",
+            win=probability("win"), clean_sheet=probability("clean_sheet"),
+            snapshot=market_timestamp(odds.get("market_snapshot_timestamp"))))
+    candidates.sort(key=lambda r: (r["fdr"], r["team"]["name"], r["opponent"]["name"], r["venue"]))
+    return dict(gw=gw, stamp=stamp, targets=candidates[:5], market_source=source)
+
+
+def market_timestamp(value):
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    return dt.astimezone(EASTERN).strftime("%b %d · %H:%M %Z") if dt.tzinfo else ""
+
+
+def market_narration(scene):
+    beats = [("opening", f"Five fixtures to target. Here are the best attacking fixture ratings for Gameweek {scene['gw']}, with market estimates for wins and clean sheets.")]
+    lead = ["First up", "Next on the board", "Third on the list", "Fourth in the rankings", "The fifth fixture"]
+    def percent(value):
+        return f"{value:.0%}" if value is not None else "unavailable"
+    for i, row in enumerate(scene["targets"]):
+        where = "at home" if row["venue"] == "H" else "away"
+        beats.append((f"target-{i}", f"{lead[i]}, {row['team']['name']} against {row['opponent']['name']} {where}. "
+                      f"Attacking fixture difficulty is {row['rating']}. "
+                      f"Market win chance: {percent(row['win'])}. Clean sheet chance: {percent(row['clean_sheet'])}."))
+    beats.append(("transition", "Here is the full picture. Use attacking difficulty to shortlist attackers, and clean sheet chance to compare defensive options. Check starting minutes before you commit. Next, the numbers and market outlook."))
+    return beats
+
+
+def render_market_html(scene, cues, captions, logo, handoff=None):
+    return render_html(scene, cues, captions, "", "", logo, handoff)

@@ -23576,24 +23576,20 @@ if "export_4k_png" not in globals():
     raise RuntimeError("Run Cell 14 first — shared 4K renderer is missing.")
 print("⏳ Rendering restored original matrix slides...")
 if SLIDE_SELECTION.get("02_fdr", True):
-    from vortex.day1_scene3 import build_scene, narration as scene3_narration, render_html as scene3_html
+    from vortex.day1_scene3 import market_board, market_narration, render_market_html
     from zoneinfo import ZoneInfo
     _scene3_session = _vx_http_session()
     _scene3_fixtures = _vx_get_json(_scene3_session, "/fixtures/")
     _scene3_stamp = datetime.fromisoformat(data_snapshot_timestamp).astimezone(
         ZoneInfo("America/New_York")
     ).strftime("%Y-%m-%d %H:%M %Z")
-    VX_SCENE3 = build_scene(
-        int(NEXT_GW), _scene3_fixtures, team_meta_by_id, data["bootstrap"]["elements"],
-        model_fixture_fdr_df.to_dict("records"),
-        lambda pid: _vx_get_json(_scene3_session, f"/element-summary/{pid}/"),
-        resolve_player_photo, _scene3_stamp, CURRENT_SEASON,
-        phase10_player_gameweek_expected_points.to_dict("records"),
+    VX_SCENE3 = market_board(
+        int(NEXT_GW), _scene3_fixtures, team_meta_by_id, model_fixture_fdr_df.to_dict("records"),
+        market_odds_benchmark.to_dict("records"), _scene3_stamp,
     )
-    VX_SCENE3_BEATS = scene3_narration(VX_SCENE3)
-    FDR_HTML_PATH.write_text(scene3_html(
-        VX_SCENE3, [{"key":"fixtures","at":-4}], [], PLAYER_CARD_CSS, PLAYER_CARD_JS,
-        vortex_logo_html,
+    VX_SCENE3_BEATS = market_narration(VX_SCENE3)
+    FDR_HTML_PATH.write_text(render_market_html(
+        VX_SCENE3, [{"key":"transition","at":-4}], [], vortex_logo_html,
     ), encoding="utf-8")
     await export_4k_png(FDR_HTML_PATH, FDR_PNG_PATH)
 if SLIDE_SELECTION.get("03_projected_goals", True):
@@ -25833,16 +25829,10 @@ for key,(src_name,out_name) in SCENES.items():
 
         cues = scene3_timing(VX_SCENE3_BEATS, words, vx_phrase_span, vx_full_word_narration)
         captions = scene3_caption_cues(words)
-        out.write_text(scene3_html(VX_SCENE3, cues, captions, PLAYER_CARD_CSS,
-                                  PLAYER_CARD_JS, vortex_logo_html,
+        out.write_text(render_market_html(VX_SCENE3, cues, captions, vortex_logo_html,
                                   Path(SLIDE_DIR) / "gw_review_animated_final.png"
                                   if "gw_review" in SELECTED_SCENES else None), encoding="utf-8")
-        # Cell 20 captures these animation windows, with captions sampled independently.
-        events = [{"sel":f'[data-beat="{cue["key"]}"]', "at":max(0,cue["at"]-.33), "dur":3.6}
-                  for cue in cues]
-        for current, following in zip(cues, cues[1:]):
-            events.append({"sel":f'[data-beat="{current["key"]}"]', "at":max(0,following["at"]-3),
-                           "dur":.5})
+        events = [{"sel":".vx-s3-market-table", "at":cue["at"], "dur":.55} for cue in cues]
         manifest[key] = {"html":str(out),"audio":info["audio"],"duration":duration,
                          "canvas":[3840,2160],"events":events,"caption_cues":captions}
         continue

@@ -1,6 +1,6 @@
 import unittest
 
-from vortex.day1_scene3 import build_scene, narration, tile_rating, timing
+from vortex.day1_scene3 import build_scene, market_board, narration, tile_rating, timing
 
 
 class Day1Scene3Tests(unittest.TestCase):
@@ -27,6 +27,19 @@ class Day1Scene3Tests(unittest.TestCase):
         self.assertEqual(first_week[1]["attack"]["rating"], "N/A")
         self.assertEqual(second_week, [])
         self.assertEqual(narration(scene)[-1][0], "transition")
+
+    def test_market_board_ranks_fdr_and_keeps_market_odds_separate(self):
+        teams = {i: {"name": str(i)} for i in range(1, 4)}
+        fixtures = [{"id": 5, "event": 11, "team_h": 1, "team_a": 2},
+                    {"id": 6, "event": 12, "team_h": 2, "team_a": 3}]
+        model = [{"fixture_id": 5, "team_id": 1, "attack_fdr_model": 2.54},
+                 {"fixture_id": 5, "team_id": 2, "attack_fdr_model": 2.51},
+                 {"fixture_id": 6, "team_id": 2, "attack_fdr_model": 1.0}]
+        market = [{"fixture_id": 5, "market_home_win_probability": .7,
+                   "market_away_win_probability": .15, "model_away_clean_sheet_probability": .35}]
+        a, b = market_board(11, fixtures, teams, model, market, "QA")["targets"]
+        self.assertEqual((a["team"]["name"], a["venue"], a["win"], a["clean_sheet"]), ("2", "A", .15, None))
+        self.assertEqual((b["team"]["name"], b["venue"], b["win"]), ("1", "H", .7))
 
     def test_measured_cues_must_remain_in_order(self):
         beats = [("opening", "Welcome."), ("fixtures", "Here is the full schedule."), ("heatmap", "Five week map.")]
