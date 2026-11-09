@@ -54,7 +54,7 @@ FORCE_RERENDER = False
 # @markdown **Uncheck any trusted slide you do not want rendered into MP4.**
 SLIDE_01_INTRO = True  # @param {type:"boolean"}
 SLIDE_02_GW_REVIEW = True  # @param {type:"boolean"}
-SLIDE_03_FDR = False  # @param {type:"boolean"}
+SLIDE_03_FDR = True  # @param {type:"boolean"}
 SLIDE_04_PROJECTED_GOALS = False  # @param {type:"boolean"}
 SLIDE_05_CLEAN_SHEETS = False  # @param {type:"boolean"}
 SLIDE_06_OUTRO = False  # @param {type:"boolean"}
@@ -23576,6 +23576,25 @@ if "export_4k_png" not in globals():
     raise RuntimeError("Run Cell 14 first — shared 4K renderer is missing.")
 print("⏳ Rendering restored original matrix slides...")
 if SLIDE_SELECTION.get("02_fdr", True):
+    from vortex.day1_scene3 import build_scene, narration as scene3_narration, render_html as scene3_html
+    from zoneinfo import ZoneInfo
+    _scene3_session = _vx_http_session()
+    _scene3_fixtures = _vx_get_json(_scene3_session, "/fixtures/")
+    _scene3_stamp = datetime.fromisoformat(data_snapshot_timestamp).astimezone(
+        ZoneInfo("America/New_York")
+    ).strftime("%Y-%m-%d %H:%M %Z")
+    VX_SCENE3 = build_scene(
+        int(NEXT_GW), _scene3_fixtures, team_meta_by_id, data["bootstrap"]["elements"],
+        model_fixture_fdr_df.to_dict("records"),
+        lambda pid: _vx_get_json(_scene3_session, f"/element-summary/{pid}/"),
+        resolve_player_photo, _scene3_stamp, CURRENT_SEASON,
+        phase10_player_gameweek_expected_points.to_dict("records"),
+    )
+    VX_SCENE3_BEATS = scene3_narration(VX_SCENE3)
+    FDR_HTML_PATH.write_text(scene3_html(
+        VX_SCENE3, [{"key":"fixtures","at":-4}], [], PLAYER_CARD_CSS, PLAYER_CARD_JS,
+        vortex_logo_html,
+    ), encoding="utf-8")
     await export_4k_png(FDR_HTML_PATH, FDR_PNG_PATH)
 if SLIDE_SELECTION.get("03_projected_goals", True):
     await export_4k_png(XG_HTML_PATH, XG_PNG_PATH)
@@ -23609,7 +23628,7 @@ HTML_ROOT.mkdir(parents=True, exist_ok=True)
 _preview_specs = [
     ("00_intro", "INTRO", "intro_scene_4k.html"),
     ("gw_review", "GW REVIEW", "gw_review_scene_4k.html"),
-    ("02_fdr", "FIXTURE DIFFICULTY", "fdr_scene_4k.html"),
+    ("02_fdr", "PLAYERS & FIXTURES", "fdr_scene_4k.html"),
     ("03_projected_goals", "PROJECTED GOALS", "projected_goals_scene_4k.html"),
     ("04_clean_sheets", "CLEAN SHEET ODDS", "clean_sheet_scene_4k.html"),
     ("05_outro", "OUTRO", "outro_scene_4k.html"),
@@ -24819,28 +24838,8 @@ Let's review the Gameweek, and decide what matters next.
 """.strip(),
 
 
-"02_fdr":
-f"""
+"02_fdr": "\n\n".join(line for _, line in globals().get("VX_SCENE3_BEATS", [])),
 
-Let's start with the fixture swing. Over six Gameweeks, a good run can change the transfer conversation. But is a green fixture list enough on its own? Not quite.
-
-Five teams stand out with genuinely favourable runs: {vx_narr_team(narr_target,0)}, {vx_narr_team(narr_target,1)}, {vx_narr_team(narr_target,2)}, {vx_narr_team(narr_target,3)}, and {vx_narr_team(narr_target,4)}.
-
-{vx_narr_team(narr_target,0)} top the list with the easiest schedule in the league, averaging {vx_narr_fdr_value(narr_target,0):.1f} fixture difficulty. That puts them straight on the shortlist. I'd still check who is likely to play consistently and whether the attacking or defensive projections support a move.
-
-{vx_narr_team(narr_target,1)} are close behind at {vx_narr_fdr_value(narr_target,1):.1f}. No need to rush here — this is more of a "get ready" fixture list than a "buy today" one. Hold your transfer, keep the budget flexible, and let the picture sharpen.
-
-Then {vx_narr_team(narr_target,2)}, {vx_narr_team(narr_target,3)}, and {vx_narr_team(narr_target,4)} round out the top five, each averaging between {vx_narr_fdr_value(narr_target,4):.1f} and {vx_narr_fdr_value(narr_target,2):.1f}. The fixtures open the door for all three — {vx_narr_team(narr_target,3)} in particular gets a nice run including {vx_narr_good_fixtures(narr_target,3)}, which is worth a look if you're after value rather than the most expensive name on the team sheet.
-
-Now the other end of the table. Three teams face a genuinely tough stretch: {vx_narr_team(narr_avoid,0)}, {vx_narr_team(narr_avoid,1)}, and {vx_narr_team(narr_avoid,2)}.
-
-{vx_narr_team(narr_avoid,0)} have it worst, at {vx_narr_fdr_value(narr_avoid,0):.1f} average difficulty. I wouldn't bring in a new player from this run unless there's a really compelling individual case — premium assets can survive it, but budget picks need an easier home.
-
-{vx_narr_team(narr_avoid,1)} and {vx_narr_team(narr_avoid,2)} aren't far off, at {vx_narr_fdr_value(narr_avoid,1):.1f} and {vx_narr_fdr_value(narr_avoid,2):.1f}. If a player from either side pops off with a goal or a clean sheet, don't chase it blind — check what's actually coming next before you spend a transfer on the back of one good week.
-
-So, what would I actually do with this? Start the shortlist with the five easier runs, but don't buy a player just because the fixture colours look good. Check minutes, role and projected output before committing a transfer. And if you already own a proven player with tougher fixtures, a difficult run isn't automatically a reason to sell.
-
-""".strip(),
 
 "03_projected_goals":
 f"""
@@ -24902,13 +24901,9 @@ Subscribe if that helps you make clearer decisions. And remember, one Gameweek n
 
 }
 
-# FDR pacing target: with Ryan at the Professor/Calm -10% rate, this wording is
-# intentionally built for roughly a 3.5–4 minute spoken section. Actual duration
-# remains authoritative only after Edge TTS generates the MP3.
-_fdr_word_count=len(re.findall(r"\b[\w’'-]+\b", scripts["02_fdr"]))
-if not 320 <= _fdr_word_count <= 460:
-    raise RuntimeError(f"FDR narration pacing drifted outside target range: {_fdr_word_count} words")
-print(f"✅ FDR narration: {_fdr_word_count} words • top 5 target • worst 3 avoid")
+# The Scene 3 time target is editorial. The recorded audio is authoritative.
+if "02_fdr" in SELECTED_SCENES:
+    print(f"Scene 3 narration: {len(scripts['02_fdr'].split())} words • editorial target 295 seconds")
 
 _goals_word_count=len(re.findall(r"\b[\w’'-]+\b", scripts["03_projected_goals"]))
 if not 320 <= _goals_word_count <= 460:
@@ -25832,6 +25827,26 @@ for key,(src_name,out_name) in SCENES.items():
     script=info["script"]
     duration=float(info["duration"])
 
+    if key == "02_fdr":
+        from vortex.day1_scene3 import timing as scene3_timing
+        from vortex.day1_brief import caption_cues as scene3_caption_cues
+
+        cues = scene3_timing(VX_SCENE3_BEATS, words, vx_phrase_span, vx_full_word_narration)
+        captions = scene3_caption_cues(words)
+        out.write_text(scene3_html(VX_SCENE3, cues, captions, PLAYER_CARD_CSS,
+                                  PLAYER_CARD_JS, vortex_logo_html,
+                                  Path(SLIDE_DIR) / "gw_review_animated_final.png"
+                                  if "gw_review" in SELECTED_SCENES else None), encoding="utf-8")
+        # Cell 20 captures these animation windows, with captions sampled independently.
+        events = [{"sel":f'[data-beat="{cue["key"]}"]', "at":max(0,cue["at"]-.33), "dur":3.6}
+                  for cue in cues]
+        for current, following in zip(cues, cues[1:]):
+            events.append({"sel":f'[data-beat="{current["key"]}"]', "at":max(0,following["at"]-3),
+                           "dur":.5})
+        manifest[key] = {"html":str(out),"audio":info["audio"],"duration":duration,
+                         "canvas":[3840,2160],"events":events,"caption_cues":captions}
+        continue
+
     events=events_for(key,info)
 
     if key == "00_intro":
@@ -26169,7 +26184,12 @@ def _vx20_probe(path):
     return json.loads(run.stdout)
 
 
-def _vx20_valid_mp4(path, grid_duration):
+def _vx20_scene_fps(key):
+    return 30 if key == "02_fdr" and (W, H) == (3840, 2160) else FPS
+
+
+def _vx20_valid_mp4(path, grid_duration, fps=None):
+    fps = FPS if fps is None else fps
     path = Path(path)
     if not path.exists() or path.stat().st_size < 20_000:
         return False, None
@@ -26182,11 +26202,11 @@ def _vx20_valid_mp4(path, grid_duration):
             video.get("avg_frame_rate") or video.get("r_frame_rate")
         )
         duration = float(info["format"]["duration"])
-        tolerance = max(0.12, 2.0 / FPS)
+        tolerance = max(0.12, 2.0 / fps)
         valid = (
             int(video.get("width", 0)) == W
             and int(video.get("height", 0)) == H
-            and abs(actual_fps - FPS) <= 0.05
+            and abs(actual_fps - fps) <= 0.05
             and video.get("codec_name") == "h264"
             and audio.get("codec_name") == "aac"
             and abs(duration - grid_duration) <= tolerance
@@ -26233,7 +26253,7 @@ def _vx20_fingerprint(key, cfg, html, audio, duration):
         "duration": round(float(duration), 6),
         "width": W,
         "height": H,
-        "fps": FPS,
+        "fps": _vx20_scene_fps(key),
         "motion_capture_fps": MOTION_CAPTURE_FPS,
         "jpeg_quality": JPEG_QUALITY,
         "events": cfg.get("events", []),
@@ -26264,7 +26284,7 @@ def _vx20_add_window(times, start, end, last_t):
 
 
 async def _vx20_sample_times(page, cfg, duration, frame_plan):
-    last_t = max(0.0, (int(frame_plan["frames"]) - 1) / FPS)
+    last_t = max(0.0, float(frame_plan["grid_duration"]) * (1 - 1 / int(frame_plan["frames"])))
     times = {0.0, round(last_t, 6), round(float(frame_plan["grid_duration"]), 6)}
 
     events = list(cfg.get("events", []))
@@ -26377,11 +26397,12 @@ for key in ORDER:
             f"{key}: audio/timeline mismatch {duration:.3f}s vs {expected:.3f}s"
         )
 
-    frame_plan = vx_frame_plan(duration, FPS)
+    scene_fps = _vx20_scene_fps(key)
+    frame_plan = vx_frame_plan(duration, scene_fps)
     final = SECTIONS / f"{key}.mp4"
     preview = PREVIEWS / f"{key}_{H}p.png"
     fingerprint = _vx20_fingerprint(key, cfg, html, audio, duration)
-    valid, media = _vx20_valid_mp4(final, float(frame_plan["grid_duration"]))
+    valid, media = _vx20_valid_mp4(final, float(frame_plan["grid_duration"]), scene_fps)
     cached_fingerprint = (CACHE.get(key) or {}).get("fingerprint")
     fingerprint_matches = cached_fingerprint == fingerprint
     if RESUME and not FORCE and valid and fingerprint_matches:
@@ -26396,7 +26417,7 @@ for key in ORDER:
             "duration": float(media["duration"]),
             "width": W,
             "height": H,
-            "fps": FPS,
+            "fps": scene_fps,
             "status": status,
             "fingerprint": fingerprint,
             "browser_keyframes": 0,
@@ -26408,7 +26429,7 @@ for key in ORDER:
             "duration": float(media["duration"]),
             "width": W,
             "height": H,
-            "fps": FPS,
+            "fps": scene_fps,
             "renderer": RENDERER_VERSION,
         }
         _vx20_atomic_json(CACHE_FILE, CACHE)
@@ -26435,6 +26456,7 @@ for key in ORDER:
 
 async def _vx20_render_scene(page, job):
     key = job["key"]
+    scene_fps = _vx20_scene_fps(key)
     cfg = job["cfg"]
     html = job["html"]
     audio = job["audio"]
@@ -26455,7 +26477,7 @@ async def _vx20_render_scene(page, job):
     print("\n" + "=" * 70)
     print(f"🎬 {key}")
     print(f"🎨 Design  : {DESIGN_W}x{DESIGN_H}")
-    print(f"📺 Output  : {W}x{H} at {FPS}fps")
+    print(f"📺 Output  : {W}x{H} at {scene_fps}fps")
     print(f"🎙 Audio   : {duration:.2f}s")
     print(f"🎞 Output frames: {frames:,}")
     print("=" * 70)
@@ -26502,7 +26524,7 @@ async def _vx20_render_scene(page, job):
     frame_paths = []
     report_every = max(1, len(sample_times) // 20)
     for index, timeline_t in enumerate(sample_times):
-        seek_t = min(float(timeline_t), max(0.0, duration - 1.0 / FPS))
+        seek_t = min(float(timeline_t), max(0.0, duration - 1.0 / scene_fps))
         await page.evaluate("t => window.__seek(t)", seek_t)
         frame_path = scene_work / f"frame_{index:06d}.jpg"
         await page.screenshot(
@@ -26542,7 +26564,7 @@ async def _vx20_render_scene(page, job):
             "ffmpeg", "-y", "-v", "error",
             "-f", "concat", "-safe", "0", "-i", str(concat_file),
             "-an",
-            "-vf", f"fps={FPS}:round=near,format=yuv420p",
+            "-vf", f"fps={scene_fps}:round=near,format=yuv420p",
             "-frames:v", str(frames),
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
             "-pix_fmt", "yuv420p", "-movflags", "+faststart",
@@ -26566,12 +26588,12 @@ async def _vx20_render_scene(page, job):
         check=True,
     )
 
-    valid, media = _vx20_valid_mp4(local_final, grid_duration)
+    valid, media = _vx20_valid_mp4(local_final, grid_duration, scene_fps)
     if not valid:
         raise RuntimeError(f"{key}: local MP4 failed publish QA: {media}")
 
     _vx20_publish(local_final, final)
-    valid, published_media = _vx20_valid_mp4(final, grid_duration)
+    valid, published_media = _vx20_valid_mp4(final, grid_duration, scene_fps)
     if not valid:
         raise RuntimeError(f"{key}: Drive MP4 failed read-back QA: {published_media}")
 
@@ -26581,7 +26603,7 @@ async def _vx20_render_scene(page, job):
         "duration": float(published_media["duration"]),
         "width": W,
         "height": H,
-        "fps": FPS,
+        "fps": scene_fps,
         "renderer": RENDERER_VERSION,
         "browser_keyframes": len(sample_times),
         "output_frames": frames,
@@ -26593,7 +26615,7 @@ async def _vx20_render_scene(page, job):
         Path(temporary).unlink(missing_ok=True)
 
     print(
-        f"✅ {key}: {W}x{H} at {FPS}fps, "
+        f"✅ {key}: {W}x{H} at {scene_fps}fps, "
         f"{published_media['duration']:.2f}s — published and cached"
     )
     return {
@@ -26603,7 +26625,7 @@ async def _vx20_render_scene(page, job):
         "duration": float(published_media["duration"]),
         "width": W,
         "height": H,
-        "fps": FPS,
+        "fps": scene_fps,
         "status": "rendered",
         "fingerprint": job["fingerprint"],
         "browser_keyframes": len(sample_times),
@@ -26726,7 +26748,7 @@ if not str(ASSEMBLY_WORK.resolve()).startswith("/content/"):
 ALL_ORDER = [
     ("00_intro",           "INTRO",            VIDEO / "00_intro.mp4"),
     ("gw_review",          "GW REVIEW",        VIDEO / "gw_review.mp4"),
-    ("02_fdr",             "FDR",              VIDEO / "02_fdr.mp4"),
+    ("02_fdr",             "PLAYERS & FIXTURES",              VIDEO / "02_fdr.mp4"),
     ("03_projected_goals", "PROJECTED GOALS",  VIDEO / "03_projected_goals.mp4"),
     ("04_clean_sheets",    "CLEAN SHEET ODDS", VIDEO / "04_clean_sheets.mp4"),
     ("05_outro",           "OUTRO",            VIDEO / "05_outro.mp4"),
@@ -26950,8 +26972,9 @@ for number, (key, label, path) in enumerate(ORDER, 1):
 
     if (width, height) != (W, H):
         raise RuntimeError(f"{label}: {width}x{height} instead of {W}x{H}")
-    if abs(fps - FPS) > 0.05:
-        raise RuntimeError(f"{label}: {fps:.3f}fps instead of {FPS}fps")
+    expected_scene_fps = 30 if key == "02_fdr" and (W, H) == (3840, 2160) else FPS
+    if abs(fps - expected_scene_fps) > 0.05:
+        raise RuntimeError(f"{label}: {fps:.3f}fps instead of {expected_scene_fps}fps")
     if duration <= 0:
         raise RuntimeError(f"{label}: invalid duration {duration}")
 
