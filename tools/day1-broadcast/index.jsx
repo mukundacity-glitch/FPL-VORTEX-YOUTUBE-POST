@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill, Composition, Img, OffthreadVideo, Sequence, interpolate, registerRoot, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Audio, Composition, Img, OffthreadVideo, Sequence, interpolate, registerRoot, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import './broadcast.css';
 import ValueBoard from './ValueBoard';
 
@@ -17,7 +17,7 @@ function Broadcast({scene, media = false}) {
   const scale = Math.min(1, 868 / sourceHeight);
   const light = interpolate(frame, [0, fps * 1.15], [-35, 112], {extrapolateRight: 'clamp'});
   return <AbsoluteFill className={`canvas ${scene.number === 5 ? "canvas--value-board" : ""}`}>
-    {media && scene.number === 5 && scene.valueBoard && <ValueBoard board={scene.valueBoard}/>}
+    {media && scene.number === 5 && scene.valueBoard && <><ValueBoard board={scene.valueBoard}/><Audio src={staticFile(`scene-${scene.number}.mp4`)}/></>}
     {media && !(scene.number === 5 && scene.valueBoard) && <div className="scene-window" style={{width:1920*scale,height:sourceHeight*scale,left:(1920-1920*scale)/2,top:112+(868-sourceHeight*scale)/2}}>
       <OffthreadVideo src={staticFile(`scene-${scene.number}.mp4`)} style={{position:'absolute',top:-scene.top*scale,width:1920*scale,height:1080*scale}}/>
     </div>}
