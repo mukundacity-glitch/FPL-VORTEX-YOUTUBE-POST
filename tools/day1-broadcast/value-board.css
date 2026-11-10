@@ -56,3 +56,11 @@
 .vb-model-note{margin-top:auto;color:#c9c5dd;font-size:15px;line-height:1.3;border-top:1px solid #5a6394;padding-top:11px}
 .vb-empty{color:#d9d0e6;font-size:17px;margin-top:40px;text-align:center}
 /* All dimensions follow the fixed 1920×1080 Remotion canvas; safe areas avoid rail overlap. */
+
+/* Next-gameweek player opponent: use the legible large-chip format from reference #2. */
+.vb-mini-fixtures { min-height:27px; margin-top:4px; }
+.vb-mini-fixtures .vb-fixture { min-height:27px; width:100%; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:7px; padding:2px 4px; }
+.vb-mini-fixtures .vb-fixture b { font-size:17px; font-weight:900; }
+.vb-mini-fixtures .vb-fixture em { font-size:15px; font-weight:800; }
+.vb-mini-fixtures .vb-fixture strong { font-size:17px; }
+.vb-next-empty { width:100%; text-align:center; background:#334966; color:#fff; font-size:13px; font-weight:800; padding:5px 2px; border-radius:4px; }
