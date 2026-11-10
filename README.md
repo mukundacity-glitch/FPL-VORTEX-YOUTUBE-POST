@@ -1,5 +1,38 @@
 # FPL VORTEX AUTO
 
+## Day 1 five-scene live production (Scene 05 integrated)
+
+The manual **Day 1** GitHub Actions workflow now keeps all 33 existing Day 1
+cells and their first four video scenes. Before the approved background/outro
+mix, it automatically generates Scene 05 using a fresh official FPL API snapshot
+(`bootstrap-static`, `fixtures`, selected `element-summary` history),
+a constrained £100m / 15-player squad optimiser and five-GW projected lineups.
+
+- `vortex/day1_value_live.py`: injury/availability, minutes, ownership, net
+  transfers, FDR and estimated xPts; MILP selects 2 GK / 5 DEF / 5 MID /
+  3 FWD, with <=3 per club, low-cost GK and DEF coverage.
+- `vortex/day1_value_board.py`: legal XI, captain, vice and bench order
+  independently optimized across the next five GWs.
+- `tools/day1-broadcast/ValueBoard.jsx`: green pitch, portrait/crest safe
+  spacing, readable fixture badges, 10-match radar, weekly projections and
+  ownership/momentum panel, with original FPL VORTEX lion logo and handles.
+- `vortex/day1_value_render.py`: natural Ryan narration, pre-music Scene 05
+  encoding, 4K five-scene splice, timing and asset/data evidence files.
+- `tests/test_day1_value_board.py`, `tests/test_day1_value_live.py`,
+  `tests/test_day1_broadcast.py`: validation gates.
+
+**Production conditions:** The previously rendered Scenes 01–04 must pass their
+existing QA; the official next GW must match the finalized review; valid prices,
+fixtures and eligible players must yield a legal squad. If a gate fails, the
+workflow stops rather than uploading an old video as a fresh five-scene master.
+
+The five-scene MP4 is not produced merely by merging source code: run GitHub
+Actions > **Day 1** > **Run workflow** and review the resulting MP4 artifact,
+`DATA/scene05_value_board.json`, `DATA/scene05_narration.json`, and
+`DATA/final_video_qa.json`. The existing YouTube upload remains **Private
+only**, never automatically Public. This change does not delete original
+Scene 01–04 source logic, assets, or review content.
+
 ## Day 1 and Day 2 video workflows
 
 Day 1 remains the existing implementation on `main`:
