@@ -15,6 +15,7 @@ SCENES = {
     "gw_review": (2, "Gameweek Review", 198, 1042),
     "02_fdr": (3, "Players & Fixtures", 78, 1080),
     "03_projected_goals": (4, "Numbers & Market Outlook", 109, 990),
+    "04_value_board": (5, "The Value Board", 0, 1080),
 }
 
 
