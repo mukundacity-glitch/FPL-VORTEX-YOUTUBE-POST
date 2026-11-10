@@ -595,6 +595,9 @@ jobs:
               or qa.get("output_contract", {}).get("passed") is not True
           ):
               raise SystemExit("Final video QA did not pass")
+          expected_scene_keys = ["00_intro", "gw_review", "02_fdr", "03_projected_goals"]
+          if qa.get("scene_keys") != expected_scene_keys:
+              raise SystemExit(f"Day 1 must contain only Scenes 1–4 in order: {qa.get('scene_keys')}")
 
           final_mp4s = [
               path for path in (root / "MP4").glob("*COMBINED*.mp4")

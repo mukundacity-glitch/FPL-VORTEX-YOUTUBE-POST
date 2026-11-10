@@ -245,29 +245,27 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None,
     if not {"headline", "editorial_squad_context", "editorial_routes", "editorial_verdict"} <= available:
         raise ValueError("Review agenda references missing editorial sections")
     rows = [
-        ("review", "GAMEWEEK REVIEW", f"GW{review_gw} · " + ("Final points" if review_status == "FINAL" else "Provisional — results may change"),
-         "Gameweek review", "First, the Gameweek review: points, rank, and our decisions."),
-        ("fixtures", "PLAYERS AND FIXTURES", "Role · minutes · next opponents",
-         "Players and fixtures", "Players and fixtures: the roles and minutes to trust."),
-        ("numbers", "NUMBERS BEHIND THE POINTS", "Actual returns and model estimates kept separate",
-         "Numbers behind the points", "Numbers behind the points: opportunity beyond a single return."),
-        ("transfers", "TRANSFER PRIORITIES", "Keep · consider · avoid / reasons before reactions",
-         "Transfer priorities", "Transfer priorities: who to keep, consider, or avoid."),
-        ("captaincy", "CAPTAINCY AND FINAL XI", "Options where verified · team news can change the plan",
-         "Captaincy and final eleven", "Captaincy and final eleven: options where the evidence supports them."),
+        ("gw_review", "review", "GAMEWEEK REVIEW", f"GW{review_gw} · " + ("Final points" if review_status == "FINAL" else "Provisional — results may change"),
+         "Gameweek review", "First, the Gameweek review: points, rank, and our decisions. We’ll look at where the returns came from and which decisions made a difference."),
+        ("02_fdr", "fixtures", "PLAYERS AND FIXTURES", "Role · minutes · next opponents",
+         "Players and fixtures", "Players and fixtures: the roles and minutes to trust. We’ll also look at which teams have the most promising matchups ahead."),
+        ("03_projected_goals", "numbers", "NUMBERS BEHIND THE POINTS", "Actual returns and model estimates kept separate",
+         "Numbers behind the points", "Numbers behind the points: opportunity beyond a single return. We’ll separate what players have already delivered from what the model projects and what the market is doing."),
     ]
-    cards = [dict(key=k, title=t, subtitle=s, anchor=a, speech=v) for k,t,s,a,v in rows]
+    cards = [dict(key=k, title=t, subtitle=s, anchor=a, speech=v)
+             for scene, k, t, s, a, v in rows if scene in selected_scenes]
     if brief:
+        by_key = {card["key"]: card for card in cards}
         score = brief["scoreboard"]["Official GW points"]
         rank = brief["scoreboard"]["Rank movement"]
-        cards[0]["subtitle"] = f"GW{review_gw} · {format_datum(score)} points · rank movement {format_datum(rank)} · {brief['status']}"
-        if not brief.get("modelDataAvailable") and brief["projections"]["xPts"]["freshnessStatus"] != "fresh":
-            cards[2]["subtitle"] = "Actual returns verified where sourced · projection unavailable"
-        else:
-            cards[2]["subtitle"] = "FPL VORTEX model estimates · actual points kept separate"
+        by_key["review"]["subtitle"] = f"GW{review_gw} · {format_datum(score)} points · rank movement {format_datum(rank)} · {brief['status']}"
+        if "numbers" in by_key:
+            if not brief.get("modelDataAvailable") and brief["projections"]["xPts"]["freshnessStatus"] != "fresh":
+                by_key["numbers"]["subtitle"] = "Actual returns verified where sourced · projection unavailable"
+            else:
+                by_key["numbers"]["subtitle"] = "FPL VORTEX model estimates · actual points kept separate"
         if not brief["personalTeamAvailable"]:
-            cards[0]["subtitle"] = f"GW{review_gw} · Presenter team unavailable"
-        cards[4]["subtitle"] = "Current XI not verified · conditional options, no invented team"
+            by_key["review"]["subtitle"] = f"GW{review_gw} · Presenter team unavailable"
     return cards
 
 
