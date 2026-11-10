@@ -87,6 +87,15 @@ def narration_parts(board):
         parts.append((p["id"],
             f"Bench option {index}, {_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, costs {price(p['price'])}. "
             f"His next gameweek projection is {float(p['nextGwXpts']):.2f}."))
+    market_leaders = sorted([*starters, *bench],
+                            key=lambda p: (-float(p.get("ownership", 0)), p["id"]))[:3]
+    for player in market_leaders:
+        flow = int(player.get("netTransfers", 0))
+        direction = "net transfers in" if flow >= 0 else "net transfers out"
+        parts.append((player["id"],
+                      f"Market trend: {_speaking_name(player)} is owned by "
+                      f"{float(player.get('ownership', 0)):.1f} percent of managers, "
+                      f"with {abs(flow):,} {direction} in the current gameweek snapshot."))
     names = {p["id"]: _speaking_name(p) for p in [*starters, *bench]}
     plans = {p["gameweek"]: p for p in board["weeklyPlans"]}
     for projection in board["projections"]:
