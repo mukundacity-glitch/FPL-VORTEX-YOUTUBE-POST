@@ -38,7 +38,7 @@ function PlayerCard({player, frame, fps, active}) {
     </div>
     <strong className="vb-name">{player.name || player.fullName || 'Unavailable'}</strong>
     <div className="vb-player-info"><span>{money(player.price)}</span><b>{fmt(player.nextGwXpts,2)} xPts</b></div>
-    <div className="vb-mini-fixtures">{list(player.fixtures).slice(0,5).map((f,i)=><Fixture key={f.id || i} fixture={f}/>)}</div>
+    <div className="vb-mini-fixtures">{list(player.fixtures).filter(f=>f.gw===player.nextGameweek).slice(0,1).map((f,i)=><Fixture key={f.id || i} fixture={f}/>)}{!list(player.fixtures).some(f=>f.gw===player.nextGameweek) && <span className="vb-next-empty">NEXT: BLANK / TBC</span>}</div>
   </article>;
 }
 
@@ -49,11 +49,11 @@ function Pitch({board, frame, fps, active}) {
     <div className="vb-pitch">
       <div className="vb-field-markings"><div className="vb-center-circle"/><div className="vb-goal-area vb-goal-area--top"/><div className="vb-goal-area vb-goal-area--bottom"/></div>
       {POSITIONS.map(pos=><div className={`vb-line vb-line--${pos.toLowerCase()}`} key={pos}>
-        {starters.filter(p=>p.position===pos).map(p=><PlayerCard key={p.id} player={p} frame={frame} fps={fps} active={active}/>)}
+        {starters.filter(p=>p.position===pos).map(p=><PlayerCard key={p.id} player={{...p,nextGameweek:board.nextGameweek}} frame={frame} fps={fps} active={active}/>)}
       </div>)}
     </div>
     <div className="vb-bench"><div className="vb-bench-title">BENCH <small>GK · FIRST · SECOND · THIRD</small></div>
-      <div className="vb-bench-grid">{list(board.bench).map((p,i)=><PlayerCard key={p.id || i} player={p} frame={frame} fps={fps} active={active}/>)}</div>
+      <div className="vb-bench-grid">{list(board.bench).map((p,i)=><PlayerCard key={p.id || i} player={{...p,nextGameweek:board.nextGameweek}} frame={frame} fps={fps} active={active}/>)}</div>
     </div>
   </section>;
 }
