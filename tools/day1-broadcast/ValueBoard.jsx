@@ -78,10 +78,10 @@ function FixturesPanel({board}) {
   </section>;
 }
 
-function ProjectionPanel({board}) {
+function ProjectionPanel({board, activeGameweek}) {
   return <section className="vb-projections-panel">
     <div className="vb-panel-heading"><strong>FIVE-GW OUTLOOK</strong><small>MODEL PROJECTIONS</small></div>
-    <div className="vb-projections">{list(board.projections).slice(0,5).map((p,i)=><div className="vb-projection" key={p.gameweek || i}>
+    <div className="vb-projections">{list(board.projections).slice(0,5).map((p,i)=><div className={`vb-projection ${p.gameweek===activeGameweek?"vb-projection--active":""}`} key={p.gameweek || i}>
       <span>GW{p.gameweek}</span><div className="vb-projection-track"><i style={{width:`${Math.max(0,Math.min(100,(p.xpts || 0)/Math.max(1,board.maxProjection || 1)*100))}%`}}/></div>
       <b>{fmt(p.xpts,1)}</b></div>)}</div>
     <div className="vb-market"><strong>MARKET · MOST OWNED PICKS</strong>
@@ -98,10 +98,25 @@ export default function ValueBoard({board}) {
     throw new Error('Scene 05 requires a verified 11-player starting XI and four bench players');
   }
   const seconds = frame/fps;
-  const active = list(board.narrationCues).find(c=>seconds>=c.start && seconds<c.end)?.playerId;
+  const cue = list(board.narrationCues).find(c=>seconds>=c.start && seconds<c.end);
+  const active = cue?.playerId;
+  const activeGameweek = cue?.gameweek || board.nextGameweek;
+  const plan = list(board.weeklyPlans).find(p=>p.gameweek===activeGameweek);
+  const byId = new Map([...board.starters,...board.bench].map(p=>[p.id,p]));
+  const activeBoard = plan ? {
+    ...board,
+    nextGameweek: activeGameweek,
+    formation: plan.formation,
+    starters: plan.starters.map(id=>({...byId.get(id),
+      nextGwXpts:byId.get(id)?.weekly?.[activeGameweek],
+      captain:id===plan.captainId,viceCaptain:id===plan.viceCaptainId})),
+    bench: plan.bench.map(id=>({...byId.get(id),
+      nextGwXpts:byId.get(id)?.weekly?.[activeGameweek],
+      captain:false,viceCaptain:false}))
+  } : board;
   return <main className="vb-layout">
-    <Pitch board={board} frame={frame} fps={fps} active={active}/>
+    <Pitch board={activeBoard} frame={frame} fps={fps} active={active}/>
     <FixturesPanel board={board}/>
-    <ProjectionPanel board={board}/>
+    <ProjectionPanel board={board} activeGameweek={activeGameweek}/>
   </main>;
 }
