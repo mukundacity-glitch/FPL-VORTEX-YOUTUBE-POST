@@ -95,6 +95,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
             tiles.append({
                 "id": fixture["id"],
                 "gw": fixture["event"],
+                "opponentId": opponent["id"],
                 "opponentShortName": opponent["short"],
                 "opponentFullName": opponent["name"],
                 "venue": "H" if home else "A",
