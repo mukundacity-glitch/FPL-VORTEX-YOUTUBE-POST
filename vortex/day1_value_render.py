@@ -24,8 +24,8 @@ from PIL import Image
 from .day1_value_live import make_live_value_board
 
 
-def run(*args):
-    process = subprocess.run([str(x) for x in args], capture_output=True, text=True)
+def run(*args, cwd=None):
+    process = subprocess.run([str(x) for x in args], capture_output=True, text=True, cwd=cwd)
     if process.returncode:
         raise RuntimeError(f"{args[0]} failed: {process.stderr[-3500:]}")
     return process.stdout
@@ -201,7 +201,7 @@ def integrate(output_root, *, remotion_root):
         write_json(props_path, props)
         clip_1080 = work / "value-board-1080.mp4"
         run("npx", "remotion", "render", "index.jsx", "ValueBoardStandalone",
-            clip_1080, "--props", props_path, "--codec", "h264", "--log", "error")
+            clip_1080, "--props", props_path, "--codec", "h264", cwd=remotion_root)
         clip = work / "value-board-4k.mp4"
         run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-i", clip_1080, "-vf", "scale=3840:2160:flags=lanczos,setsar=1",
