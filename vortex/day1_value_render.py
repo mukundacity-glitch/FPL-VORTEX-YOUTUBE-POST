@@ -71,24 +71,33 @@ def narration_parts(board):
     parts = [(None, f"Welcome to FPL VORTEX, The Value Board. For gameweek {gw}, "
                    f"our researched squad costs {price(board['totalCost'])}, "
                    f"with a {board['formation']} starting formation. "
+                   "We prioritise verified minutes, official injury flags, fixture difficulty, "
+                   "predicted points, price value and actual market ownership trends. "
                    "Expected points are estimates, not guaranteed returns.")]
     for p in starters:
         part = ("Our captain, " if p.get("captain") else
                 "Our vice-captain, " if p.get("viceCaptain") else "Next, ")
         total = sum(float(v) for v in p["weekly"].values())
         parts.append((p["id"],
-            f"{part}{_speaking_name(p)}, at {price(p['price'])}. "
+            f"{part}{_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, at {price(p['price'])}. "
+            f"He averages {float(p.get('minutesPerAppearance',0)):.1f} recent minutes per appearance. "
             f"The model estimates {float(p['nextGwXpts']):.2f} points next gameweek, "
             f"and {total:.2f} points across the next five fixtures."))
     for index, p in enumerate(bench, 1):
         parts.append((p["id"],
-            f"Bench option {index}, {_speaking_name(p)}, costs {price(p['price'])}. "
+            f"Bench option {index}, {_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, costs {price(p['price'])}. "
             f"His next gameweek projection is {float(p['nextGwXpts']):.2f}."))
+    names = {p["id"]: _speaking_name(p) for p in [*starters, *bench]}
+    plans = {p["gameweek"]: p for p in board["weeklyPlans"]}
     for projection in board["projections"]:
-        parts.append((None, f"Gameweek {projection['gameweek']}: our optimal "
-                            f"eleven with projected captaincy is estimated at "
-                            f"{projection['xpts']:.2f} expected points. "
-                            "Starting elevens can change with team news."))
+        plan = plans[projection["gameweek"]]
+        captain_name = names[plan["captainId"]]
+        reserve_names = ", ".join(names[pid] for pid in plan["bench"])
+        parts.append((None, f"Gameweek {projection['gameweek']}: the optimal "
+                            f"{plan['formation']} lineup, with {captain_name} as captain, "
+                            f"is estimated at {projection['xpts']:.2f} expected points. "
+                            f"Our four bench players are {reserve_names}. "
+                            "Review actual starting lineups before the deadline."))
     parts.append((None, "That is our five gameweek Value Board. Check late "
                          "injury updates, official lineups and deadlines before "
                          "making transfers. Subscribe to FPL VORTEX for the next analysis."))
