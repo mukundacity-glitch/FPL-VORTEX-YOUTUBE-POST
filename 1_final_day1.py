@@ -24319,11 +24319,20 @@ else:
                     float(_vx17_timeline["first_player_at"]) - 1.0 / FPS
                 )
                 goalkeeper_done = float(_vx17_timeline["first_player_at"]) + 0.50
-                goalkeeper_exit_mid = (
-                    float(_vx17_first_segment["hero_exit_at"])
-                    + float(_vx17_first_segment["hero_off"])
-                ) / 2.0
-                goalkeeper_exit_done = float(_vx17_first_segment["hero_off"]) + 0.05
+                # The actual Hero opacity fades during the LAST 120 ms of
+                # measured speech, then the existing Hero Card flies into
+                # its pitch slot AFTER speech. Old hero_exit_at/hero_off
+                # metadata do not describe this live seek engine and must
+                # not be used for pitch-presence assertions.
+                goalkeeper_speech_end = float(_vx17_first_segment["speech_end_at"])
+                goalkeeper_exit_mid = goalkeeper_speech_end - 0.06
+                goalkeeper_exit_done = goalkeeper_speech_end + 0.05
+                goalkeeper_landed = (
+                    goalkeeper_speech_end
+                    + float(_vx17_timeline.get("hero_to_pitch_duration") or 0.56)
+                    + float(_vx17_timeline.get("entrance_duration") or 0.42)
+                    + 0.05
+                )
                 final_times = _vx17_final_hold_times((N_FRAMES - 1) / FPS)
 
                 checkpoint_times = {
@@ -24335,6 +24344,7 @@ else:
                     "goalkeeper_visible":goalkeeper_done,
                     "goalkeeper_exiting":goalkeeper_exit_mid,
                     "goalkeeper_hero_gone":goalkeeper_exit_done,
+                    "goalkeeper_landed":goalkeeper_landed,
                     "final_start":final_times[0],
                     "final_mid":final_times[1],
                     "final_end":final_times[2],
@@ -24367,25 +24377,37 @@ else:
                 if checkpoint_states["before_goalkeeper"]["pitchPlayers"] != 0:
                     raise RuntimeError("GW Review goalkeeper appeared before Ryan said their name.")
                 goalkeeper_state = checkpoint_states["goalkeeper_visible"]
-                if goalkeeper_state["pitchPlayers"] != 1 or goalkeeper_state["hero"] < 0.88:
+                if goalkeeper_state["pitchPlayers"] != 0 or goalkeeper_state["hero"] < 0.88:
                     raise RuntimeError(
-                        "GW Review goalkeeper hero/pitch reveal is not synchronized: "
+                        "GW Review goalkeeper Hero must be revealed during narration "
+                        "before its card flies back to the pitch: "
                         f"{goalkeeper_state}"
                     )
                 exiting_state = checkpoint_states["goalkeeper_exiting"]
                 if (
                     not (0.02 < exiting_state["hero"] < 0.98)
-                    or exiting_state["pitchPlayers"] < 1
+                    or exiting_state["pitchPlayers"] != 0
+                    or exiting_state["heroFlight"] > 0.05
                 ):
                     raise RuntimeError(
-                        "GW Review goalkeeper exit removed the wrong content: "
+                        "GW Review goalkeeper speech-end fade is not synchronized: "
                         f"{exiting_state}"
                     )
                 gone_state = checkpoint_states["goalkeeper_hero_gone"]
-                if gone_state["hero"] > 0.05 or gone_state["pitchPlayers"] < 1:
+                if (gone_state["hero"] > 0.05
+                        or gone_state["pitchPlayers"] != 0
+                        or gone_state["heroFlight"] < 0.1):
                     raise RuntimeError(
-                        "GW Review goalkeeper marker did not persist after hero exit: "
+                        "GW Review goalkeeper Hero did not begin its flight after speech: "
                         f"{gone_state}"
+                    )
+                landed_state = checkpoint_states["goalkeeper_landed"]
+                if (landed_state["pitchPlayers"] < 1
+                        or landed_state["settledSquad"] < 1
+                        or landed_state["heroFlight"] > 0.05):
+                    raise RuntimeError(
+                        "GW Review goalkeeper marker did not persist on pitch after flight: "
+                        f"{landed_state}"
                     )
 
                 metric_pulse = float(
