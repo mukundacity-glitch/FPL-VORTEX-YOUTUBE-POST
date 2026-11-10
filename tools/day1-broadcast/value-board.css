@@ -83,3 +83,10 @@
 .vb-projection--active { border:1px solid #70ebff; margin:-2px -4px; padding:2px 4px; border-radius:8px; background:#1161904a; box-shadow:0 0 14px #49e5ff44; }
 .vb-projection--active>span,.vb-projection--active>b { color:#72faff; }
 .vb-projection--active .vb-projection-track i { background:linear-gradient(90deg,#ffe65c,#ffb247); }
+
+/* Broadcast-mobile legibility pass: names and numerical labels win over decoration. */
+.vb-line .vb-name { font-size:22px; min-height:40px; }
+.vb-player-info { font-size:15px; }
+.vb-player-info b { font-size:15px; }
+.vb-bench-grid .vb-name { font-size:20px; min-height:38px; }
+.vb-mini-fixtures .vb-fixture b { font-size:18px; }
