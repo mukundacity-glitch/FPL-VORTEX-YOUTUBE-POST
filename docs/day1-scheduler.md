@@ -50,7 +50,7 @@ release requires separate approval and an explicit policy change.
 - Scheduling and idempotency: **Day 1 scheduler (finalized FPL only, private upload)**.
 - Safe scheduler tests: **Day 1 scheduler contracts (no production)**.
 - Official snapshot: `DATA/scene05_value_board.json` and
-  `DATA/day1_production_identity.json` when the full run has succeeded.
+  the persistent issue ledger when the full run has succeeded.
 - Visual/audio scan: `DATA/day1_final_media_scan.json`.
 - Evidence frames: `SLIDE/final-scene-*.png`.
 - If a production fails, inspect the failing Day 1 run log and ledger issue.
