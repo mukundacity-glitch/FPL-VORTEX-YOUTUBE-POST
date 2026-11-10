@@ -64,3 +64,17 @@
 .vb-mini-fixtures .vb-fixture em { font-size:15px; font-weight:800; }
 .vb-mini-fixtures .vb-fixture strong { font-size:17px; }
 .vb-next-empty { width:100%; text-align:center; background:#334966; color:#fff; font-size:13px; font-weight:800; padding:5px 2px; border-radius:4px; }
+
+/* Readable data and club-crest safe regions, avoiding image/face collisions. */
+.vb-photo { padding-right:24%; }
+.vb-headshot { width:76%; object-position:32% bottom; }
+.vb-crest { width:29px; height:29px; right:2%; top:2%; background:#091932; }
+.vb-name { white-space:normal; overflow-wrap:break-word; display:flex; justify-content:center; align-items:center; min-height:36px; max-height:40px; font-size:19px; line-height:1; overflow:hidden; text-overflow:clip; }
+.vb-market { margin-top:16px; padding-top:10px; border-top:2px solid #3f688a; }
+.vb-market>strong { color:#68e9ff; font-size:18px; display:block; margin-bottom:10px; line-height:1.08; }
+.vb-market-row { display:flex; align-items:center; gap:5px; justify-content:space-between; padding:6px 0; border-bottom:1px solid #39496c; font-size:16px; }
+.vb-market-row span { min-width:0; overflow-wrap:anywhere; font-weight:700; }
+.vb-market-row b { color:#ffe362; font-size:17px; }
+.vb-market-row em { font-style:normal; font-size:13px; font-weight:900; }
+.vb-market-rise { color:#5df4ad; }
+.vb-market-fall { color:#ff8aa7; }
