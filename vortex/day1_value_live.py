@@ -202,7 +202,8 @@ def make_live_value_board(*, session=None, snapshot=None):
         series = []
         for index, week in enumerate(range(gw, gw+5)):
             match_scores = [_model_points(player, rating, avg, next_gw=index==0)
-                            for _, rating in _week_ratings(fixtures, player["team"], week)]
+                            for fixture_id, rating in _week_ratings(fixtures, player["team"], week)
+                            if fixture_id is not None]
             score = sum(match_scores)
             series.append(round(score, 3))
             forecast.append({"player_id": player["id"], "team_id": player["team"],
