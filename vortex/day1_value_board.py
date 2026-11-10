@@ -1,9 +1,9 @@
 """Scene 05 reusable Value Board payload — no screenshot data, no speculative values.
 
-The existing squad optimiser remains the source of the 15 selected players.
-This module verifies that squad and derives the best legal XI for each of the
-next five GWs from the supplied model forecasts. It does NOT choose 15 players
-from the full player pool or fetch unverified market data.
+The separate live FPL optimiser selects 15 players using only the current
+verified snapshot. This module checks that selected squad and derives the best
+legal XI, captain and bench for each of the next five GWs from the supplied
+research-model forecasts. It never substitutes screenshot values.
 """
 from collections import Counter
 from itertools import combinations
