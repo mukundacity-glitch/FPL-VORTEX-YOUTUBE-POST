@@ -63,6 +63,23 @@ class LiveValueTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_next_gw([{"id": 11, "is_next": False}])
 
+    def test_timed_fixture_and_captain_adjusted_plan(self):
+        snap = snapshot()
+        snap["fixtures"][0]["kickoff_time"] = "2026-11-21T12:30:00Z"
+        board = make_live_value_board(snapshot=snap)
+        fixture = board["nextFixtures"][0]
+        self.assertEqual(fixture["kickoffLabel"], "Sat 21 Nov 12:30 GMT")
+        self.assertTrue(fixture["homeBadge"].endswith("t801.png"))
+        players = {p["id"]: p for p in board["starters"] + board["bench"]}
+        for plan in board["weeklyPlans"]:
+            captain = players[plan["captainId"]]
+            self.assertIn(captain["id"], plan["starters"])
+            self.assertIn(plan["viceCaptainId"], plan["starters"])
+            self.assertNotEqual(plan["captainId"], plan["viceCaptainId"])
+            base = sum(players[pid]["weekly"][plan["gameweek"]] for pid in plan["starters"])
+            self.assertEqual(plan["startingXiXpts"], round(base, 2))
+            self.assertEqual(plan["captainAdjustedXpts"], round(base + captain["weekly"][plan["gameweek"]], 2))
+
 
 if __name__ == "__main__":
     unittest.main()

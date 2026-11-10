@@ -93,7 +93,8 @@ def narration_parts(board):
         )
         parts.append((p["id"],
             f"{part}{_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, at {price(p['price'])}. "
-            f"He averages {float(p.get('minutesPerAppearance',0)):.1f} recent minutes per appearance. "
+            f"The minutes input is {float(p['minutesPerAppearance']):.1f} per match, based on "
+            f"{'recent results' if p.get('minutesSource') == 'official last five match records' else 'season totals'}. "
             f"{fixture_text}"
             f"The model estimates {float(p['nextGwXpts']):.2f} points next gameweek, "
             f"and {total:.2f} points across the next five gameweeks."))
@@ -192,7 +193,17 @@ def local_assets(board, root):
 
         for p in [*board["starters"], *board["bench"]]:
             path = root / f"player-{p['id']}.png"
-            p["portrait"] = "/value-assets/" + path.name if _asset(session, p.get("portrait"), path) else ""
+            code = p.get("photoCode")
+            candidates = [p.get("portrait")]
+            if code:
+                candidates += [
+                    f"https://resources.premierleague.com/premierleague25/photos/players/250x250/{code}.png",
+                    f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png",
+                    f"https://resources.premierleague.com/premierleague/photos/players/110x140/p{code}.png",
+                ]
+            p["portrait"] = "/value-assets/" + path.name if any(
+                _asset(session, source, path) for source in candidates
+            ) else ""
             p["clubLogo"] = crest(p.get("clubLogo"), f"club-{p['teamId']}.png")
         for fixture in board["nextFixtures"]:
             for side in ("home", "away"):

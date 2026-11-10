@@ -32,7 +32,8 @@ function PlayerCard({player, frame, fps, active}) {
   const pulse = cue ? interpolate(frame % Math.max(1, fps), [0, Math.max(1, fps)/2, Math.max(1, fps)], [0, 1, 0]) : 0;
   return <article className={`vb-player ${cue?'vb-player--active':''}`} style={{'--vb-pulse':pulse}} aria-label={player.fullName || player.name}>
     <div className="vb-photo">
-      {photo && <Img src={photo} alt="" className="vb-headshot"/>}
+      {photo ? <Img src={photo} alt="" className="vb-headshot"/> :
+        <span className="vb-headshot-unavailable">Photo unavailable</span>}
       <Crest player={player}/>
       {player.captain && <span className="vb-captain">C</span>}
       {player.viceCaptain && <span className="vb-captain vb-captain--vice">VC</span>}

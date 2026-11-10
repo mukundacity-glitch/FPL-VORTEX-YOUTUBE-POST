@@ -96,7 +96,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
         team_fixtures = sorted(
             (f for f in fixtures if gameweek <= f.get("event", -1) < gameweek + 5
              and tid in (f.get("team_h"), f.get("team_a"))),
-            key=lambda f: (f["event"], f.get("kickoff_time") or "", f["id"]),
+            key=lambda f: (f["event"], not f.get("kickoff_time"), f.get("kickoff_time") or "", f["id"]),
         )
         tiles = []
         for fixture in team_fixtures:
@@ -159,7 +159,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
     bench = [{**p, "nextGwXpts": p["weekly"][gameweek]} for p in bench]
     next_matches = sorted(
         (f for f in fixtures if f.get("event") == gameweek),
-        key=lambda f: (f.get("kickoff_time") or "", f["id"]),
+        key=lambda f: (not f.get("kickoff_time"), f.get("kickoff_time") or "", f["id"]),
     )
     next_fixtures = [{
         "id": f["id"],

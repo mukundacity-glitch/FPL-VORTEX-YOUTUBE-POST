@@ -95,5 +95,6 @@
 .vb-match-clubs b { display:flex;align-items:center;gap:8px; }
 .vb-match-clubs img { width:24px;height:24px;object-fit:contain; }
 .vb-match-time { font-size:15px; }
+.vb-headshot-unavailable { align-self:center;color:#c6d8ea;font-size:13px;text-align:center; }
 .vb-fixture + .vb-fixture, .vb-fixture:has(+ .vb-fixture) { gap:3px; }
 .vb-fixture + .vb-fixture > *, .vb-fixture:has(+ .vb-fixture) > * { font-size:12px; }

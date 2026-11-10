@@ -36,18 +36,35 @@ def verify(root: Path):
 
     elapsed = 0.0
     frames = []
+
+    def capture(name, timestamp, scene):
+        _run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+              "-ss", f"{timestamp:.3f}", "-i", str(video), "-frames:v", "1",
+              str(root / "SLIDE" / name)])
+        frames.append({"file": name, "scene": scene, "seconds": timestamp})
+
     for number, section in enumerate(sections, 1):
         seconds = float(section["duration"])
         start = float(section.get("start_seconds", elapsed))
         if seconds <= 0 or abs(start - elapsed) > 0.5:
             raise ValueError(f"Invalid scene timing for {section['key']}")
         timestamp = start + seconds / 2
-        name = f"final-scene-{number:02d}.png"
-        _run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-              "-ss", f"{timestamp:.3f}", "-i", str(video), "-frames:v", "1",
-              str(root / "SLIDE" / name)])
-        frames.append({"file": name, "scene": section["key"], "seconds": timestamp})
+        capture(f"final-scene-{number:02d}.png", timestamp, section["key"])
         elapsed = start + seconds
+
+    board = json.loads((data / "scene05_value_board.json").read_text())
+    weekly_cues = {
+        cue["gameweek"]: cue for cue in board["narrationCues"] if cue.get("gameweek")
+    }
+    expected_weeks = [plan["gameweek"] for plan in board["weeklyPlans"]]
+    if len(expected_weeks) != 5 or set(weekly_cues) != set(expected_weeks):
+        raise ValueError("Scene 05 is missing measured cues for its five weekly plans")
+    for week in expected_weeks:
+        cue = weekly_cues[week]
+        if not 0 <= cue["start"] < cue["end"] <= seconds:
+            raise ValueError(f"Scene 05 timing is invalid for GW{week}")
+        capture(f"final-scene-05-gw{week:02d}.png",
+                start + (cue["start"] + cue["end"]) / 2, sections[-1]["key"])
 
     length = float(media["format"]["duration"])
     passed = not black and not silence and peak is not None and float(peak[1]) < 0
