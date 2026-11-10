@@ -1316,6 +1316,8 @@ if _loaded_module_file != _FPL_DATA_MODULE_FILE:
     )
 
 fetch_fpl_data = _fpl_module.fetch_fpl_data
+_vx_http_session = _fpl_module._vx_http_session
+_vx_get_json = _fpl_module._vx_get_json
 data = fetch_fpl_data()
 
 _required_completion_contract = {
