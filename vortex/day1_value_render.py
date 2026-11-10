@@ -148,6 +148,10 @@ def _asset(session, source, destination):
 
 
 def local_assets(board, root):
+    if root.name != "value-assets" or root.parent.name != "public":
+        raise ValueError("Refusing to clean assets outside the Scene 05 public cache")
+    if root.exists():
+        shutil.rmtree(root)
     root.mkdir(parents=True, exist_ok=True)
     original = Path(os.environ.get("DAY1_LOGO_FILE", "/content/drive/MyDrive/elements/logo.png"))
     if not original.is_file():
