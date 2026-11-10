@@ -202,10 +202,17 @@ def make_live_value_board(*, session=None, snapshot=None):
             continue
         series = []
         for index, week in enumerate(range(gw, gw+5)):
-            match_scores = [_model_points(player, rating, avg, next_gw=index==0)
-                            for fixture_id, rating in _week_ratings(fixtures, player["team"], week)
-                            if fixture_id is not None]
+            actual_fixtures = [(fid, rating) for fid, rating in
+                               _week_ratings(fixtures, player["team"], week) if fid is not None]
+            match_scores = [_model_points(player, rating, avg, next_gw=index==0 and len(actual_fixtures)==1)
+                            for _, rating in actual_fixtures]
             score = sum(match_scores)
+            if index == 0 and len(match_scores) > 1:
+                # ep_next is a whole-GW estimate; never apply it once per
+                # fixture or a double gameweek will double count the signal.
+                ep = fnum(player.get("ep_next"), -1.0)
+                if ep >= 0:
+                    score = .75 * score + .25 * ep * _status_factor(player)
             series.append(round(score, 3))
             forecast.append({"player_id": player["id"], "team_id": player["team"],
                              "gameweek": week, "gameweek_expected_points": score})
