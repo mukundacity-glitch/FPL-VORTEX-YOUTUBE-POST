@@ -1,4 +1,5 @@
 name: Day 1
+run-name: FPL VORTEX DAY 1 | ${{ inputs.production_identity || github.ref_name }}
 
 on:
   push:
@@ -10,6 +11,10 @@ on:
       - '.github/workflows/day-1.yml'
   workflow_dispatch:
     inputs:
+      production_identity:
+        description: Stable season/review/preview identity for scheduler ledger
+        type: string
+        default: ''
       release_private:
         description: Save to Drive and upload privately after QA
         type: boolean
