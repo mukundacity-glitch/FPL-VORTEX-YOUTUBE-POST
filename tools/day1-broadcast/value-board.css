@@ -92,3 +92,8 @@
 .vb-mini-fixtures .vb-fixture b { font-size:18px; }
 
 .vb-crest--fallback { display:flex;align-items:center;justify-content:center;background:#183963;color:#fff;font-size:10px;font-weight:900;letter-spacing:-.05em;border:1px solid #69dfff; }
+.vb-match-clubs b { display:flex;align-items:center;gap:8px; }
+.vb-match-clubs img { width:24px;height:24px;object-fit:contain; }
+.vb-match-time { font-size:15px; }
+.vb-fixture + .vb-fixture, .vb-fixture:has(+ .vb-fixture) { gap:3px; }
+.vb-fixture + .vb-fixture > *, .vb-fixture:has(+ .vb-fixture) > * { font-size:12px; }

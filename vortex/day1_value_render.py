@@ -96,7 +96,7 @@ def narration_parts(board):
             f"He averages {float(p.get('minutesPerAppearance',0)):.1f} recent minutes per appearance. "
             f"{fixture_text}"
             f"The model estimates {float(p['nextGwXpts']):.2f} points next gameweek, "
-            f"and {total:.2f} points across the next five fixtures."))
+            f"and {total:.2f} points across the next five gameweeks."))
     for index, p in enumerate(bench, 1):
         parts.append((p["id"],
             f"Bench option {index}, {_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, costs {price(p['price'])}. "
@@ -182,13 +182,22 @@ def local_assets(board, root):
     with Image.open(original) as img:
         img.convert("RGBA").save(root / "original-logo.png", format="PNG")
     with requests.Session() as session:
+        crests = {}
+
+        def crest(source, filename):
+            if source and source not in crests:
+                path = root / filename
+                crests[source] = "/value-assets/" + path.name if _asset(session, source, path) else ""
+            return crests.get(source, "")
+
         for p in [*board["starters"], *board["bench"]]:
-            for field, prefix in (("portrait", "player"), ("clubLogo", "club")):
-                path = root / f"{prefix}-{p['id']}.png"
-                if _asset(session, p.get(field), path):
-                    p[field] = "/value-assets/" + path.name
-                else:
-                    p[field] = ""
+            path = root / f"player-{p['id']}.png"
+            p["portrait"] = "/value-assets/" + path.name if _asset(session, p.get("portrait"), path) else ""
+            p["clubLogo"] = crest(p.get("clubLogo"), f"club-{p['teamId']}.png")
+        for fixture in board["nextFixtures"]:
+            for side in ("home", "away"):
+                field = f"{side}Badge"
+                fixture[field] = crest(fixture.get(field), f"match-{fixture['id']}-{side}.png")
 
 
 def _check_previous_program(qa, review, board):
@@ -237,15 +246,9 @@ def integrate(output_root, *, remotion_root):
                  "durationInFrames": int(math.ceil((voice_duration + .5) * 30))}
         props_path = work / "value-board-props.json"
         write_json(props_path, props)
-        clip_1080 = work / "value-board-1080.mp4"
-        run("npx", "remotion", "render", "index.jsx", "ValueBoardStandalone",
-            clip_1080, "--props", props_path, "--codec", "h264", cwd=remotion_root)
         clip = work / "value-board-4k.mp4"
-        run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-i", clip_1080, "-vf", "scale=3840:2160:flags=lanczos,setsar=1",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
-            "-ar", "48000", "-movflags", "+faststart", clip)
+        run("npx", "remotion", "render", "index.jsx", "ValueBoardStandalone",
+            clip, "--props", props_path, "--codec", "h264", "--scale", "2", cwd=remotion_root)
         if video_size(clip) != (3840, 2160):
             raise RuntimeError("Scene 05 video dimensions invalid")
         scene_duration = duration(clip)
@@ -279,7 +282,7 @@ def integrate(output_root, *, remotion_root):
         board["narrationCues"] = props["board"]["narrationCues"]
         write_json(data / "scene05_value_board.json", board)
         write_json(data / "scene05_narration.json", cues)
-        append = {"key": "04_value_board", "scene": "THE VALUE BOARD",
+        append = {"key": "04_value_board", "scene": "THE VALUE BOARD", "order": 5,
                   "duration": scene_duration, "start_seconds": before_seconds}
         qa.setdefault("sections", []).append(append)
         qa["scene_keys"].append("04_value_board")
