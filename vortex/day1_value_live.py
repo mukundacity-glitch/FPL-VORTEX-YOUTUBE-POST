@@ -250,6 +250,9 @@ def make_live_value_board(*, session=None, snapshot=None):
     for row in [*board["starters"], *board["bench"]]:
         raw = market_by_id[row["id"]]
         row["clubSpeechName"] = full_club_name({**team_map[raw["team"]], "code": next(t["code"] for t in raw_teams if t["id"] == raw["team"])}, speech=True)
+        for tile in row["fixtures"]:
+            opponent_id = tile["opponentId"]
+            tile["opponentSpeechName"] = full_club_name({**team_map[opponent_id], "code": next(t["code"] for t in raw_teams if t["id"] == opponent_id)}, speech=True)
         row["ownership"] = round(fnum(raw.get("selected_by_percent")), 1)
         row["netTransfers"] = int(fnum(raw.get("transfers_in_event")) - fnum(raw.get("transfers_out_event")))
         row["minutesPerAppearance"] = round(_recent_minutes(raw, recent.get(row["id"], [])), 1)
