@@ -47,7 +47,8 @@ def build_market_desk(bootstrap):
             continue
         row = groups[action][0]
         p = by_id[int(row['player_id'])]
-        name = str(p['web_name'])
+        name = ' '.join(str(p.get(field) or '').strip() for field in ('first_name', 'second_name')).strip()
+        name = name or str(p['web_name'])
         incoming, outgoing = int(p['transfers_in_event']), int(p['transfers_out_event'])
         if action == 'BUY':
             reason = f'{incoming:,} transfers in against {outgoing:,} out in the current event. Official status is available. Compare the fixtures and likely minutes before buying.'

@@ -38,6 +38,14 @@ class MarketDeskTests(unittest.TestCase):
         self.assertIsNone(rows[1]['element'])
         self.assertIn('no player clears',rows[0]['text'])
 
+    def test_market_narration_uses_official_full_name_instead_of_display_initial(self):
+        boot = snapshot()
+        boot['elements'][0].update(web_name='N.Jackson', first_name='Nicolas', second_name='Jackson')
+        buy = build_market_desk(boot)[0]
+        self.assertIn('Nicolas Jackson', buy['text'])
+        self.assertNotIn('N.Jackson', buy['text'])
+        self.assertEqual(buy['element']['web_name'], 'N.Jackson')
+
     def test_agenda_promises_the_market_cards_that_will_actually_render(self):
         from vortex.day1_agenda import build_intro_agenda
         beats = ['headline','editorial_squad_context','editorial_routes',
