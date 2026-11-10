@@ -118,6 +118,7 @@ def _vx23_chapters(qa, review_gw):
         "gw_review": f"GW{review_gw} review",
         "02_fdr": "Fixture difficulty",
         "03_projected_goals": "Projected goals",
+        "04_value_board": "The Value Board · Best £100m Squad",
         "04_clean_sheets": "Clean-sheet odds",
         "05_outro": "Next video",
     }
@@ -170,6 +171,7 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
             "• TRANSFER TARGETS — BUY / HOLD / SELL",
             "• TRANSFER PLANS — ROLL, MOVE OR TAKE A HIT?",
             "• THE FINAL VORTEX VERDICT",
+            "• THE VALUE BOARD — 15 players under £100m, with five-GW projected lineups",
             "• All 15 original player cards; focused commentary on the key decisions",
             "",
             "CHAPTERS",
@@ -191,6 +193,7 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
         f"Gameweek {preview_gw}",
         "FPL review",
         "FPL VORTEX",
+        "FPL Value Board",
     ]
     if len(title) > 100:
         raise RuntimeError(f"YouTube title exceeds 100 characters: {len(title)}")
