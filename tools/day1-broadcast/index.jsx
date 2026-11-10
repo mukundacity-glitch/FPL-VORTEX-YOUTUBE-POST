@@ -15,14 +15,14 @@ function Broadcast({scene, media = false}) {
   const sourceHeight = scene.bottom - scene.top;
   const scale = Math.min(1, 868 / sourceHeight);
   const light = interpolate(frame, [0, fps * 1.15], [-35, 112], {extrapolateRight: 'clamp'});
-  return <AbsoluteFill className="canvas">
+  return <AbsoluteFill className={`canvas ${scene.number === 5 ? "canvas--value-board" : ""}`}>
     {media && <div className="scene-window" style={{width:1920*scale,height:sourceHeight*scale,left:(1920-1920*scale)/2,top:112+(868-sourceHeight*scale)/2}}>
       <OffthreadVideo src={staticFile(`scene-${scene.number}.mp4`)} style={{position:'absolute',top:-scene.top*scale,width:1920*scale,height:1080*scale}}/>
     </div>}
     <header className="rail header">
       <div className="sheen" style={{left:`${light}%`,opacity:light>100?0:.7}}/>
-      <div className="brand"><Img src={scene.logo || staticFile('vortex.jpg')}/><strong>FPL<br/>VORTEX</strong></div>
-      <div className="heading"><div>FPL VORTEX · DAY 1 · SCENE {String(scene.number).padStart(2,'0')}</div><h1>{scene.title}</h1></div>
+      <div className="brand" aria-label="FPL VORTEX official channel branding"><Img src={scene.logo || staticFile('vortex.jpg')} alt="FPL VORTEX original channel logo"/><strong>FPL<br/>VORTEX</strong></div>
+      <div className="heading"><div>FPL VORTEX · DAY 1 · SCENE {String(scene.number).padStart(2,'0')}</div><h1>{scene.title}</h1>{scene.number === 5 && <span className="value-board-kicker">THE BEST £100M SQUAD · NEXT FIVE GAMEWEEKS</span>}</div>
       <b className="gameweek">{scene.label}</b>
     </header>
     <footer className="rail footer">
