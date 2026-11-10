@@ -552,6 +552,14 @@ jobs:
           print("Day 1 execution: PASS")
           PY
 
+      - name: Build and verify live Scene 05 Value Board (official FPL API)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m vortex.day1_value_render
+          python -m unittest discover -s tests -p 'test_day1_value_board.py' -v
+          python -m unittest discover -s tests -p 'test_day1_broadcast.py' -v
+
       - name: Add opening and confirmed music mix
         shell: bash
         run: python -m vortex.day1_media
@@ -597,9 +605,15 @@ jobs:
               or qa.get("output_contract", {}).get("passed") is not True
           ):
               raise SystemExit("Final video QA did not pass")
-          expected_scene_keys = ["00_intro", "gw_review", "02_fdr", "03_projected_goals"]
+          expected_scene_keys = ["00_intro", "gw_review", "02_fdr", "03_projected_goals", "04_value_board"]
           if qa.get("scene_keys") != expected_scene_keys:
-              raise SystemExit(f"Day 1 must contain only Scenes 1–4 in order: {qa.get('scene_keys')}")
+              raise SystemExit(f"Day 1 must contain all five verified scenes in order: {qa.get('scene_keys')}")
+
+          scene5_qa = qa.get("scene05_verified") or {}
+          if scene5_qa.get("squad") != 15 or scene5_qa.get("start_xi") != 11 or scene5_qa.get("bench") != 4:
+              raise SystemExit("Scene 05 fifteen-player squad verification missing")
+          if scene5_qa.get("frame_size") != [3840, 2160] or not scene5_qa.get("sha256"):
+              raise SystemExit("Scene 05 4K source and hash verification missing")
 
           final_mp4s = [
               path for path in (root / "MP4").glob("*COMBINED*.mp4")
