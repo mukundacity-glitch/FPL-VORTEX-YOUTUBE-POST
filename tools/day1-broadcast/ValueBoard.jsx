@@ -84,6 +84,9 @@ function ProjectionPanel({board}) {
     <div className="vb-projections">{list(board.projections).slice(0,5).map((p,i)=><div className="vb-projection" key={p.gameweek || i}>
       <span>GW{p.gameweek}</span><div className="vb-projection-track"><i style={{width:`${Math.max(0,Math.min(100,(p.xpts || 0)/Math.max(1,board.maxProjection || 1)*100))}%`}}/></div>
       <b>{fmt(p.xpts,1)}</b></div>)}</div>
+    <div className="vb-market"><strong>MARKET · MOST OWNED PICKS</strong>
+      {[...list(board.starters),...list(board.bench)].filter(p=>Number.isFinite(p.ownership)).sort((a,b)=>b.ownership-a.ownership).slice(0,4).map(p=><div className="vb-market-row" key={p.id}><span>{p.name}</span><b>{fmt(p.ownership,1)}%</b><em className={p.netTransfers>=0?"vb-market-rise":"vb-market-fall"}>{p.netTransfers>=0?"▲":"▼"} {Math.abs(p.netTransfers || 0).toLocaleString("en-GB")}</em></div>)}
+    </div>
     <div className="vb-model-note">{board.modelLabel || 'Research estimates · Verify before deadline'}</div>
   </section>;
 }
