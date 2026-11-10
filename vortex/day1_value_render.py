@@ -102,7 +102,7 @@ def narration_parts(board):
         plan = plans[projection["gameweek"]]
         captain_name = names[plan["captainId"]]
         reserve_names = ", ".join(names[pid] for pid in plan["bench"])
-        parts.append((None, f"Gameweek {projection['gameweek']}: the optimal "
+        parts.append((-projection["gameweek"], f"Gameweek {projection['gameweek']}: the optimal "
                             f"{plan['formation']} lineup, with {captain_name} as captain, "
                             f"is estimated at {projection['xpts']:.2f} expected points. "
                             f"Our four bench players are {reserve_names}. "
@@ -215,7 +215,9 @@ def integrate(output_root, *, remotion_root):
         local_assets(board, assets)
         voice, cues, voice_duration = asyncio.run(render_voice(narration_parts(board), work))
         shutil.copy2(voice, assets / "scene-5-narration.mp3")
-        board["narrationCues"] = [dict(playerId=c["playerId"],start=c["start"],end=c["end"])
+        board["narrationCues"] = [dict(playerId=c["playerId"] if c["playerId"] > 0 else None,
+                                      gameweek=-c["playerId"] if c["playerId"] < 0 else None,
+                                      start=c["start"], end=c["end"])
                                  for c in cues if c["playerId"] is not None]
         props = {"board": board, "gameweek": board["nextGameweek"],
                  "durationInFrames": int(math.ceil((voice_duration + .5) * 30))}
