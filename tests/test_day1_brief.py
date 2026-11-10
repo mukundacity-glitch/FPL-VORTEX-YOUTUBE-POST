@@ -32,8 +32,8 @@ def snapshot():
                     for k in ("bootstrap","fixtures","picks","history","live")})
 
 
-def cards():
-    return build_intro_agenda(["00_intro","gw_review"],next_gw=10,review_gw=9,
+def cards(selected=("00_intro", "gw_review", "02_fdr", "03_projected_goals")):
+    return build_intro_agenda(selected,next_gw=10,review_gw=9,
         review_status="FINAL", review_segments=[{"id":x} for x in
             ("headline","editorial_squad_context","editorial_routes","editorial_verdict")])
 
@@ -170,7 +170,8 @@ class BriefFacts(unittest.TestCase):
 class BriefProduction(unittest.TestCase):
     def test_new_agenda_uses_exact_current_headings_and_anchors(self):
         self.assertEqual([c["title"] for c in cards()], ["GAMEWEEK REVIEW","PLAYERS AND FIXTURES",
-            "NUMBERS BEHIND THE POINTS","TRANSFER PRIORITIES","CAPTAINCY AND FINAL XI"])
+            "NUMBERS BEHIND THE POINTS"])
+        self.assertEqual([c["key"] for c in cards(("00_intro", "gw_review"))], ["review"])
         for c in cards():self.assertIn(c["anchor"].lower(),c["speech"].lower())
 
     def test_opening_cannot_be_disconnected_from_review(self):

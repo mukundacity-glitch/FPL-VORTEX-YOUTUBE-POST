@@ -36,7 +36,7 @@ class BriefBrowser(unittest.TestCase):
         for width,height in ((3840,2160),(1920,1080),(390,844),(320,740)):
             with self.subTest(width=width):
                 page=self.page(width,height)
-                self.assertEqual(page.locator('.agenda-card').count(),5)
+                self.assertEqual(page.locator('.agenda-card').count(),3)
                 self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'),width)
                 screenshots=os.environ.get('DAY1_BRIEF_SCREENSHOT_DIR')
                 if screenshots:
@@ -58,7 +58,7 @@ class BriefBrowser(unittest.TestCase):
         self.assertFalse(page.evaluate('document.body.classList.contains("video")'))
 
     def test_timed_handoff_is_ready_and_same_origin(self):
-        timeline=dict(hook=0,brand=4,title=9,cards=[14,17,20,23,26],transition=33,end=38)
+        timeline=dict(hook=0,brand=4,title=9,cards=[14,17,20],transition=33,end=38)
         child='<html><body id="actual-review">Verified review<script>window.__ready=true;window.__seek=t=>{document.body.dataset.seek=t}</script></body></html>'
         uri='data:text/html;base64,'+base64.b64encode(child.encode()).decode()
         page=self.page(timeline=timeline,review_uri=uri)
@@ -69,7 +69,7 @@ class BriefBrowser(unittest.TestCase):
         page.evaluate('window.__seek(37.9)')
         self.assertEqual(page.locator('.handoff').evaluate('(e)=>getComputedStyle(e).opacity'),'1')
         self.assertEqual(page.evaluate('document.querySelector("iframe").contentDocument.body.dataset.seek'),'0')
-        self.assertEqual(page.locator('.agenda-card.active').inner_text().splitlines()[1],'CAPTAINCY AND FINAL XI')
+        self.assertEqual(page.locator('.agenda-card.active').inner_text().splitlines()[1],'NUMBERS BEHIND THE POINTS')
 
 
 if __name__=='__main__':unittest.main()
