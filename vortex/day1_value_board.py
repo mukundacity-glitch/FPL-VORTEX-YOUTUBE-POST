@@ -161,6 +161,20 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
             raise ValueError("Narration cue references unknown player")
         if not (0 <= _number(cue.get("start"), "cue start") < _number(cue.get("end"), "cue end")):
             raise ValueError("Invalid narration cue")
+    weekly_plans = []
+    for week in range(gameweek, gameweek + 5):
+        xi, ids, captain, vice = lineups[week]
+        reserves = [p for p in players if p["id"] not in ids]
+        reserves.sort(key=lambda p: (p["position"] != "GK", -p["weekly"][week], p["id"]))
+        form = {pos: sum(p["position"] == pos for p in xi) for pos in ("DEF", "MID", "FWD")}
+        weekly_plans.append({
+            "gameweek": week,
+            "formation": "{}-{}-{}".format(form["DEF"], form["MID"], form["FWD"]),
+            "starters": [p["id"] for p in xi],
+            "bench": [p["id"] for p in reserves],
+            "captainId": captain,
+            "viceCaptainId": vice,
+        })
     return {
         "nextGameweek": gameweek,
         "formation": f"{sum(p['position']=='DEF' for p in starters)}-"
@@ -172,6 +186,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
         "bank": round(bank, 2),
         "fiveGwXpts": round(sum(p["xpts"] for p in projections), 2),
         "projections": projections,
+        "weeklyPlans": weekly_plans,
         "maxProjection": max(p["xpts"] for p in projections),
         "nextFixtures": next_fixtures,
         "modelLabel": model_label,
