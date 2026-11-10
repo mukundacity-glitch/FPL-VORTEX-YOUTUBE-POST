@@ -78,3 +78,8 @@
 .vb-market-row em { font-style:normal; font-size:13px; font-weight:900; }
 .vb-market-rise { color:#5df4ad; }
 .vb-market-fall { color:#ff8aa7; }
+
+/* The active week's XI and captain are switched on Ryan's measured GW cue. */
+.vb-projection--active { border:1px solid #70ebff; margin:-2px -4px; padding:2px 4px; border-radius:8px; background:#1161904a; box-shadow:0 0 14px #49e5ff44; }
+.vb-projection--active>span,.vb-projection--active>b { color:#72faff; }
+.vb-projection--active .vb-projection-track i { background:linear-gradient(90deg,#ffe65c,#ffb247); }
