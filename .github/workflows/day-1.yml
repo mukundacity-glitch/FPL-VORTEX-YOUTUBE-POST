@@ -101,7 +101,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_season_dedup.py' -v
           python -m unittest discover -s tests -p 'test_day1_player_card.py' -v
           python -m unittest discover -s tests -p 'test_day1_value_board.py' -v
-          python -m unittest discover -s tests -p 'test_day1_broadcast.py' -v
 
       - name: Verify private YouTube upload configuration
         if: github.ref == 'refs/heads/main' && inputs.release_private
@@ -181,6 +180,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_source_loader.py' -v
           python -m unittest discover -s tests -p 'test_day1_market_desk.py' -v
           python -m unittest discover -s tests -p 'test_day1_value_live.py' -v
+          python -m unittest discover -s tests -p 'test_day1_broadcast.py' -v
 
       - name: Install Chromium runtime
         shell: bash
