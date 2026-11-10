@@ -78,9 +78,23 @@ def narration_parts(board):
         part = ("Our captain, " if p.get("captain") else
                 "Our vice-captain, " if p.get("viceCaptain") else "Next, ")
         total = sum(float(v) for v in p["weekly"].values())
+        next_fixtures = [t for t in p["fixtures"] if t["gw"] == gw]
+        fixture_text = "A blank gameweek is currently scheduled. " if not next_fixtures else (
+            "The next fixture" + ("s are " if len(next_fixtures) > 1 else " is ") +
+            " and ".join(
+                f"versus {t.get('opponentSpeechName', t['opponentFullName'])} "
+                f"{'at home' if t['venue']=='H' else 'away'}, "
+                f"with difficulty {float(t['fdr']):.1f}"
+                if t.get("fdr") is not None else
+                f"versus {t.get('opponentSpeechName', t['opponentFullName'])} "
+                f"{'at home' if t['venue']=='H' else 'away'}"
+                for t in next_fixtures
+            ) + ". "
+        )
         parts.append((p["id"],
             f"{part}{_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, at {price(p['price'])}. "
             f"He averages {float(p.get('minutesPerAppearance',0)):.1f} recent minutes per appearance. "
+            f"{fixture_text}"
             f"The model estimates {float(p['nextGwXpts']):.2f} points next gameweek, "
             f"and {total:.2f} points across the next five fixtures."))
     for index, p in enumerate(bench, 1):
