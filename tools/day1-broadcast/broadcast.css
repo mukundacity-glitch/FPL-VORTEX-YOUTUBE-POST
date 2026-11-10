@@ -18,3 +18,12 @@ h1 { margin:0; color:#fff; font-size:51px; line-height:1.02; font-weight:900; te
 .icon.youtube svg { width:53px; height:50px }
 .icon.instagram { background:linear-gradient(35deg,#ffce58,#ff325e,#913cfb); border-radius:13px }
 .sheen { position:absolute; z-index:-1; width:300px; height:160%; top:-25%; transform:skew(-31deg); background:linear-gradient(90deg,transparent,#9235e344,#c771ff67,transparent); pointer-events:none }
+
+/* Scene 05 premium rail: retain the approved original crest; make the channel identity unmistakable. */
+.canvas--value-board .header { gap:24px; padding-left:24px; }
+.canvas--value-board .brand { min-width:298px; gap:18px; font-size:38px; padding-right:20px; }
+.canvas--value-board .brand img { width:74px; height:74px; object-fit:contain; background:#170d29; border-radius:12px; }
+.canvas--value-board .heading > div { font-size:20px; letter-spacing:.075em; }
+.canvas--value-board .heading h1 { font-size:48px; line-height:.97; }
+.canvas--value-board .value-board-kicker { display:block; margin-top:5px; font-size:17px; font-weight:800; letter-spacing:.08em; color:#45e4ff; }
+.canvas--value-board .gameweek { font-size:40px; padding:4px 16px; }
