@@ -12,7 +12,8 @@ const url = value => typeof value === 'string' && /^(https?:|data:|\/)/.test(val
 
 function Crest({player}) {
   const src = url(player.clubLogo);
-  return src ? <Img className="vb-crest" src={src} alt=""/> : null;
+  return src ? <Img className="vb-crest" src={src} alt=""/> :
+    <span className="vb-crest vb-crest--fallback" aria-label="Club crest unavailable">{player.clubShortName || "FC"}</span>;
 }
 
 function Fixture({fixture}) {
