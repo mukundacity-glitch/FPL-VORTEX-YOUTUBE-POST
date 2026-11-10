@@ -238,6 +238,13 @@ def make_live_value_board(*, session=None, snapshot=None):
     board["method"] = ("Weighted historic PPG/form, next-week FPL ep_next when provided, "
                        "xGI/90, injury availability, observed minutes and fixture FDR. "
                        "Constrained 15-player MILP, £100m, 3 per club.")
+    market_by_id = {p["id"]: p for p in selected}
+    for row in [*board["starters"], *board["bench"]]:
+        raw = market_by_id[row["id"]]
+        row["ownership"] = round(fnum(raw.get("selected_by_percent")), 1)
+        row["netTransfers"] = int(fnum(raw.get("transfers_in_event")) - fnum(raw.get("transfers_out_event")))
+        row["minutesPerAppearance"] = round(_recent_minutes(raw, recent.get(row["id"], [])), 1)
+        row["availability"] = raw.get("status") or "unknown"
     board["marketTrends"] = [
         {"playerId": p["id"], "ownership": fnum(p.get("selected_by_percent")),
          "transfersIn": p.get("transfers_in_event"), "transfersOut": p.get("transfers_out_event")}
