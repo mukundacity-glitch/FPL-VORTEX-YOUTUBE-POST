@@ -121,8 +121,11 @@ def _week_ratings(fixtures, team_id, gw):
     for fixture in matches:
         home = fixture["team_h"] == team_id
         # Official FDR is the starting point. FPL rates the opponent from 1-5.
-        rating = fnum(fixture.get("team_h_difficulty" if home else "team_a_difficulty"), 3.0)
-        out.append((fixture["id"], min(5.0, max(1.0, rating))))
+        raw_rating = fixture.get("team_h_difficulty" if home else "team_a_difficulty")
+        rating = fnum(raw_rating, None)
+        if rating is not None and not 1 <= rating <= 5:
+            rating = None
+        out.append((fixture["id"], rating))
     return out
 
 
@@ -204,7 +207,8 @@ def make_live_value_board(*, session=None, snapshot=None):
         for index, week in enumerate(range(gw, gw+5)):
             actual_fixtures = [(fid, rating) for fid, rating in
                                _week_ratings(fixtures, player["team"], week) if fid is not None]
-            match_scores = [_model_points(player, rating, avg, next_gw=index==0 and len(actual_fixtures)==1)
+            match_scores = [_model_points(player, rating if rating is not None else 3.0,
+                                          avg, next_gw=index==0 and len(actual_fixtures)==1)
                             for _, rating in actual_fixtures]
             score = sum(match_scores)
             if index == 0 and len(match_scores) > 1:
