@@ -24,6 +24,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       DAY1_AUTO_PRIVATE_UPLOAD: ${{ vars.DAY1_AUTO_PRIVATE_UPLOAD }}
+      DAY1_SCHEDULER_MAX_RETRIES: ${{ vars.DAY1_SCHEDULER_MAX_RETRIES }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

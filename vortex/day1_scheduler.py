@@ -15,7 +15,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-MAX_RETRIES = 3
+MAX_RETRIES = min(5, max(1, int(os.environ.get('DAY1_SCHEDULER_MAX_RETRIES') or '3')))
 TITLE_PREFIX = "FPL VORTEX DAY 1 | "
 MARK = "vortex-day1-state:"
 
