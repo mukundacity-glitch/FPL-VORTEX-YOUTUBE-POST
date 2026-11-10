@@ -17,7 +17,7 @@ function Crest({player}) {
 }
 
 function Fixture({fixture}) {
-  const rating = Number(fixture?.fdr);
+  const rating = fixture?.fdr == null ? Number.NaN : Number(fixture.fdr);
   const band = !Number.isFinite(rating) || rating<1 || rating>5 ? 'missing' :
     rating<=2.5 ? 'easy' : rating<=3 ? 'medium' : rating<=4 ? 'hard' : 'very-hard';
   return <span className={`vb-fixture vb-fixture--${band}`} title={fixture?.opponentFullName || ''}>
