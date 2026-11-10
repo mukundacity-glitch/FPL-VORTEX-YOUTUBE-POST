@@ -95,6 +95,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
           python -m unittest discover -s tests -p 'test_day1_season_dedup.py' -v
           python -m unittest discover -s tests -p 'test_day1_player_card.py' -v
+          python -m unittest discover -s tests -p 'test_day1_value_board.py' -v
+          python -m unittest discover -s tests -p 'test_day1_broadcast.py' -v
 
       - name: Verify private YouTube upload configuration
         shell: bash
