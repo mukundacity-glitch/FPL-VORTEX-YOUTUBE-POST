@@ -405,10 +405,18 @@ jobs:
           print("Colab compatibility layer: PASS")
           PY
 
+      - name: Set up Day 1 broadcast renderer
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+        working-directory: tools/day1-broadcast
+
       - name: Execute Day 1 cells once in order
         shell: bash
         env:
           VORTEX_DAY1_COMPACT: "1"
+          VORTEX_DAY1_PREMIUM_BROADCAST: "1"
         run: |
           set -o pipefail
           python - <<'PY' 2>&1 | tee "${RUNNER_TEMP}/day-1.log"

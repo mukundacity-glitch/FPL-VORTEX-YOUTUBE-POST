@@ -1,0 +1,1 @@
+{"name":"vortex-day1-broadcast","private":true,"scripts":{"studio":"remotion studio index.jsx --no-open"},"dependencies":{"@remotion/cli":"4.0.534","remotion":"4.0.534","react":"19.2.0","react-dom":"19.2.0"}}

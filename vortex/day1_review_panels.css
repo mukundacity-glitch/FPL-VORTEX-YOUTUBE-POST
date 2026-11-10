@@ -1,0 +1,65 @@
+/* Scene 2 analytics only. Rank polarity and fixture colours remain semantic. */
+.review-dashboard .red-board,.left > .reviewPanel {
+  background:linear-gradient(125deg,#281d43,#1b1732 72%) !important;
+  border-color:#a477de80 !important;
+  box-shadow:inset 3px 0 #9a67d5,0 3px 12px #0a071a65 !important;
+  color:#fff !important;
+}
+.review-dashboard .red-board h3,.reviewPanel h2,.reviewPanel .title {
+  color:#e5d4ff !important;
+}
+.review-dashboard .board-cell,.reviewPanel .metric {
+  background:#17112c !important;
+  color:#f8f4ff !important;
+}
+.reviewPanel .metric :is(.label,.value,.num,b,strong) { color:inherit !important; }
+.review-dashboard .board-cell:is(.gain,.rank-up) {
+  background:#164039 !important;
+  color:#c3ffe5 !important;
+}
+.review-dashboard .board-cell.loss { background:#3b203b !important; }
+.review-dashboard .board-cell.rank-down strong { color:#ff91a2 !important; }
+.review-dashboard .chip-icon { background:#432863; }
+.review-dashboard .chip-cell .used { background:#100d24; color:#d7c8ed; }
+.review-dashboard .red-board small { color:#d8ccee; }
+.reviewPanel .panelTitle,.reviewPanel .panelTitle .smallTitle {
+  color:#e5d4ff !important;
+}
+.reviewPanel .metric :is(.metricLabel,.metricSub) { color:#d8ccee !important; }
+.reviewPanel .metric .metricValue { color:#fff !important; }
+.reviewPanel .metric .metricValue.good { color:#a9f4cf !important; }
+.reviewPanel .metric .metricValue.bad { color:#ffafbe !important; }
+
+/* Keep the whole pitch inside the broadcast-safe area at its authored ratio. */
+.pitchShell {
+  left:1486px;
+  top:400px;
+  width:2112px;
+  height:1663px;
+}
+.pitchShell .playerCard { scale:.88; }
+.pitchShell .photoZone { padding:12px 18px 0; }
+.pitchShell .photoZone .vxPitchPlayerImg {
+  height:100% !important;
+  width:100%;
+  max-width:100% !important;
+  object-fit:contain;
+  object-position:center bottom;
+}
+
+/* Matching safe portrait area for the approved standalone pitch cut. */
+.squad-board { container-type:size; }
+.squad-board .pitch-panel {
+  width:min(100%,calc((100cqh - 112px) * 2));
+  aspect-ratio:2 / 1;
+  justify-self:center;
+  align-self:center;
+}
+.squad-board .squad-photo {
+  top:4px;
+  left:5px;
+  width:calc(100% - 10px);
+  height:calc(100% - 44px);
+  object-fit:contain;
+  object-position:center top;
+}
