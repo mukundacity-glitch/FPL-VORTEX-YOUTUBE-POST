@@ -40,3 +40,13 @@ renderer captures caption boundaries and transition frames as well as entrances.
 No second opening video is prepended. Reduced motion disables interactive playback
 and takes the viewer directly to the review. Keyboard users can activate agenda
 buttons and reach the review; all statuses include text.
+
+## Day 1 episode presentation
+
+The broadcast framing in `tools/day1-broadcast` uses a 1920×1080 design grid.
+Across Scenes 1–4, match the reference proportions with a 97 px header and
+86 px social footer, a violet rim, midnight plum surfaces, white titles and
+gold gameweek badges. Keep social marks at 54 px high and the YouTube mark
+wider to preserve its shape. Use one short violet sweep at each scene entrance.
+The underlying scene sequence, metric colours and narration timing belong to
+the approved source exports.
