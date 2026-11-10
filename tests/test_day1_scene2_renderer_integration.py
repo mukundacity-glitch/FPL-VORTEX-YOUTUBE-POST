@@ -46,6 +46,12 @@ class Scene2RendererIntegrationTests(unittest.TestCase):
                       '.reviewPanel .metric','pitchGW'):
             self.assertIn(token,SOURCE,token)
 
+    def test_scene2_review_table_is_hidden_at_frame_zero(self):
+        js=script_literal("JS")
+        self.assertIn('t >= Number(timing.review_title_at ?? 0) + 0.60',js)
+        self.assertIn('t < Number(firstPlayer?.reveal_at || 0)',js)
+        self.assertIn('const scoreboardOpening = el.classList.contains("reviewPanel") &&',js)
+
     def test_extracted_review_js_parses_in_node(self):
         js=script_literal("JS").replace("__VX_DATA__","{}")
         js=re.sub(r'^\s*<script[^>]*>\s*','',js).replace("</script>","")

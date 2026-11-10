@@ -1,6 +1,13 @@
 name: Day 1
 
 on:
+  push:
+    branches: [codex/day1-five-scene-verification]
+    paths:
+      - '1_final_day1.py'
+      - 'vortex/day1_final_qa.py'
+      - 'tests/test_day1_scene2_renderer_integration.py'
+      - '.github/workflows/day-1.yml'
   workflow_dispatch:
     inputs:
       release_private:
@@ -33,6 +40,7 @@ env:
 jobs:
   run-day-1:
     name: Run Day 1
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[day1-verify]')
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -570,6 +578,25 @@ jobs:
       - name: Add opening and confirmed music mix
         shell: bash
         run: python -m vortex.day1_media
+
+      - name: Decode final 4K MP4 and capture all five scenes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m vortex.day1_final_qa
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO')
+          report=json.loads((root/'DATA/day1_final_media_scan.json').read_text())
+          if not report.get('passed') or len(report.get('frames',[])) < 10:
+              raise SystemExit('Final video evidence missing or incomplete')
+          for shot in report['frames']:
+              file=root/'SLIDE'/shot['file']
+              if not file.is_file() or file.stat().st_size < 10000:
+                  raise SystemExit(f'Final scene screenshot missing: {file}')
+          print(f"Final 4K video + audio scan PASS, {len(report['frames'])} screenshots")
+          PY
 
       - name: Build private YouTube metadata package
         shell: bash

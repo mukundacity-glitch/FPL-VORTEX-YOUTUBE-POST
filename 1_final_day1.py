@@ -18670,7 +18670,9 @@ window.__seek=function(t){
     );
     document.querySelectorAll(".reviewPanel,.chipsPanel,.fixturesPanel").forEach(el=>{
         const firstPlayer = VX.segments.find(s=>s.player_id && s.kind==="starter");
-        const scoreboardOpening = el.classList.contains("reviewPanel") && t < Number(firstPlayer?.reveal_at || 0);
+        const scoreboardOpening = el.classList.contains("reviewPanel") &&
+            t >= Number(timing.review_title_at ?? 0) + 0.60 &&
+            t < Number(firstPlayer?.reveal_at || 0);
         el.style.setProperty("opacity",desk ? 0 : scoreboardOpening ? 1 : panelsP,"important");
         el.style.transform=scoreboardOpening ? "none" :
           `translateY(${(1-panelsP)*38}px) scale(${.985+.015*panelsP})`;
