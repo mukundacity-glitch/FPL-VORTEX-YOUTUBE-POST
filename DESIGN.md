@@ -50,3 +50,21 @@ gold gameweek badges. Keep social marks at 54 px high and the YouTube mark
 wider to preserve its shape. Use one short violet sweep at each scene entrance.
 The underlying scene sequence, metric colours and narration timing belong to
 the approved source exports.
+
+## Day 1 Scene 05 — Value Board
+
+The value board is an evidence-led **football pitch first** composition,
+not the older dark micro-card density. Design implementation is owned by
+`tools/day1-broadcast/ValueBoard.jsx` and `value-board.css`.
+It uses a green pitch for the legal 11, a separated four-player bench,
+one highly legible next-opponent chip per player, a dedicated fixture radar,
+and a five-gameweek projection rail. The original FPL VORTEX lion crest and
+channel wordmark remain prominent in the broadcast header. Violet and cyan
+frame the analytical surfaces, while FDR colours retain their established
+meaning. Match and xPts estimates are labelled as projections, never results.
+
+Only validated, freshly assembled five-GW squad data can enable the native
+Scene 05 renderer. Missing player or club assets are left absent, not filled
+with invented badges or portraits; missing fixture/xG values display N/A.
+Audio remains sourced from the original rendered scene and player-focus cues
+must come from measured narration timing, not heuristics.
