@@ -1,0 +1,45 @@
+name: Day 1 scheduler (finalized FPL only, private upload)
+on:
+  schedule:
+    - cron: '23 0,6,12,18 * * *'
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Day 1]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: fpl-vortex-day-1-scheduler
+  cancel-in-progress: false
+
+jobs:
+  schedule:
+    if: github.event_name != 'workflow_run' && (github.event_name == 'workflow_dispatch' || vars.DAY1_SCHEDULER_ENABLED == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DAY1_AUTO_PRIVATE_UPLOAD: ${{ vars.DAY1_AUTO_PRIVATE_UPLOAD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Inspect official finalized FPL gameweek (never use a fixed weekday)
+        run: python -m vortex.day1_schedule_gate > "$RUNNER_TEMP/day1-gate.json"
+      - name: Persist idempotent generation identity and dispatch original Day 1
+        run: python -m vortex.day1_scheduler dispatch --gate "$RUNNER_TEMP/day1-gate.json"
+  record:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Record success or failure of the full QA-gated production
+        run: python -m vortex.day1_scheduler record --run-id "${{ github.event.workflow_run.id }}"
