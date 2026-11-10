@@ -33,8 +33,16 @@ def scene_manifest(reports, review_gw, next_gw, fps, logo, *, review_status, lat
         frames = round(report["duration"] * fps)
         if frames < 1:
             raise ValueError(f"{key} has no usable video frames")
-        result.append(dict(number=number, title=title, top=top, bottom=bottom, frames=frames,
-                           label=f"GW{review_gw if key == 'gw_review' else next_gw}", logo=logo))
+        entry = dict(number=number, title=title, top=top, bottom=bottom, frames=frames,
+                     label=f"GW{review_gw if key == 'gw_review' else next_gw}", logo=logo)
+        if key == "04_value_board" and report.get("value_board") is not None:
+            payload = report["value_board"]
+            if payload.get("nextGameweek") != next_gw:
+                raise ValueError("Scene 05 board and episode gameweek disagree")
+            if len(payload.get("starters", [])) != 11 or len(payload.get("bench", [])) != 4:
+                raise ValueError("Scene 05 board must include 11 starters and four bench players")
+            entry["valueBoard"] = payload
+        result.append(entry)
     return result
 
 
