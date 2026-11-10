@@ -17,7 +17,7 @@ function Broadcast({scene, media = false}) {
   const scale = Math.min(1, 868 / sourceHeight);
   const light = interpolate(frame, [0, fps * 1.15], [-35, 112], {extrapolateRight: 'clamp'});
   return <AbsoluteFill className={`canvas ${scene.number === 5 ? "canvas--value-board" : ""}`}>
-    {media && scene.number === 5 && scene.valueBoard && <><ValueBoard board={scene.valueBoard}/><Audio src={staticFile(`scene-${scene.number}.mp4`)}/></>}
+    {media && scene.number === 5 && scene.valueBoard && <><ValueBoard board={scene.valueBoard}/><Audio src={staticFile(scene.narrationAudio || `scene-${scene.number}.mp4`)}/></>}
     {media && !(scene.number === 5 && scene.valueBoard) && <div className="scene-window" style={{width:1920*scale,height:sourceHeight*scale,left:(1920-1920*scale)/2,top:112+(868-sourceHeight*scale)/2}}>
       <OffthreadVideo src={staticFile(`scene-${scene.number}.mp4`)} style={{position:'absolute',top:-scene.top*scale,width:1920*scale,height:1080*scale}}/>
     </div>}
@@ -47,8 +47,13 @@ function Episode({scenes}) {
   });
 }
 
+function ValueBoardStandalone({board, gameweek, durationInFrames}) {
+  return <Broadcast scene={{number:5,title:"The Value Board",label:`GW${gameweek}`,logo:staticFile("value-assets/original-logo.png"),valueBoard:board,narrationAudio:"value-assets/scene-5-narration.mp3"}} media/>;
+}
+
 function Root() {
   return <>
+    <Composition id="ValueBoardStandalone" component={ValueBoardStandalone} fps={30} width={1920} height={1080} durationInFrames={1800} defaultProps={{board:null,gameweek:1,durationInFrames:1800}} calculateMetadata={async ({props}) => ({props,durationInFrames:props.durationInFrames})}/>
     <Composition id="Day1Broadcast" component={Episode} fps={30} width={1920} height={1080} durationInFrames={1} calculateMetadata={async ({props}) => {
       const scenes = props.scenes ?? await (await fetch(staticFile("scenes.json"))).json();
       return {props:{scenes},durationInFrames:scenes.reduce((sum,scene)=>sum+scene.frames,0)};
