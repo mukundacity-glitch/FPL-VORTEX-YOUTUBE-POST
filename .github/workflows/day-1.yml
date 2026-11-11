@@ -6,6 +6,8 @@ on:
     branches: [codex/day1-five-scene-verification]
     paths:
       - '1_final_day1.py'
+      - 'vortex/day1_scene3.py'
+      - 'tests/test_day1_scene3.py'
       - 'vortex/day1_final_qa.py'
       - 'tests/test_day1_scene2_renderer_integration.py'
       - '.github/workflows/day-1.yml'
@@ -193,6 +195,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_source_loader.py' -v
           python -m unittest discover -s tests -p 'test_day1_market_desk.py' -v
           python -m unittest discover -s tests -p 'test_day1_value_live.py' -v
+          python -m unittest discover -s tests -p 'test_day1_scene3.py' -v
           python -m unittest discover -s tests -p 'test_day1_broadcast.py' -v
 
       - name: Install Chromium runtime
