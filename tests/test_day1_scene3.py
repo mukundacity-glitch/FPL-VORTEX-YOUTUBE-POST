@@ -56,7 +56,7 @@ class Day1Scene3Tests(unittest.TestCase):
         for i in range(5):
             self.assertIn(f"unavailable for Club {i}.", script)
         import re
-        sentences = [x.strip().lower() for x in re.split(r"(?<=[.!?])\\s+", script) if x.strip()]
+        sentences = [x.strip().lower() for x in re.split(r"(?<=[.!?])\s+", script) if x.strip()]
         self.assertEqual(len(sentences), len(set(sentences)))
 
     def test_measured_cues_must_remain_in_order(self):
