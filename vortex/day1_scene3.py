@@ -285,7 +285,7 @@ def market_narration(scene):
                 odds_parts.append(f"clean sheet chance {clean_sheet:.0%}")
             odds_note = f"For {team_name}, verified " + " and ".join(odds_parts) + "."
         beats.append((f"target-{i}", f"{lead[i]}, {team_name} against {row['opponent']['name']} {where}. "
-                      f"Attacking fixture difficulty is {row['rating']}. {odds_note}"))
+                      f"The VORTEX attacking difficulty for {team_name} is {row['rating']}. {odds_note}"))
     beats.append(("transition", "Here is the full picture. Use attacking difficulty to shortlist attackers, and clean sheet chance to compare defensive options. Check starting minutes before you commit. Next, the numbers and market outlook."))
     return beats
 
