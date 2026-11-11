@@ -327,7 +327,9 @@ jobs:
           # from an independent Drive backup without altering notebook logic.
           bash scripts/restore_day1_assets.sh
 
-          restore_optional "FPL_VORTEX/FIRST VIDEO"
+          # Do not copy the previous full MP4/MP3 output from Drive: the
+          # next step clears FIRST VIDEO before this run generates fresh media.
+          # Historic source assets remain restored by restore_day1_assets.sh.
           restore_optional "FPL_VORTEX/MODEL_INPUTS"
           restore_optional "FPL_VORTEX/DECISION_ENGINE"
           restore_optional "FPL_VORTEX/RAW_DATA"
