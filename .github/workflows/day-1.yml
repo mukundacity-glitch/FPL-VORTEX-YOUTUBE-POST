@@ -47,6 +47,7 @@ env:
 jobs:
   run-day-1:
     name: Run Day 1
+    # Explicit verification commits run the full 4K pipeline; ordinary pushes run only safe CI.
     if: github.event_name != 'push' || contains(github.event.head_commit.message, '[day1-verify]')
     runs-on: ubuntu-24.04
     timeout-minutes: 360
