@@ -48,7 +48,7 @@ function Episode({scenes}) {
 }
 
 function ValueBoardStandalone({board, gameweek, durationInFrames}) {
-  return <Broadcast scene={{number:5,top:0,bottom:1080,title:"The Value Board",label:`GW${gameweek}`,logo:staticFile("value-assets/original-logo.png"),valueBoard:board,narrationAudio:"value-assets/scene-5-narration.mp3"}} media/>;
+  return <Broadcast scene={{number:5,top:0,bottom:1080,title:"The Value Board",label:`GW${gameweek}–${gameweek + 4}`,logo:staticFile("value-assets/original-logo.png"),valueBoard:board,narrationAudio:"value-assets/scene-5-narration.mp3"}} media/>;
 }
 
 function Root() {

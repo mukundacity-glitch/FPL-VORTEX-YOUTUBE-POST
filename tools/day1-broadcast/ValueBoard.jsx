@@ -32,21 +32,22 @@ function PlayerCard({player, frame, fps, active}) {
   const pulse = cue ? interpolate(frame % Math.max(1, fps), [0, Math.max(1, fps)/2, Math.max(1, fps)], [0, 1, 0]) : 0;
   return <article className={`vb-player ${cue?'vb-player--active':''}`} style={{'--vb-pulse':pulse}} aria-label={player.fullName || player.name}>
     <div className="vb-photo">
-      {photo && <Img src={photo} alt="" className="vb-headshot"/>}
+      {photo ? <Img src={photo} alt="" className="vb-headshot"/> :
+        <span className="vb-headshot-unavailable">Photo unavailable</span>}
       <Crest player={player}/>
       {player.captain && <span className="vb-captain">C</span>}
       {player.viceCaptain && <span className="vb-captain vb-captain--vice">VC</span>}
     </div>
     <strong className="vb-name">{player.name || player.fullName || 'Unavailable'}</strong>
     <div className="vb-player-info"><span>{money(player.price)}</span><b>{fmt(player.nextGwXpts,2)} xPts</b></div>
-    <div className="vb-mini-fixtures">{list(player.fixtures).filter(f=>f.gw===player.nextGameweek).slice(0,1).map((f,i)=><Fixture key={f.id || i} fixture={f}/>)}{!list(player.fixtures).some(f=>f.gw===player.nextGameweek) && <span className="vb-next-empty">NEXT: BLANK / TBC</span>}</div>
+    <div className="vb-mini-fixtures">{list(player.fixtures).filter(f=>f.gw===player.nextGameweek).map((f,i)=><Fixture key={f.id || i} fixture={f}/>)}{!list(player.fixtures).some(f=>f.gw===player.nextGameweek) && <span className="vb-next-empty">NEXT: BLANK / TBC</span>}</div>
   </article>;
 }
 
 function Pitch({board, frame, fps, active}) {
   const starters = list(board.starters);
   return <section className="vb-pitch-panel">
-    <div className="vb-pitch-top"><strong>OPTIMIZED STARTING XI</strong><span>{board.formation || '—'} FORMATION · NEXT GAMEWEEK</span></div>
+    <div className="vb-pitch-top"><strong>OPTIMIZED STARTING XI</strong><span>{board.formation || '—'} FORMATION · GW{board.nextGameweek}</span></div>
     <div className="vb-pitch">
       <div className="vb-field-markings"><div className="vb-center-circle"/><div className="vb-goal-area vb-goal-area--top"/><div className="vb-goal-area vb-goal-area--bottom"/></div>
       {POSITIONS.map(pos=><div className={`vb-line vb-line--${pos.toLowerCase()}`} key={pos}>
@@ -64,7 +65,11 @@ function FixturesPanel({board}) {
   return <section className="vb-fixtures-panel">
     <div className="vb-panel-heading"><strong>GW{board.nextGameweek} · FIXTURE RADAR</strong><small>HOME / AWAY · KICKOFF</small></div>
     <div className="vb-match-list">{fixtures.length ? fixtures.slice(0,10).map((f,i)=><div className="vb-match" key={f.id || i}>
-      <span className="vb-match-clubs"><b>{f.homeShort || 'TBC'}</b><em>vs</em><b>{f.awayShort || 'TBC'}</b></span>
+      <span className="vb-match-clubs">
+        <b>{url(f.homeBadge) && <Img src={f.homeBadge} alt=""/>}{f.homeShort || 'TBC'}</b>
+        <em>vs</em>
+        <b>{f.awayShort || 'TBC'}{url(f.awayBadge) && <Img src={f.awayBadge} alt=""/>}</b>
+      </span>
       <span className="vb-match-time">{f.kickoffLabel || 'TBC'}</span>
       {Number.isFinite(f.projectedHomeGoals) && Number.isFinite(f.projectedAwayGoals) ?
         <strong className="vb-match-goals">{fmt(f.projectedHomeGoals,2)} : {fmt(f.projectedAwayGoals,2)}</strong> :

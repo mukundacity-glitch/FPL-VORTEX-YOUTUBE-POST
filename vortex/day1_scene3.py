@@ -268,15 +268,24 @@ def market_timestamp(value):
 
 
 def market_narration(scene):
-    beats = [("opening", f"Five fixtures to target. Here are the best attacking fixture ratings for Gameweek {scene['gw']}, with market estimates for wins and clean sheets.")]
+    beats = [("opening", f"Five fixtures to target. Here are the best attacking fixture ratings for Gameweek {scene['gw']}. Market estimates are quoted only where verified data are available.")]
     lead = ["First up", "Next on the board", "Third on the list", "Fourth in the rankings", "The fifth fixture"]
-    def percent(value):
-        return f"{value:.0%}" if value is not None else "unavailable"
     for i, row in enumerate(scene["targets"]):
         where = "at home" if row["venue"] == "H" else "away"
-        beats.append((f"target-{i}", f"{lead[i]}, {row['team']['name']} against {row['opponent']['name']} {where}. "
-                      f"Attacking fixture difficulty is {row['rating']}. "
-                      f"Market win chance: {percent(row['win'])}. Clean sheet chance: {percent(row['clean_sheet'])}."))
+        win = row.get("win")
+        clean_sheet = row.get("clean_sheet")
+        team_name = row["team"]["name"]
+        if win is None and clean_sheet is None:
+            odds_note = f"Verified market win and clean-sheet percentages are unavailable for {team_name}."
+        else:
+            odds_parts = []
+            if win is not None:
+                odds_parts.append(f"market win chance {win:.0%}")
+            if clean_sheet is not None:
+                odds_parts.append(f"clean sheet chance {clean_sheet:.0%}")
+            odds_note = f"For {team_name}, verified " + " and ".join(odds_parts) + "."
+        beats.append((f"target-{i}", f"{lead[i]}, {team_name} against {row['opponent']['name']} {where}. "
+                      f"The VORTEX attacking difficulty for {team_name} is {row['rating']}. {odds_note}"))
     beats.append(("transition", "Here is the full picture. Use attacking difficulty to shortlist attackers, and clean sheet chance to compare defensive options. Check starting minutes before you commit. Next, the numbers and market outlook."))
     return beats
 

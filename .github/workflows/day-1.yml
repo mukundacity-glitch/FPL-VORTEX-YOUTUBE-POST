@@ -1,7 +1,26 @@
 name: Day 1
+run-name: FPL VORTEX DAY 1 | ${{ inputs.production_identity || github.ref_name }}
 
 on:
+  push:
+    branches: [codex/day1-five-scene-verification]
+    paths:
+      - '1_final_day1.py'
+      - 'vortex/day1_scene3.py'
+      - 'tests/test_day1_scene3.py'
+      - 'vortex/day1_final_qa.py'
+      - 'tests/test_day1_scene2_renderer_integration.py'
+      - '.github/workflows/day-1.yml'
   workflow_dispatch:
+    inputs:
+      production_identity:
+        description: Stable season/review/preview identity for scheduler ledger
+        type: string
+        default: ''
+      release_private:
+        description: Save to Drive and upload privately after QA
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,6 +47,8 @@ env:
 jobs:
   run-day-1:
     name: Run Day 1
+    # Explicit verification commits run the full 4K pipeline; ordinary pushes run only safe CI.
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[day1-verify]')
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -98,6 +119,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_value_board.py' -v
 
       - name: Verify private YouTube upload configuration
+        if: github.ref == 'refs/heads/main' && inputs.release_private
         shell: bash
         run: |
           python - <<'PY'
@@ -174,7 +196,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_day1_source_loader.py' -v
           python -m unittest discover -s tests -p 'test_day1_market_desk.py' -v
           python -m unittest discover -s tests -p 'test_day1_value_live.py' -v
-          # Broadcast imports Pillow; validate it only after Python dependencies exist.
+          python -m unittest discover -s tests -p 'test_day1_scene3.py' -v
           python -m unittest discover -s tests -p 'test_day1_broadcast.py' -v
 
       - name: Install Chromium runtime
@@ -305,7 +327,9 @@ jobs:
           # from an independent Drive backup without altering notebook logic.
           bash scripts/restore_day1_assets.sh
 
-          restore_optional "FPL_VORTEX/FIRST VIDEO"
+          # Do not copy the previous full MP4/MP3 output from Drive: the
+          # next step clears FIRST VIDEO before this run generates fresh media.
+          # Historic source assets remain restored by restore_day1_assets.sh.
           restore_optional "FPL_VORTEX/MODEL_INPUTS"
           restore_optional "FPL_VORTEX/DECISION_ENGINE"
           restore_optional "FPL_VORTEX/RAW_DATA"
@@ -566,6 +590,25 @@ jobs:
         shell: bash
         run: python -m vortex.day1_media
 
+      - name: Decode final 4K MP4 and capture all five scenes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m vortex.day1_final_qa
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO')
+          report=json.loads((root/'DATA/day1_final_media_scan.json').read_text())
+          if not report.get('passed') or len(report.get('frames',[])) < 10:
+              raise SystemExit('Final video evidence missing or incomplete')
+          for shot in report['frames']:
+              file=root/'SLIDE'/shot['file']
+              if not file.is_file() or file.stat().st_size < 10000:
+                  raise SystemExit(f'Final scene screenshot missing: {file}')
+          print(f"Final 4K video + audio scan PASS, {len(report['frames'])} screenshots")
+          PY
+
       - name: Build private YouTube metadata package
         shell: bash
         run: python -m vortex.youtube_studio_package
@@ -649,7 +692,7 @@ jobs:
 
           # Editorial QA uses measured TTS boundaries and real video runtime.
           scene_keys = list(qa.get("scene_keys") or [])
-          if "gw_review" in scene_keys and set(scene_keys) <= {"opening_video", "00_intro", "gw_review"}:
+          if "gw_review" in scene_keys:
               qa_editorial = root / "DATA" / "gw_review_editorial_qa.json"
               script_file = root / "DATA" / "gw_review_final_script.txt"
               caption_file = root / "DATA" / "gw_review_master.vtt"
@@ -711,7 +754,12 @@ jobs:
           print("Day 1 output structure, final QA, and private YouTube package: PASS")
           PY
 
+      - name: Verify final media and capture five scene frames
+        shell: bash
+        run: python -m vortex.day1_final_qa
+
       - name: Publish outputs and persistent state to Google Drive
+        if: github.ref == 'refs/heads/main' && inputs.release_private
         shell: bash
         run: |
           set -euo pipefail
@@ -742,15 +790,17 @@ jobs:
           publish_if_present "FPL_VORTEX_DATA/07_LOGS"
 
       - name: Upload final 4K video privately to YouTube
+        if: github.ref == 'refs/heads/main' && inputs.release_private
         shell: bash
         run: python -m vortex.youtube_private_upload
 
       - name: Confirm PRIVATE YouTube draft and show Studio link
+        if: github.ref == 'refs/heads/main' && inputs.release_private
         shell: bash
         run: python -m vortex.day1_upload_status
 
       - name: Save YouTube private-upload receipt to Google Drive
-        if: always()
+        if: always() && github.ref == 'refs/heads/main' && inputs.release_private
         shell: bash
         run: |
           receipt="/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/DATA/youtube_private_upload.json"

@@ -6,8 +6,10 @@ legal XI, captain and bench for each of the next five GWs from the supplied
 research-model forecasts. It never substitutes screenshot values.
 """
 from collections import Counter
+from datetime import datetime
 from itertools import combinations
 from math import isfinite
+from zoneinfo import ZoneInfo
 
 POSITION = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 FORMATION = {"GK": (1, 1), "DEF": (3, 5), "MID": (2, 5), "FWD": (1, 3)}
@@ -29,13 +31,23 @@ def _best_xi(players, gw):
         counts = Counter(p["position"] for p in xi)
         if any(not lo <= counts.get(pos, 0) <= hi for pos, (lo, hi) in FORMATION.items()):
             continue
-        score = sum(p["weekly"][gw] for p in xi)
+        scores = [p["weekly"][gw] for p in xi]
+        score = sum(scores) + max(scores)
         valid.append((score, tuple(sorted(p["id"] for p in xi)), xi))
     if not valid:
         raise ValueError("No legal starting XI available")
     # Tie-break by canonical player IDs to make the same model snapshot deterministic.
     _, _, lineup = min(valid, key=lambda r: (-r[0], r[1]))
     return list(lineup)
+
+
+def _kickoff_label(fixture):
+    if fixture.get("kickoff_label"):
+        return fixture["kickoff_label"]
+    if not fixture.get("kickoff_time"):
+        return "TBC"
+    kickoff = datetime.fromisoformat(fixture["kickoff_time"].replace("Z", "+00:00"))
+    return kickoff.astimezone(ZoneInfo("Europe/London")).strftime("%a %d %b %H:%M %Z")
 
 
 def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
@@ -84,7 +96,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
         team_fixtures = sorted(
             (f for f in fixtures if gameweek <= f.get("event", -1) < gameweek + 5
              and tid in (f.get("team_h"), f.get("team_a"))),
-            key=lambda f: (f["event"], f.get("kickoff_time") or "", f["id"]),
+            key=lambda f: (f["event"], not f.get("kickoff_time"), f.get("kickoff_time") or "", f["id"]),
         )
         tiles = []
         for fixture in team_fixtures:
@@ -147,13 +159,15 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
     bench = [{**p, "nextGwXpts": p["weekly"][gameweek]} for p in bench]
     next_matches = sorted(
         (f for f in fixtures if f.get("event") == gameweek),
-        key=lambda f: (f.get("kickoff_time") or "", f["id"]),
+        key=lambda f: (not f.get("kickoff_time"), f.get("kickoff_time") or "", f["id"]),
     )
     next_fixtures = [{
         "id": f["id"],
         "homeShort": teams[f["team_h"]]["short"],
         "awayShort": teams[f["team_a"]]["short"],
-        "kickoffLabel": f.get("kickoff_label") or "TBC",
+        "homeBadge": teams[f["team_h"]].get("badge") or "",
+        "awayBadge": teams[f["team_a"]].get("badge") or "",
+        "kickoffLabel": _kickoff_label(f),
         "projectedHomeGoals": f.get("projected_home_goals"),
         "projectedAwayGoals": f.get("projected_away_goals"),
     } for f in next_matches]
@@ -176,6 +190,8 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
             "bench": [p["id"] for p in reserves],
             "captainId": captain,
             "viceCaptainId": vice,
+            "startingXiXpts": round(sum(p["weekly"][week] for p in xi), 2),
+            "captainAdjustedXpts": projections[week - gameweek]["xpts"],
         })
     return {
         "nextGameweek": gameweek,

@@ -8,6 +8,7 @@ availability; they are NOT official forward projections or guarantees.
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from math import isfinite
 from typing import Any
@@ -101,15 +102,19 @@ def _fetch_recent(players, session):
         -(_status_factor(p) * (fnum(p.get("form")) + fnum(p.get("points_per_game")))),
         -fnum(p.get("selected_by_percent")), p["id"],
     ))[:110]
-    result = {}
-    for player in candidates:
+    def recent_history(player):
+        pid = player["id"]
         try:
-            payload = fetch_json(f"{API}/element-summary/{player['id']}/", session)
-            result[player["id"]] = payload.get("history", [])
-        except (requests.RequestException, ValueError, KeyError):
-            # Missing summaries are marked as fallback to season minutes.
-            result[player["id"]] = []
-    return result
+            payload = fetch_json(f"{API}/element-summary/{pid}/", session)
+            history = payload.get("history")
+            return pid, history if isinstance(history, list) else []
+        except (requests.RequestException, ValueError, KeyError, AttributeError):
+            return pid, []
+
+    if session is not None:
+        return dict(map(recent_history, candidates))
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        return dict(pool.map(recent_history, candidates))
 
 
 def _week_ratings(fixtures, team_id, gw):
@@ -151,15 +156,6 @@ def _optimise(players, cost, points, next_scores):
     for club_id in {p["team"] for p in players}:
         constraint([int(p["team"] == club_id) for p in players], 0, 3)
     constraint(cost, 0, 100)
-    # One low-cost goalkeeper and one value defender, without excluding
-    # playing backup options whose prices are slightly above the minimum.
-    gk_floor = min(cost[i] for i,p in enumerate(players) if p["element_type"] == 1)
-    def_floor = min(cost[i] for i,p in enumerate(players) if p["element_type"] == 2)
-    constraint([int(p["element_type"] == 1 and cost[i] <= max(4.5, gk_floor+.4))
-                for i,p in enumerate(players)], 1, 2)
-    constraint([int(p["element_type"] == 2 and cost[i] <= max(4.5, def_floor+.4))
-                for i,p in enumerate(players)], 1, 5)
-
     result = milp(c=-objective, integrality=np.ones(n),
                   bounds=Bounds(np.zeros(n), np.ones(n)),
                   constraints=LinearConstraint(np.vstack(rows), lower, upper),
@@ -175,6 +171,7 @@ def _optimise(players, cost, points, next_scores):
 def make_live_value_board(*, session=None, snapshot=None):
     bootstrap = snapshot["bootstrap"] if snapshot else fetch_json(f"{API}/bootstrap-static/", session)
     fixtures = snapshot["fixtures"] if snapshot else fetch_json(f"{API}/fixtures/", session)
+    retrieved_at = datetime.now(timezone.utc).isoformat() if snapshot is None else snapshot.get("retrievedAt")
     gw = select_next_gw(bootstrap["events"])
     all_players = bootstrap["elements"]
     raw_teams = bootstrap["teams"]
@@ -238,14 +235,18 @@ def make_live_value_board(*, session=None, snapshot=None):
             match["team_a"]: _week_ratings([match], match["team_a"], match["event"])[0][1],
         }
         enriched.append(item)
-    portraits = {p["id"]: f"https://resources.premierleague.com/premierleague/photos/players/110x140/p{p['code']}.png"
-                 for p in selected if p.get("code")}
+    portraits = {
+        p["id"]: f"https://resources.premierleague.com/premierleague25/photos/players/500x500/{p['code']}.png"
+        for p in selected if p.get("code")
+    }
     board = build_value_board(
         gameweek=gw, squad=selected, forecasts=selected_forecast,
         fixtures=enriched, teams=team_map, portraits=portraits,
         model_label="VORTEX research xPts · official FPL form / price / minutes / FDR",
     )
-    board["marketSnapshotUTC"] = datetime.now(timezone.utc).isoformat()
+    board["marketSnapshotUTC"] = retrieved_at
+    board["computedAtUTC"] = datetime.now(timezone.utc).isoformat()
+    board["modelVersion"] = "day1-value-research-v1"
     board["dataOrigin"] = "official FPL bootstrap-static, fixtures, element-summary"
     board["method"] = ("Weighted historic PPG/form, next-week FPL ep_next when provided, "
                        "xGI/90, injury availability, observed minutes and fixture FDR. "
@@ -260,7 +261,12 @@ def make_live_value_board(*, session=None, snapshot=None):
         row["ownership"] = round(fnum(raw.get("selected_by_percent")), 1)
         row["netTransfers"] = int(fnum(raw.get("transfers_in_event")) - fnum(raw.get("transfers_out_event")))
         row["minutesPerAppearance"] = round(_recent_minutes(raw, recent.get(row["id"], [])), 1)
+        row["minutesSource"] = (
+            "official last five match records" if recent.get(row["id"])
+            else "official season totals and starts"
+        )
         row["availability"] = raw.get("status") or "unknown"
+        row["photoCode"] = raw.get("code")
     board["marketTrends"] = [
         {"playerId": p["id"], "ownership": fnum(p.get("selected_by_percent")),
          "transfersIn": p.get("transfers_in_event"), "transfersOut": p.get("transfers_out_event")}
