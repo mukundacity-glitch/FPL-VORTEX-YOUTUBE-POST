@@ -39,16 +39,18 @@ def _production_intro_and_validator():
         "_vx_replace_narration_phrase",
         "vx_assert_full_word_narration",
         "vx_full_word_narration",
+        "vx_review_clean_text",
     }
     functions = [
         node for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef) and node.name in names
     ]
-    if {func.name for func in functions} != names or len(functions) != 3:
+    if {func.name for func in functions} != names or len(functions) != len(names):
         raise AssertionError("Production narration contract functions are missing")
     namespace = {
         "_vx_html": html,
         "_vx_re": re,
+        "re": re,
         "VX_NARRATION_PLAYER_BY_ID": {},
         "VX_NARRATION_TEAM_SHORT_ALIASES": set(),
         "VX_NARRATION_PLAYER_TEXT_ALIASES": [],
@@ -56,7 +58,7 @@ def _production_intro_and_validator():
     }
     isolated = ast.fix_missing_locations(ast.Module(body=functions, type_ignores=[]))
     exec(compile(isolated, str(SOURCE), "exec"), namespace)
-    return intros[0], namespace["vx_full_word_narration"]
+    return intros[0], namespace
 
 
 def _review_beats():
@@ -72,9 +74,9 @@ def _review_beats():
 class IntroSpeechContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        expression, full_word = _production_intro_and_validator()
+        expression, namespace = _production_intro_and_validator()
         cls.expression = expression
-        cls.full_word = staticmethod(full_word)
+        cls.full_word = staticmethod(namespace["vx_full_word_narration"])
 
     def _actual_intro(self, next_gw, cards):
         return eval(
@@ -123,6 +125,25 @@ class IntroSpeechContractTests(unittest.TestCase):
             self.full_word("This is an XYZ shortlist.")
         with self.assertRaisesRegex(RuntimeError, "API-style fields"):
             self.full_word("Read the next_gw_xpts field.")
+
+    def test_market_player_alias_is_resolved_before_review_name_protection(self):
+        _, namespace = _production_intro_and_validator()
+        namespace["VX_NARRATION_PLAYER_TEXT_ALIASES"] = [
+            ("N.Jackson", "Jackson"),
+            ("N. Jackson", "Jackson"),
+        ]
+        namespace["VX_NARRATION_PLAYER_BY_ID"] = {166: "N.Jackson"}
+        namespace["_review_narration_context"] = {166: {"full_name": "Jackson"}}
+        clean = namespace["vx_review_clean_text"]
+
+        for alias in ("N.Jackson", "N. Jackson", "Jackson"):
+            with self.subTest(alias=alias):
+                spoken = clean(f"Buy watchlist: {alias}. Compare the fixtures.")
+                self.assertEqual(spoken, "Buy watchlist, Jackson. Compare the fixtures.")
+                self.assertEqual(clean(spoken), spoken)
+
+        with self.assertRaisesRegex(RuntimeError, "capital abbreviations.*XYZ"):
+            clean("Buy watchlist: Jackson. XYZ is unavailable.")
 
     def test_visible_brand_stays_unchanged_and_qa_runs_before_expensive_work(self):
         script = SOURCE.read_text(encoding="utf-8")

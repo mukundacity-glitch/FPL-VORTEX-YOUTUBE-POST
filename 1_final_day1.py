@@ -16061,6 +16061,11 @@ def vx_review_clean_text(text: str) -> str:
     for abbreviation, expansion in (("xPts", "expected points"), ("xG", "expected goals"), ("xA", "expected assists"), ("FPL", "Fantasy Premier League"), ("GW", "Gameweek")):
         text = re.sub(r"\b" + abbreviation + r"\b", expansion, text, flags=re.I)
     text = text.replace(": ", ", ")
+    # Resolve dotted official names before masking a squad surname inside one.
+    # For example, protecting Jackson first would hide N.Jackson from Cell 22.
+    for alias, spoken in VX_NARRATION_PLAYER_TEXT_ALIASES:
+        if re.match(r"^[A-Za-z]\.", alias):
+            text = _vx_replace_narration_phrase(text, alias, spoken)
     protected = {}
     for index, context in enumerate(sorted(_review_narration_context.values(), key=lambda row: len(row["full_name"]), reverse=True)):
         name = context["full_name"]
@@ -16091,8 +16096,12 @@ def vx_review_validate_creator_script(narration: dict[str, Any], script_segments
     text = narration["tts_text"]
     if re.search(r"\bnailed\b|\bmust[ -]buy\b|\bmust[ -]sell\b|secure and firm", text, flags=re.I):
         raise RuntimeError("Gameweek review contains a direct instruction or unsupported certainty")
-    if re.search(r"\b(?:xG|xA|xPts|GW|FPL)\b|\b[A-Z]\.\s*[A-Z]", text):
-        raise RuntimeError("Gameweek review contains narration shorthand")
+    for segment in script_segments:
+        shorthand = re.search(r"\b(?:xG|xA|xPts|GW|FPL)\b|\b[A-Z]\.\s*[A-Z]", segment["text"])
+        if shorthand:
+            raise RuntimeError(
+                f"Gameweek review contains narration shorthand {shorthand.group()!r} in {segment['id']}"
+            )
     for team in review_teams.values():
         short = str(team.get("short_name") or "")
         if short and re.search(r"\b" + re.escape(short) + r"\b", text):
