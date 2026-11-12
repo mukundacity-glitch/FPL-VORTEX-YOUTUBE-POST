@@ -1,5 +1,21 @@
 # FPL VORTEX AUTO
 
+## Actions workflows
+
+Open a workflow and select **Run workflow** on `main`.
+
+| Workflow | Purpose |
+| --- | --- |
+| [Day 1](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/day-1.yml) | Five-scene gameweek review and value board. |
+| [Day 2](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/day-2.yml) | Day 2 video production. |
+| [Day 3](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/day-3.yml) | Transfer and chip plan video. |
+| [WC-FH](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/wc-fh.yml) | Wildcard and Free Hit videos. |
+| [XG-DEFCON](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/xg-defcon.yml) | xG and DEFCON video with public YouTube publishing. |
+
+Day 1 and Day 2 include automated QA jobs for relevant code changes. For a
+manual Scene 2 restoration check, select **Run Scene 2 restoration tests only**
+in Day 1.
+
 ## Day 1 five-scene live production (Scene 05 integrated)
 
 The manual **Day 1** GitHub Actions workflow now keeps all 33 existing Day 1
@@ -75,19 +91,10 @@ No Day 2 input or file is required for Day 1.
 
 ### Run Day 2 manually
 
-GitHub only exposes a `workflow_dispatch` workflow from the repository's default branch. After reviewing and manually merging `feature/day2-video-workflow` into `main`:
-
-1. Open **Actions**.
-2. Select **Day 2**.
-3. Choose **Run workflow**.
-4. Set:
-   - `upload_to_youtube`: `true` to allow a Private upload, or `false` to build only.
-   - `dry_run`: `true` to build/render and validate metadata while skipping YouTube upload.
-   - `video_date`: the date used in the title, for example `2026-09-03`.
-   - `render_quality`: `FINAL` for a 3840x2160 YouTube-ready render; `DRAFT` for fast validation.
-5. Start the run.
-
-A real YouTube upload is refused unless `render_quality=FINAL`. Every upload request is created with `privacyStatus=private`, `notifySubscribers=false`, and no automatic scheduling/publication.
+Open [Day 2 in Actions](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/day-2.yml),
+select `main`, and choose **Run workflow**. A successful production run uploads
+a private YouTube video with subscriber notifications and automatic publishing
+disabled.
 
 ### Edit Day 2 metadata and assets
 
@@ -154,8 +161,3 @@ The notebook's canonical FPL snapshot distinguishes `review_gw` (which may be `L
 The Day 3 runner validates every player's DEFCON cutoff and the complete model-history list against `review_ready_gws`. Player and team cumulative totals use that same history, and the board labels its completed cutoff explicitly. A stale/mixed player cutoff or missing model-history event still stops the run. Once GW6 becomes review-ready, DEFCON must advance to GW6. The patch does not change the model formulas or the live review's gameweek selection.
 
 After applying a runner fix, start a new **Day 3** workflow on `main`. Re-running a failed job retains the old run's source commit.
-
-
-### Automatic watcher
-
-`Gameweek State Watcher` checks official FPL state every two days (approximately 48 hours). Day 1 and Day 2 remain separate workflows. When the review state advances, the watcher can trigger each workflow independently; Day 2 remains Private-only on YouTube and keeps its own Drive output root.

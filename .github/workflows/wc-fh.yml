@@ -1,4 +1,4 @@
-name: WC- FH
+name: WC-FH
 run-name: WC- FH | ${{ inputs.chip }} | ${{ inputs.selection }} | Final
 
 on:

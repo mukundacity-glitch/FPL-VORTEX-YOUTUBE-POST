@@ -15,7 +15,7 @@ Review. Optional legacy forecast scenes remain off; Day 2/3 are unchanged.
   deterministic motion/captions, keyboard controls, reduced-motion mode.
 - `vortex/day1_media.py`: retains music mixing and private-output contract, skips
   prepending `opening.mp4` when final QA identifies the integrated opening.
-- `.github/workflows/day-1.yml` and `day1-editorial-qa.yml`: new data and browser
+- `.github/workflows/day-1.yml`: production and QA jobs cover data and browser
   contracts alongside existing review/player-card/publication safeguards.
 
 ## Caption-ready voiceover

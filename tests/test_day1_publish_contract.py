@@ -139,11 +139,13 @@ class Day1PublishContractTests(unittest.TestCase):
 
     def test_workflow_guards_run_before_expensive_full_video(self):
         workflow = (ROOT / ".github/workflows/day-1.yml").read_text(encoding="utf-8")
-        self.assertIn("test_day1_publish_contract.py", workflow)
-        self.assertLess(workflow.index("test_day1_publish_contract.py"),
-                        workflow.index("Execute Day 1 cells once in order"))
-        qa = (ROOT / ".github/workflows/day1-editorial-qa.yml").read_text(encoding="utf-8")
-        self.assertIn("test_day1_publish_contract.py", qa)
+        jobs = workflow.split("\njobs:\n", 1)[1]
+        production, editorial_qa = jobs.split("\n  editorial-contracts:\n", 1)
+        editorial_qa = editorial_qa.split("\n  hero-card-layout:\n", 1)[0]
+        self.assertIn("test_day1_publish_contract.py", production)
+        self.assertLess(production.index("test_day1_publish_contract.py"),
+                        production.index("Execute Day 1 cells once in order"))
+        self.assertIn("test_day1_publish_contract.py", editorial_qa)
 
 
 if __name__ == "__main__":

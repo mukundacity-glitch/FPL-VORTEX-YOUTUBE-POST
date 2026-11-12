@@ -128,12 +128,14 @@ class IntroSpeechContractTests(unittest.TestCase):
         script = SOURCE.read_text(encoding="utf-8")
         self.assertIn('<div class="channelName">FPL VORTEX</div>', script)
         workflow = (ROOT / ".github/workflows/day-1.yml").read_text(encoding="utf-8")
-        self.assertIn("test_day1_intro_voice_gate.py", workflow)
+        jobs = workflow.split("\njobs:\n", 1)[1]
+        production, editorial_qa = jobs.split("\n  editorial-contracts:\n", 1)
+        editorial_qa = editorial_qa.split("\n  hero-card-layout:\n", 1)[0]
+        self.assertIn("test_day1_intro_voice_gate.py", production)
         self.assertLess(
-            workflow.index("test_day1_intro_voice_gate.py"),
-            workflow.index("Execute Day 1 cells once in order"),
+            production.index("test_day1_intro_voice_gate.py"),
+            production.index("Execute Day 1 cells once in order"),
         )
-        editorial_qa = (ROOT / ".github/workflows/day1-editorial-qa.yml").read_text(encoding="utf-8")
         self.assertIn("test_day1_intro_voice_gate.py", editorial_qa)
 
 

@@ -1,10 +1,10 @@
-# WC- FH
+# WC-FH
 
-The separate **WC- FH** Actions workflow generates **Wildcard, Free Hit, or both videos in one run** in **Final 3840×2160 / 24fps**, then saves each as a **private YouTube draft** with its own matching thumbnail, description, SEO tags and hashtags. **Both** is the default. It uses the current [WC/FH Colab notebook](https://colab.research.google.com/drive/1RVyrEGhHg77h4ek7ASowfRHIeYFDl2aB) downloaded by Drive file ID on every run. It preserves Ryan narration, the 8% body music, the footer subscribe animation, and the opening/outro.
+The separate **WC-FH** Actions workflow generates **Wildcard, Free Hit, or both videos in one run** in **Final 3840×2160 / 24fps**, then saves each as a **private YouTube draft** with its own matching thumbnail, description, SEO tags and hashtags. **Both** is the default. It uses the current [WC/FH Colab notebook](https://colab.research.google.com/drive/1RVyrEGhHg77h4ek7ASowfRHIeYFDl2aB) downloaded by Drive file ID on every run. It preserves Ryan narration, the 8% body music, the footer subscribe animation, and the opening/outro.
 
 ## Run a video
 
-1. Open [Actions → WC- FH](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/wc-fh.yml) on `main` and select **Run workflow**.
+1. Open [Actions → WC-FH](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/wc-fh.yml) on `main` and select **Run workflow**.
 2. Leave **task = Render and upload**.
 3. Choose **chip = Both**, **Wildcard**, or **Free Hit**.
 4. Choose **selection = Auto** or **Manual**.
