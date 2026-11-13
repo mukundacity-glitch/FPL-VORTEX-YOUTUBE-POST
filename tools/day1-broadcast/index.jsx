@@ -13,10 +13,11 @@ const socials = [
 function Broadcast({scene, media = false}) {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
+  const value = scene.number === 5 && scene.valueBoard;
   const sourceHeight = scene.bottom - scene.top;
   const scale = Math.min(1, 868 / sourceHeight);
   const light = interpolate(frame, [0, fps * 1.15], [-35, 112], {extrapolateRight: 'clamp'});
-  return <AbsoluteFill className={`canvas ${scene.number === 5 ? "canvas--value-board" : ""}`}>
+  return <AbsoluteFill className={`canvas ${value ? "canvas--value-board" : ""}`}>
     {media && scene.number === 5 && scene.valueBoard && <><ValueBoard board={scene.valueBoard}/><Audio src={staticFile(scene.narrationAudio || `scene-${scene.number}.mp4`)}/></>}
     {media && !(scene.number === 5 && scene.valueBoard) && <div className="scene-window" style={{width:1920*scale,height:sourceHeight*scale,left:(1920-1920*scale)/2,top:112+(868-sourceHeight*scale)/2}}>
       <OffthreadVideo src={staticFile(`scene-${scene.number}.mp4`)} style={{position:'absolute',top:-scene.top*scale,width:1920*scale,height:1080*scale}}/>
@@ -24,8 +25,14 @@ function Broadcast({scene, media = false}) {
     <header className="rail header">
       <div className="sheen" style={{left:`${light}%`,opacity:light>100?0:.7}}/>
       <div className="brand" aria-label="FPL VORTEX official channel branding"><Img src={scene.logo || staticFile('vortex.jpg')} alt="FPL VORTEX original channel logo"/><strong>FPL<br/>VORTEX</strong></div>
-      <div className="heading"><div>FPL VORTEX · DAY 1 · SCENE {String(scene.number).padStart(2,'0')}</div><h1>{scene.title}</h1>{scene.number === 5 && <span className="value-board-kicker">THE BEST £100M SQUAD · NEXT FIVE GAMEWEEKS</span>}</div>
-      <b className="gameweek">{scene.label}</b>
+      {value ? <>
+        <div className="heading"><h1>Value Board <span>– Gameweek {scene.valueBoard.nextGameweek}</span></h1>
+          <span className="value-board-kicker">The best £{scene.valueBoard.budget}m squad</span></div>
+        <div className="vb-league">{scene.leagueLogo ? <Img src={scene.leagueLogo} alt="Premier League"/> : <span>Premier League</span>}</div>
+      </> : <>
+        <div className="heading"><div>FPL VORTEX · DAY 1 · SCENE {String(scene.number).padStart(2,'0')}</div><h1>{scene.title}</h1></div>
+        <b className="gameweek">{scene.label}</b>
+      </>}
     </header>
     <footer className="rail footer">
       <div className="sheen" style={{left:`${light}%`,opacity:light>100?0:.5}}/>
@@ -47,13 +54,14 @@ function Episode({scenes}) {
   });
 }
 
-function ValueBoardStandalone({board, gameweek, durationInFrames}) {
-  return <Broadcast scene={{number:5,top:0,bottom:1080,title:"The Value Board",label:`GW${gameweek}`,logo:staticFile("value-assets/original-logo.png"),valueBoard:board,narrationAudio:"value-assets/scene-5-narration.mp3"}} media/>;
+function ValueBoardStandalone({board}) {
+  if (!board) return null;
+  return <Broadcast scene={{number:5,top:0,bottom:1080,title:"The Value Board",label:`GW${board.nextGameweek}`,leagueLogo:board.leagueLogo && staticFile(board.leagueLogo),logo:staticFile("value-assets/original-logo.png"),valueBoard:board,narrationAudio:"value-assets/scene-5-narration.mp3"}} media/>;
 }
 
 function Root() {
   return <>
-    <Composition id="ValueBoardStandalone" component={ValueBoardStandalone} fps={30} width={1920} height={1080} durationInFrames={1800} defaultProps={{board:null,gameweek:1,durationInFrames:1800}} calculateMetadata={async ({props}) => ({props,durationInFrames:props.durationInFrames})}/>
+    <Composition id="ValueBoardStandalone" component={ValueBoardStandalone} fps={30} width={1920} height={1080} durationInFrames={1800} defaultProps={{board:null,durationInFrames:1800}} calculateMetadata={async ({props}) => ({props,durationInFrames:props.durationInFrames})}/>
     <Composition id="Day1Broadcast" component={Episode} fps={30} width={1920} height={1080} durationInFrames={1} calculateMetadata={async ({props}) => {
       const scenes = props.scenes ?? await (await fetch(staticFile("scenes.json"))).json();
       return {props:{scenes},durationInFrames:scenes.reduce((sum,scene)=>sum+scene.frames,0)};

@@ -1,94 +1,63 @@
-/* FPL VORTEX / Day 1 / Scene 05 — 1920×1080 broadcast-native.
-   Visual structure follows the FPL Core pitch reference, not a static screenshot. */
-.vb-layout{position:absolute;inset:112px 20px 100px;display:grid;grid-template-columns:minmax(0,1.87fr) minmax(0,.7fr) minmax(0,.49fr);gap:13px;color:#f8faff;font-family:Arial, sans-serif}
-.vb-layout *{box-sizing:border-box}
-.vb-pitch-panel,.vb-fixtures-panel,.vb-projections-panel{min-width:0;overflow:hidden;background:linear-gradient(150deg,#101c36,#0b1026 72%);border:2px solid #42cfff;border-radius:16px;box-shadow:inset 0 0 15px #338ad32b,0 0 14px #412b9b55}
-.vb-pitch-panel{display:flex;flex-direction:column;padding:10px 11px 9px}
-.vb-pitch-top{height:41px;flex:none;display:flex;align-items:center;justify-content:space-between;gap:16px;color:white;font-weight:900;font-size:25px;letter-spacing:.025em}
-.vb-pitch-top span{color:#73e8ff;font-size:17px;white-space:nowrap}
-.vb-pitch{flex:1;min-height:0;position:relative;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;justify-content:space-around;padding:14px 10px;background:repeating-linear-gradient(to bottom,#187841 0%,#187841 17%,#197f47 17%,#197f47 34%);border:2px solid #8cfbd0;border-radius:11px}
-.vb-field-markings{position:absolute;inset:7px;border:2px solid #cefbd7c0;pointer-events:none;z-index:-1}
-.vb-field-markings:before{content:"";position:absolute;top:50%;width:100%;border-top:2px solid #ddffe6b0}
-.vb-center-circle{position:absolute;width:190px;height:190px;border:2px solid #ddffe6af;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%)}
-.vb-goal-area{position:absolute;width:40%;height:70px;border:2px solid #d9ffe4ac;left:30%}
-.vb-goal-area--top{top:-2px}.vb-goal-area--bottom{bottom:-2px}
-.vb-line{display:flex;align-items:center;justify-content:space-evenly;gap:5px;width:100%;z-index:1}
-.vb-line--gk{min-height:105px}.vb-line--def,.vb-line--mid,.vb-line--fwd{min-height:117px}
-.vb-player{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:0;width:clamp(112px,9.1vw,165px);max-width:165px;padding:3px;border:2px solid #55d4ff;border-radius:10px;background:linear-gradient(#0a1938c9,#101e43 65%,#101a38);box-shadow:0 4px 9px #04111c9c;flex-shrink:1}
-.vb-player--active{border-color:#f6e85b;box-shadow:0 0 calc(12px + 14px * var(--vb-pulse,0)) #e9e24ca6,0 3px 6px #04111c}
-.vb-photo{height:55px;width:100%;position:relative;display:flex;justify-content:center;align-items:flex-end}
-.vb-headshot{height:100%;width:80%;object-fit:contain;object-position:center bottom}
-.vb-crest{position:absolute;width:27px;height:27px;object-fit:contain;right:0;top:0;background:#06132a90;border-radius:50%;padding:2px}
-.vb-captain{position:absolute;left:0;top:0;min-width:29px;height:25px;line-height:24px;text-align:center;background:#f8d934;color:#17112f;font-size:17px;border-radius:50%;font-weight:900}
-.vb-captain--vice{background:#b77cff;color:white;font-size:13px}
-.vb-name{font-size:20px;line-height:1.08;min-height:22px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
-.vb-player-info{display:flex;width:100%;justify-content:space-around;align-items:center;font-size:14px;gap:2px;padding:3px 1px;background:#152859;border-radius:3px;color:white}
-.vb-player-info b{color:#6efbfa;font-weight:900;font-size:14px}
-.vb-mini-fixtures{display:flex;gap:2px;width:100%;margin-top:3px}
-.vb-fixture{min-width:0;flex:1;text-align:center;border-radius:3px;background:#aee99f;color:#07162a;display:flex;flex-direction:column;padding:1px 0}
-.vb-fixture b{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:clip;max-width:100%}
-.vb-fixture em{font-style:normal;font-size:9px}
-.vb-fixture strong{font-size:12px;font-weight:900}
-.vb-fixture--medium{background:#79c9f2}.vb-fixture--hard{background:#f5a8d6}.vb-fixture--very-hard{background:#d53450;color:white}.vb-fixture--missing{background:#5a6280;color:white}
-.vb-bench{flex:none;min-height:149px;margin-top:8px;background:#102c38;border-radius:12px;padding:5px 8px;border:1px solid #5db6e5}
-.vb-bench-title{color:#70efff;font-size:18px;font-weight:900;display:flex;justify-content:space-between}
-.vb-bench-title small{color:#d3e8ec;font-size:12px}
-.vb-bench-grid{display:flex;justify-content:space-around;gap:14px;margin-top:4px}
-.vb-bench-grid .vb-player{width:22%;max-width:175px}.vb-bench-grid .vb-photo{height:44px}.vb-bench-grid .vb-name{font-size:17px}
-.vb-fixtures-panel,.vb-projections-panel{padding:12px 10px;display:flex;flex-direction:column;gap:12px}
-.vb-panel-heading{padding:5px 2px 10px;border-bottom:2px solid #356a89}
-.vb-panel-heading strong{display:block;font-size:23px;color:#6cf0ff;line-height:1.1;white-space:normal}
-.vb-panel-heading small{display:block;color:#e6dbef;font-size:14px;margin-top:6px}
-.vb-match-list{display:flex;flex-direction:column;gap:5px;flex:1;min-height:0}
-.vb-match{flex:1;max-height:65px;min-height:43px;display:flex;flex-direction:column;align-items:stretch;justify-content:center;border-bottom:1px solid #4f7091;padding:3px 4px}
-.vb-match-clubs{display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:22px;font-weight:900}
-.vb-match-clubs em{font-size:12px;font-style:normal;color:#a9b6d9}
-.vb-match-time{font-size:12px;color:#9fe8fa}
-.vb-match-goals{align-self:flex-end;margin-top:-18px;font-size:17px;color:#ffe879}
-.vb-match-unavailable{align-self:flex-end;margin-top:-18px;font-size:12px;color:#bbb8cd}
-.vb-budget{flex:none;border:2px solid #a44fff;border-radius:12px;padding:12px;background:linear-gradient(120deg,#21123e,#111836)}
-.vb-budget>small{color:#9ed6fa;font-size:15px}.vb-budget>div:nth-child(2){margin-top:6px}.vb-budget>div:nth-child(2) strong{font-size:31px;color:#ffe14e}.vb-budget>div:nth-child(2) span{font-size:15px}
-.vb-budget-metrics{display:flex;justify-content:space-between;margin-top:9px;gap:8px}.vb-budget-metrics span{display:flex;flex-direction:column}.vb-budget-metrics b{font-size:22px;color:#65ecff}.vb-budget-metrics small{font-size:12px;color:#dbd6e9}
-.vb-projections{display:flex;flex-direction:column;gap:20px;padding-top:16px}
-.vb-projection{display:flex;align-items:center;gap:7px;white-space:nowrap}
-.vb-projection>span{font-size:19px;font-weight:900}.vb-projection>b{font-size:22px;color:white;min-width:43px;text-align:right}
-.vb-projection-track{height:13px;border-radius:20px;background:#233e70;flex:1;min-width:4px;overflow:hidden}.vb-projection-track i{display:block;height:100%;background:linear-gradient(90deg,#1defff,#7f8eff);border-radius:20px}
-.vb-model-note{margin-top:auto;color:#c9c5dd;font-size:15px;line-height:1.3;border-top:1px solid #5a6394;padding-top:11px}
-.vb-empty{color:#d9d0e6;font-size:17px;margin-top:40px;text-align:center}
-/* All dimensions follow the fixed 1920×1080 Remotion canvas; safe areas avoid rail overlap. */
-
-/* Next-gameweek player opponent: use the legible large-chip format from reference #2. */
-.vb-mini-fixtures { min-height:27px; margin-top:4px; }
-.vb-mini-fixtures .vb-fixture { min-height:27px; width:100%; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:7px; padding:2px 4px; }
-.vb-mini-fixtures .vb-fixture b { font-size:17px; font-weight:900; }
-.vb-mini-fixtures .vb-fixture em { font-size:15px; font-weight:800; }
-.vb-mini-fixtures .vb-fixture strong { font-size:17px; }
-.vb-next-empty { width:100%; text-align:center; background:#334966; color:#fff; font-size:13px; font-weight:800; padding:5px 2px; border-radius:4px; }
-
-/* Readable data and club-crest safe regions, avoiding image/face collisions. */
-.vb-photo { padding-right:24%; }
-.vb-headshot { width:76%; object-position:32% bottom; }
-.vb-crest { width:29px; height:29px; right:2%; top:2%; background:#091932; }
-.vb-name { white-space:normal; overflow-wrap:break-word; display:flex; justify-content:center; align-items:center; min-height:36px; max-height:40px; font-size:19px; line-height:1; overflow:hidden; text-overflow:clip; }
-.vb-market { margin-top:16px; padding-top:10px; border-top:2px solid #3f688a; }
-.vb-market>strong { color:#68e9ff; font-size:18px; display:block; margin-bottom:10px; line-height:1.08; }
-.vb-market-row { display:flex; align-items:center; gap:5px; justify-content:space-between; padding:6px 0; border-bottom:1px solid #39496c; font-size:16px; }
-.vb-market-row span { min-width:0; overflow-wrap:anywhere; font-weight:700; }
-.vb-market-row b { color:#ffe362; font-size:17px; }
-.vb-market-row em { font-style:normal; font-size:13px; font-weight:900; }
-.vb-market-rise { color:#5df4ad; }
-.vb-market-fall { color:#ff8aa7; }
-
-/* The active week's XI and captain are switched on Ryan's measured GW cue. */
-.vb-projection--active { border:1px solid #70ebff; margin:-2px -4px; padding:2px 4px; border-radius:8px; background:#1161904a; box-shadow:0 0 14px #49e5ff44; }
-.vb-projection--active>span,.vb-projection--active>b { color:#72faff; }
-.vb-projection--active .vb-projection-track i { background:linear-gradient(90deg,#ffe65c,#ffb247); }
-
-/* Broadcast-mobile legibility pass: names and numerical labels win over decoration. */
-.vb-line .vb-name { font-size:22px; min-height:40px; }
-.vb-player-info { font-size:15px; }
-.vb-player-info b { font-size:15px; }
-.vb-bench-grid .vb-name { font-size:20px; min-height:38px; }
-.vb-mini-fixtures .vb-fixture b { font-size:18px; }
-
-.vb-crest--fallback { display:flex;align-items:center;justify-content:center;background:#183963;color:#fff;font-size:10px;font-weight:900;letter-spacing:-.05em;border:1px solid #69dfff; }
+.canvas--value-board {
+  --vb-violet: #430474;
+  --vb-plum: #200137;
+  --vb-white: #fcfff8;
+  --vb-yellow: #ffeb53;
+  --vb-cyan: #00e8ff;
+  background: #11800a;
+}
+.vb-pitch {
+  position: absolute; inset: 122px 0 67px; overflow: hidden;
+  background:
+    radial-gradient(ellipse at 51% -8%, #91ff118c 0%, transparent 58%),
+    repeating-conic-gradient(from 78deg at 50% -106%, #45dd161f 0deg 3.5deg, #0a640d24 3.5deg 7deg),
+    linear-gradient(108deg, #17ae09, #0a8309 52%, #26c60d);
+}
+.vb-pitch::before {
+  content: ''; position: absolute; inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)' opacity='.22'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+.vb-pitch-lines { position:absolute; inset:0; width:100%; height:100%; stroke:#f7fff0; stroke-width:5; opacity:.95; }
+.vb-line {
+  position: absolute; left: 38px; right: 104px; height: 214px;
+  display: grid; grid-template-columns: 376px minmax(0, 1fr); align-items: center;
+}
+.vb-line--gk { top: 7px; }
+.vb-line--def { top: 222px; }
+.vb-line--mid { top: 445px; }
+.vb-line--fwd { top: 664px; }
+.vb-players { display:flex; align-items:center; justify-content:center; gap: 22px; }
+.vb-line--gk .vb-players { gap: 125px; padding-right: 70px; }
+.vb-line--fwd .vb-players { gap: 108px; padding-right: 70px; }
+.vb-position {
+  display:flex; align-items:center; gap:8px; width:max-content; margin:0;
+  padding:0 20px 0 0; height:56px; border:3px solid var(--vb-white); border-radius:35px;
+  background: linear-gradient(#6908a3 0%, var(--vb-violet) 46%, var(--vb-plum) 100%);
+  box-shadow:0 6px 8px #08230670; color:var(--vb-white); text-transform:uppercase;
+  font-size:31px; font-weight:900; letter-spacing:-.8px; white-space:nowrap;
+}
+.vb-position span {
+  width:71px; height:71px; display:grid; place-items:center; margin-left:-5px; border-radius:50%;
+  background:linear-gradient(#520787,#19002f); border:3px solid var(--vb-white);
+}
+.vb-position svg { width:44px; height:44px; stroke:var(--vb-white); stroke-width:2; stroke-linejoin:round; fill:none; }
+.vb-position b { color:var(--vb-yellow); }
+.vb-player { position:relative; flex:0 0 249px; height:211px; isolation:isolate; }
+.vb-card-outline {
+  position:absolute; inset:55px 0 0; border:3px solid var(--vb-white); border-radius:20px;
+  background:linear-gradient(145deg,#19c70b61,#08710914);
+  box-shadow:0 6px 9px #06420f82;
+}
+.vb-player--active .vb-card-outline { border-color:var(--vb-yellow); box-shadow:0 0 12px #ffed55a0; }
+.vb-photo { position:absolute; inset:0 15px 72px 10px; overflow:hidden; }
+.vb-photo img { position:absolute; bottom:-28px; left:50%; transform:translateX(-50%); width:205px; height:172px; object-fit:contain; object-position:center bottom; }
+.vb-crest { position:absolute; top:38px; right:13px; width:69px; height:69px; object-fit:contain; filter:drop-shadow(0 2px 2px #10250d80); }
+.vb-player-copy { position:absolute; inset:auto 0 0; overflow:hidden; border:3px solid var(--vb-white); border-radius:17px; background:var(--vb-white); }
+.vb-name { display:flex; justify-content:center; align-items:center; height:36px; color:#14112b; font-weight:900; line-height:1; white-space:nowrap; }
+.vb-player-info {
+  display:flex; align-items:center; justify-content:center; height:35px; gap:10px;
+  border-radius:10px; background:linear-gradient(#57058a,#2b0346);
+  color:var(--vb-white); font-size:23px; font-weight:850; letter-spacing:-.5px; font-variant-numeric:tabular-nums;
+}
+.vb-player-info b { padding-left:10px; border-left:2px solid #e4c6ec; color:var(--vb-cyan); }

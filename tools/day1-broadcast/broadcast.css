@@ -19,11 +19,26 @@ h1 { margin:0; color:#fff; font-size:51px; line-height:1.02; font-weight:900; te
 .icon.instagram { background:linear-gradient(35deg,#ffce58,#ff325e,#913cfb); border-radius:13px }
 .sheen { position:absolute; z-index:-1; width:300px; height:160%; top:-25%; transform:skew(-31deg); background:linear-gradient(90deg,transparent,#9235e344,#c771ff67,transparent); pointer-events:none }
 
-/* Scene 05 premium rail: retain the approved original crest; make the channel identity unmistakable. */
-.canvas--value-board .header { gap:24px; padding-left:24px; }
-.canvas--value-board .brand { min-width:298px; gap:18px; font-size:38px; padding-right:20px; }
-.canvas--value-board .brand img { width:74px; height:74px; object-fit:contain; background:#170d29; border-radius:12px; }
-.canvas--value-board .heading > div { font-size:20px; letter-spacing:.075em; }
-.canvas--value-board .heading h1 { font-size:48px; line-height:.97; }
-.canvas--value-board .value-board-kicker { display:block; margin-top:5px; font-size:17px; font-weight:800; letter-spacing:.08em; color:#45e4ff; }
-.canvas--value-board .gameweek { font-size:40px; padding:4px 16px; }
+/* Value Board rails follow the supplied full-width pitch reference. */
+.canvas--value-board .rail {
+  left:0; right:0; border-radius:0; border:0;
+  background:linear-gradient(180deg,#4f0795 0%,#25013f 40%,#140322 78%,#420675 100%);
+}
+.canvas--value-board .header { top:0; height:123px; padding:0 43px; gap:16px; border-bottom:4px solid #e783ff; box-shadow:0 3px 15px #f36cff; }
+.canvas--value-board .brand { min-width:397px; gap:19px; font-size:53px; letter-spacing:-.06em; }
+.canvas--value-board .brand img { width:97px; height:108px; object-fit:contain; border:0; border-radius:0; box-shadow:none; }
+.canvas--value-board .heading { text-align:center; }
+.canvas--value-board .heading h1 { font-size:66px; white-space:nowrap; text-shadow:0 3px 5px #100020; }
+.canvas--value-board .heading h1 span { color:var(--vb-yellow); }
+.value-board-kicker {
+  display:inline-block; min-width:575px; padding:1px 27px 2px; margin-top:2px;
+  border-radius:18px; background:var(--vb-cyan); color:#0b1434; font-size:35px;
+  line-height:1.12; font-weight:900; text-transform:uppercase; letter-spacing:.015em;
+}
+.vb-league { width:110px; height:105px; display:grid; place-items:center; text-align:center; font-size:21px; }
+.vb-league img { width:100%; height:100%; object-fit:contain; filter:brightness(0) invert(1); }
+.canvas--value-board .footer { bottom:0; height:69px; padding:0 55px; border-top:4px solid #e783ff; box-shadow:0 -3px 14px #f36cff; }
+.canvas--value-board .social { font-size:32px; gap:14px; }
+.canvas--value-board .icon { width:43px; height:43px; }
+.canvas--value-board .icon svg { width:39px; height:39px; }
+.canvas--value-board .icon.youtube { width:65px; height:44px; border-radius:11px; }
