@@ -16899,7 +16899,7 @@ PLAYER_CARD_CSS = r"""
 }
 .pc-name-last{
   margin-top:calc(var(--u) * 2);
-  font-size:calc(var(--u) * 72);
+  font-size:calc(var(--u) * 50);
   line-height:.98;
   font-weight:1000;
   font-style:italic;
@@ -25342,8 +25342,9 @@ def events_for(key, info):
         return round(float(start_time),3), max(float(min_duration),float(spoken_span))
 
     if key=="00_intro":
-        # The programme ident and each agenda card follow real speech boundaries.
-        welcome_at,_ = _sync("Welcome", 0.35)
+        # Sample the opening stagger and each narration-led highlight.
+        brief_timing = info["brief_timeline"]
+        welcome_at = brief_timing["title"]
         agenda_events = []
         last_cue = -1.0
         for _agenda_index, _agenda in enumerate(VX_INTRO_AGENDA, 1):
@@ -25354,9 +25355,11 @@ def events_for(key, info):
                 raise RuntimeError("Intro agenda word boundaries overlap or are out of order")
             last_cue = cue_at
             agenda_events.append({"sel":f".agenda-card:nth-child({_agenda_index})",
-                "at":cue_at,"dur":0.45,"stagger":0,"fx":"rise"})
-        return [{"sel":".brand","at":info["brief_timeline"]["brand"],"dur":0.45,"fx":"fade"},
-                {"sel":".title-row","at":welcome_at,"dur":0.55,"fx":"rise"}, *agenda_events]
+                "at":cue_at,"dur":0.05,"stagger":0,"fx":"fade"})
+        return [{"sel":".brand","at":brief_timing["brand"],"dur":0.45,"fx":"fade"},
+                {"sel":".title-row","at":welcome_at,"dur":0.55,"fx":"rise"},
+                {"sel":".agendaWrap","at":max(0, brief_timing["cards"][0] - .15),
+                 "dur":.7,"fx":"rise"}, *agenda_events]
 
     if key=="02_fdr":
 
