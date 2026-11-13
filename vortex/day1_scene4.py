@@ -226,51 +226,51 @@ def outlook_script(scene, team_name, player_name):
         say(f"Let’s look at {name} of {club}.", "identity.player")
         if p["price"] is not None:
             price = _decimal(p["price"], 1)
-            say(f"He costs {price} million pounds.", "identity.price", price)
+            say(f"{name} costs {price} million pounds.", "identity.price", price)
         for tile in (t for t in p["tiles"] if t["gw"] == scene["gw"]):
             opponent = team_name(tile["opponent_id"])
             venue = "at home" if tile["venue"] == "H" else "away"
             if tile["band"] == "missing":
-                say(f"He faces {opponent} {venue}.", fixture_metric(tile))
+                say(f"{name} faces {opponent} {venue}.", fixture_metric(tile))
             else:
                 fdr = _decimal(float(tile["rating"]), 1)
-                say(f"He faces {opponent} {venue}, with a fixture difficulty of {fdr}.", fixture_metric(tile), fdr)
+                say(f"{name} faces {opponent} {venue}, with a fixture difficulty of {fdr}.", fixture_metric(tile), fdr)
         for value, label, metric in (
             (p["weeks"][0], "in the next gameweek", "forecast.nextGwXpts"),
             (p["total"], f"over {len(scene['weeks'])} gameweeks", "forecast.fiveGwXpts"),
         ):
             if value is not None:
                 points = _decimal(value, 2)
-                say(f"The Vortex model projects {points} points {label}.", metric, points)
+                say(f"The Vortex model projects {points} points for {name} {label}.", metric, points)
         if p.get("value_pick") and p["value"] is not None:
             value = _decimal(p["value"], 2)
-            say(f"That works out at {value} projected points per million pounds.", "forecast.valuePerMillion", value)
+            say(f"For {name}, that works out at {value} projected points per million pounds.", "forecast.valuePerMillion", value)
 
         recent = p["recent"]
         if recent.get("minutes") is not None and p["sample_matches"]:
             minutes = str(int(recent["minutes"]))
-            say(f"Over his last {p['sample_matches']} recorded matches, he played {minutes} minutes.", "performance.minutes", minutes)
+            say(f"Over the last {p['sample_matches']} recorded matches, {name} played {minutes} minutes.", "performance.minutes", minutes)
         if recent.get("total_points") is not None:
             points = str(int(recent["total_points"]))
-            say(f"He scored {points} actual Fantasy Premier League points in that sample.", "performance.actualPoints", points)
+            say(f"{name} scored {points} actual Fantasy Premier League points in that sample.", "performance.actualPoints", points)
         if recent.get("expected_goal_involvements") is not None:
             threat = _decimal(recent["expected_goal_involvements"], 2)
-            say(f"He recorded {threat} expected goal involvements in that sample.", "performance.xGI", threat)
+            say(f"{name} recorded {threat} expected goal involvements in that sample.", "performance.xGI", threat)
         defence = p.get("defence")
         probabilities = defence["cs_probabilities"] if defence else []
         if len(probabilities) == 1 and probabilities[0] is not None and 0 <= probabilities[0] <= 1:
             chance = _decimal(100 * probabilities[0], 1)
-            say(f"The model puts the next match clean sheet chance at {chance} percent.", "defensive.cleanSheetChance", chance)
+            say(f"For {name}, the model puts the next match clean sheet chance at {chance} percent.", "defensive.cleanSheetChance", chance)
         if p["forecast_review"]:
-            say("The model gives him an unusually large share of his team’s attack. I would review that assumption before using the estimate.", "verdict")
+            say(f"The model gives {name} an unusually large share of the attack, so I would review that assumption before using the estimate.", "verdict")
         if p["net"] is not None:
             net = str(abs(int(p["net"])))
             if p["net"] == 0:
-                say(f"The market snapshot shows a net movement of {net} transfers.", "transfers.net", net)
+                say(f"The market snapshot shows a net movement of {net} transfers for {name}.", "transfers.net", net)
             else:
                 direction = "net transfers in" if p["net"] > 0 else "net transfers out"
-                say(f"The market snapshot shows {net} {direction}.", "transfers.net", net)
-        say(f"My verdict is {p['verdict'].lower()}. {p['reason']}.", "verdict")
+                say(f"The market snapshot shows {net} {direction} for {name}.", "transfers.net", net)
+        say(f"My verdict for {name} is {p['verdict'].lower()}, because {p['reason'][:1].lower() + p['reason'][1:]}.", "verdict")
         beats.append((f"hero-{pid}", pid, lines))
     beats.append(("summary", None, [
         ("Compare the next fixture with the longer run, then check the latest line-up news before deciding where to use your transfer.", None, None),

@@ -1,6 +1,6 @@
 import re
 import unittest
-from vortex.day1_scene4 import build_outlook, outlook_timing
+from vortex.day1_scene4 import build_outlook, outlook_narration, outlook_script, outlook_timing
 from vortex.football_identity import full_club_name
 
 
@@ -31,6 +31,23 @@ class Scene4Tests(unittest.TestCase):
         self.assertEqual(review["leaders"][0]["verdict"], "REVIEW")
         self.assertEqual(review["value"], [])
         self.assertFalse(any(review["verdicts"].values()))
+
+    def test_identical_player_metrics_and_verdicts_keep_distinct_sentences(self):
+        row = {
+            "team_id": 3, "price": 5.0, "tiles": [
+                {"id": 18, "gw": 11, "opponent_id": 4, "venue": "H", "band": "easy", "rating": "2.0"},
+            ],
+            "weeks": [3.0] * 5, "total": 15.0, "recent": {"minutes": 90, "total_points": 2},
+            "sample_matches": 1, "forecast_review": False, "net": 0, "verdict": "HOLD",
+            "reason": "Projection and transfer flow give a mixed signal",
+        }
+        scene = {"gw": 11, "weeks": list(range(11, 16)), "board": [
+            dict(row, id=1, name="Jackson"), dict(row, id=2, name="Palmer"),
+        ]}
+        script = outlook_script(scene, lambda i: {3: "Chelsea", 4: "Arsenal"}[i], lambda _, name: name)
+        sentences = re.split(r"(?<=[.!?])\s+", " ".join(line for _, line in outlook_narration(script)))
+        self.assertEqual(len(sentences), len(set(sentences)))
+        self.assertIn("My verdict for Palmer is hold", " ".join(sentences))
 
     def test_measured_metric_spans_handle_repeated_projection_values(self):
         script = [
