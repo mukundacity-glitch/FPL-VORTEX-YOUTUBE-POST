@@ -713,8 +713,6 @@ def tighten_review_narration(segments, starters, context, *, review_gw, points,
         'bench_intro': 'The bench order is on the board.',
         'metrics_intro': 'Here’s how the armband worked out.',
         'metric_captain': captain_line or 'The captain return is unavailable in this snapshot.',
-        'hero_review': ('For the next armband, I’d look at how long the player is likely to be on the pitch '
-                        'and whether their role gives them more than one route to points.'),
         'quietest_review': ('A quiet score can make a good pick look worse than it was. '
                             'I’d only change my approach if there was a warning I could have spotted before the deadline.'),
         'availability_review': news,
@@ -732,8 +730,6 @@ def tighten_review_narration(segments, starters, context, *, review_gw, points,
         key = segment['id']
         if key in copy:
             segment['text'] = copy[key]
-    if 'hero_review' not in by_id:
-        by_id['metric_captain']['text'] += ' ' + copy['hero_review']
     if 'availability_review' not in by_id:
         by_id['review_close']['text'] += ' ' + news
 

@@ -59,9 +59,7 @@ def write_json(path, payload):
 
 
 def _speaking_name(player):
-    # Full official names; abbreviations such as BHA never enter spoken text.
-    name = player.get("fullName") or player.get("name")
-    return name.strip()
+    return re.sub(r"^[A-Za-z]\.\s*", "", player["name"].strip())
 
 
 def narration_parts(board):
@@ -77,61 +75,25 @@ def narration_parts(board):
     budget = min((p for p in starters if p["position"] != "GK"),
                  key=lambda p: (p["price"], -p["nextGwXpts"], p["id"]))
     formation = " ".join(board["formation"].split("-"))
-    parts = [(None, f"The Value Board comes in at {price(board['totalCost'])}, with "
-                   f"{price(board['bank'])} left from the model squad budget. "
-                   f"I'd set up in a {formation}. The full squad and bench order are on the board."),
-             (budget["id"], f"{_speaking_name(budget)} is the cheapest outfield starter here, at "
-                            f"{price(budget['price'])}. That keeps more of the budget available for "
-                            "the positions where I'd back a player to start and contribute most weeks. "
-                            "For a cheaper pick, I want to see how often the planner actually starts them."),
-             (captain["id"], f"I'd captain {_speaking_name(captain)}. The model gives this pick "
-                             "the strongest points projection in the starting eleven. If the team "
-                             "update puts those minutes in doubt, I'd revisit the armband."),
-             (vice["id"], f"{_speaking_name(vice)} is my vice-captain. If the captain doesn't play "
-                          "at all, the vice gets double points provided they play."),
-             (first_sub["id"], f"First outfield substitute is {_speaking_name(first_sub)}. "
-                               "Bench order matters, and an automatic change still has to leave a legal formation.")]
-    plans = board["weeklyPlans"]
-    projections = {p["gameweek"]: p["xpts"] for p in board["projections"]}
-    first = plans[0]
-    biggest = max(plans[1:], key=lambda plan: (
-        len(set(first["starters"]) - set(plan["starters"])),
-        plan["captainId"] != first["captainId"],
-        plan["formation"] != first["formation"],
-        -plan["gameweek"],
-    ), default=first)
-    for plan in plans:
-        gw = plan["gameweek"]
-        if plan is first:
-            line = f"Gameweek {gw} is the starting point. Watch how the lineup changes across the run."
-        elif plan is biggest:
-            swaps = len(set(first["starters"]) - set(plan["starters"]))
-            new_captain = plan["captainId"] != first["captainId"]
-            if swaps:
-                line = (f"Gameweek {gw} has the biggest change, with {swaps} "
-                        f"starting {'spot' if swaps == 1 else 'spots'} changing from the opening lineup.")
-            else:
-                line = f"The starting eleven holds in Gameweek {gw}."
-            if swaps == 0 and not new_captain:
-                line += " I’d keep the same captain if the team news stays clear."
-            if new_captain:
-                line += f" The armband switches to {_speaking_name(players[plan['captainId']])}."
-            line += " That’s the week I’d check again before locking the plan."
-        else:
-            previous = projections[gw - 1]
-            projected = projections[gw]
-            if projected > previous:
-                line = f"The team projection rises in Gameweek {gw}."
-            elif projected < previous:
-                line = f"Gameweek {gw} looks a little tougher for this squad."
-            else:
-                line = f"The projected team return holds steady in Gameweek {gw}."
-        parts.append((-gw, line))
-    parts.append((None, "My call is to roll if the current squad has cover. I'd use a free transfer "
-                        "if the team update rules out a starter and the replacement fits your squad and budget."))
-    parts.append((None, f"Which spot in your squad would you use a transfer on this week? Tell me the "
-                        "position you're weighing up in the comments. I'll be back with the next "
-                        f"Fantasy Premier League Vortex update before the Gameweek {board['nextGameweek']} deadline."))
+    gameweek = board["nextGameweek"]
+    parts = [
+        (None, f"Here’s the recommended squad for Gameweek {gameweek}. "
+               f"It costs {price(board['totalCost'])}, with {price(board['bank'])} left. "
+               f"The model recommends a {formation} starting formation."),
+        (budget["id"], f"{_speaking_name(budget)} is the cheapest outfield starter at {price(budget['price'])}."),
+        (captain["id"], f"{_speaking_name(captain)} is the recommended captain, with the highest "
+                        f"projection in the starting eleven at {captain['nextGwXpts']:.1f} points."),
+        (vice["id"], f"{_speaking_name(vice)} is the recommended vice-captain."),
+        (first_sub["id"], f"{_speaking_name(first_sub)} is first among the outfield substitutes."),
+    ]
+    change = next((plan for plan in board["weeklyPlans"][1:]
+                   if plan["captainId"] != captain["id"]), None)
+    if change:
+        pick = players[change["captainId"]]
+        parts.append((pick["id"], f"The model switches captaincy to {_speaking_name(pick)} "
+                                  f"in Gameweek {change['gameweek']}."))
+    parts.append((None, f"See you in the next video, where I will analyze transfer options "
+                        f"before the Gameweek {gameweek} deadline."))
     return parts
 
 
@@ -171,6 +133,7 @@ def _asset(session, source, destination):
             pic = raw.convert("RGBA")
             if pic.width < 24 or pic.height < 24:
                 return None
+            pic = pic.crop(pic.getbbox())
             pic.thumbnail((512, 512), Image.Resampling.LANCZOS)
             pic.save(destination, format="PNG")
         return destination
@@ -189,14 +152,37 @@ def local_assets(board, root):
         raise FileNotFoundError(f"Approved original FPL VORTEX logo missing: {original}")
     with Image.open(original) as img:
         img.convert("RGBA").save(root / "original-logo.png", format="PNG")
+    league = original.with_name("pl.png")
+    if not league.is_file():
+        league = next(Path("/content/drive/MyDrive").rglob("pl.png"), league)
+    if league.is_file():
+        with Image.open(league) as img:
+            rgba = img.convert("RGBA")
+            if rgba.getchannel("A").getextrema()[0] < 255:
+                alpha = rgba.getchannel("A")
+                rgba = Image.new("RGBA", rgba.size, "white")
+                rgba.putalpha(alpha)
+            rgba.crop(rgba.getbbox()).save(root / "league-logo.png")
+        board["leagueLogo"] = "value-assets/league-logo.png"
+
     with requests.Session() as session:
-        for p in [*board["starters"], *board["bench"]]:
-            for field, prefix in (("portrait", "player"), ("clubLogo", "club")):
-                path = root / f"{prefix}-{p['id']}.png"
-                if _asset(session, p.get(field), path):
-                    p[field] = "/value-assets/" + path.name
-                else:
-                    p[field] = ""
+        for player in [*board["starters"], *board["bench"]]:
+            portrait = root / f"player-{player['id']}.png"
+            code = player.get("photoCode")
+            base = "https://resources.premierleague.com"
+            sources = [
+                f"{base}/premierleague25/photos/players/500x500/{code}.png",
+                f"{base}/premierleague25/photos/players/250x250/{code}.png",
+                f"{base}/premierleague/photos/players/250x250/p{code}.png",
+                f"{base}/premierleague/photos/players/110x140/p{code}.png",
+            ] if code else []
+            if player.get("portrait"):
+                sources.append(player["portrait"])
+            player["portrait"] = ("/value-assets/" + portrait.name if
+                any(_asset(session, source, portrait) for source in sources) else "")
+            crest = root / f"club-{player['teamId']}.png"
+            player["clubLogo"] = ("/value-assets/" + crest.name if
+                crest.is_file() or _asset(session, player.get("clubLogo"), crest) else "")
 
 
 def _check_previous_program(qa, review, board):
@@ -245,11 +231,9 @@ def integrate(output_root, *, remotion_root):
             )
         local_assets(board, assets)
         shutil.copy2(voice, assets / "scene-5-narration.mp3")
-        board["narrationCues"] = [dict(playerId=c["playerId"] if c["playerId"] > 0 else None,
-                                      gameweek=-c["playerId"] if c["playerId"] < 0 else None,
-                                      start=c["start"], end=c["end"])
+        board["narrationCues"] = [dict(playerId=c["playerId"], start=c["start"], end=c["end"])
                                  for c in cues if c["playerId"] is not None]
-        props = {"board": board, "gameweek": board["nextGameweek"],
+        props = {"board": board,
                  "durationInFrames": int(math.ceil((voice_duration + .5) * 30))}
         props_path = work / "value-board-props.json"
         write_json(props_path, props)
@@ -265,6 +249,8 @@ def integrate(output_root, *, remotion_root):
         if video_size(clip) != (3840, 2160):
             raise RuntimeError("Scene 05 video dimensions invalid")
         scene_duration = duration(clip)
+        run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", "1",
+            "-i", clip, "-frames:v", "1", root / "SLIDE" / "scene05_value_board.png")
         temporary = mp4_dir / (".five-scene-" + master.name)
         try:
             run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y",

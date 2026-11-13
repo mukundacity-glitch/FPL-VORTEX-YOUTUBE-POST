@@ -5,7 +5,7 @@ V6.0 player-card component and other days keep their established visual identity
 
 Audience: FPL managers reviewing a result before making the next decision.
 The opening should identify the programme, set expectations and reach the
-presenter’s actual review within 35–40 seconds.
+presenter’s actual review as soon as the spoken agenda finishes.
 
 ## Runtime tokens
 
@@ -53,18 +53,15 @@ the approved source exports.
 
 ## Day 1 Scene 05 — Value Board
 
-The value board is an evidence-led **football pitch first** composition,
-not the older dark micro-card density. Design implementation is owned by
-`tools/day1-broadcast/ValueBoard.jsx` and `value-board.css`.
-It uses a green pitch for the legal 11, a separated four-player bench,
-one highly legible next-opponent chip per player, a dedicated fixture radar,
-and a five-gameweek projection rail. The original FPL VORTEX lion crest and
-channel wordmark remain prominent in the broadcast header. Violet and cyan
-frame the analytical surfaces, while FDR colours retain their established
-meaning. Match and xPts estimates are labelled as projections, never results.
+The supplied Value Board reference sets the 16:9 layout. Full-width violet rails
+frame the bright striped pitch. Four position rows show the complete 2–5–5–3
+squad. Each card has the official player portrait, club crest, common FPL name,
+price and next-gameweek expected points. The original channel logo sits at the
+upper left, the gameweek and model budget sit in the centre, and social handles
+run along the bottom.
 
-Only validated, freshly assembled five-GW squad data can enable the native
-Scene 05 renderer. Missing player or club assets are left absent, not filled
-with invented badges or portraits; missing fixture/xG values display N/A.
-Audio remains sourced from the original rendered scene and player-focus cues
-must come from measured narration timing, not heuristics.
+`tools/day1-broadcast/ValueBoard.jsx` and `value-board.css` own the composition.
+The same verified roster, price and projections feed the graphics and Ryan
+narration. A short stagger introduces the four rows, with a steady border
+highlight on the pick being discussed. Five-gameweek plans remain in the
+episode data and inform the recommendations.

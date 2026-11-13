@@ -220,14 +220,15 @@ def build_brief(snapshot, *, next_gw, now=None, forecasts=None,
 
 def build_timeline(words, *, duration, phrase_span, cards):
     """Measured speech cues; frame capture must never guess a narration boundary."""
-    if not 35 <= duration <= 40:
-        raise ValueError(f"Opening must measure 35–40 seconds; got {duration:.2f}s. Edit text, never accelerate voice.")
+    if not 0 < duration <= 40:
+        raise ValueError(f"Opening must finish within 40 seconds; got {duration:.2f}s.")
     def at(phrase):
         result = phrase_span(words, phrase, required=True, context="Gameweek Brief")
         return round(float(result[0]), 3)
     timeline = dict(hook=0.0, brand=at("This is"), title=at("Welcome"),
                     cards=[at(c["anchor"]) for c in cards],
                     transition=at("Let's review"), end=duration)
+    timeline["handoff"] = max(timeline["transition"], duration - 0.5)
     order = [timeline["hook"], timeline["brand"], timeline["title"], *timeline["cards"], timeline["transition"], duration]
     if any(b <= a for a, b in zip(order, order[1:])):
         raise ValueError("Opening narration boundaries overlap or are out of order")
@@ -246,11 +247,15 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None,
         raise ValueError("Review agenda references missing editorial sections")
     rows = [
         ("gw_review", "review", "GAMEWEEK REVIEW", f"GW{review_gw} · " + ("Final points" if review_status == "FINAL" else "Provisional — results may change"),
-         "Gameweek review", "First, the Gameweek review: the moment that swung the score."),
+         "Gameweek review", "Gameweek review."),
         ("02_fdr", "fixtures", "PLAYERS AND FIXTURES", "Role · minutes · next opponents",
-         "Players and fixtures", "Players and fixtures: who can make the most of the matchup?"),
+         "Players and fixtures", "Players and fixtures."),
         ("03_projected_goals", "numbers", "NUMBERS BEHIND THE POINTS", "Actual returns and model estimates kept separate",
-         "Numbers behind the points", "Numbers behind the points: how much of an upgrade does the model see?"),
+         "Numbers behind the points", "Numbers behind the points."),
+        ("03_projected_goals", "market", "MARKET OUTLOOK", "Ownership · transfers · price",
+         "Market outlook", "Market outlook."),
+        ("04_value_board", "value", "THE VALUE BOARD", f"Recommended squad for Gameweek {next_gw}",
+         "Value Board", "The Value Board picks the squad for the deadline."),
     ]
     cards = [dict(key=k, title=t, subtitle=s, anchor=a, speech=v)
              for scene, k, t, s, a, v in rows if scene in selected_scenes]

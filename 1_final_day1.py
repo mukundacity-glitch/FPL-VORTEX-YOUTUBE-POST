@@ -16267,7 +16267,11 @@ _review_narration["outro"] = (
 segments.append({"id": "metrics_intro", "text": "Now, did the captaincy pay off?"})
 for _segment_id, _section in (("metric_captain", "captain_review"), ("hero_review", "gameweek_hero"), ("quietest_review", "quietest_return"), ("availability_review", "availability_alerts"), ("review_close", "outro")):
     if _review_narration[_section]:
-        segments.append({"id": _segment_id, "text": _review_narration[_section]})
+        beat = {"id": _segment_id, "text": _review_narration[_section]}
+        if _segment_id == "hero_review":
+            beat.update(spotlight_player_id=int(highest_player["id"]),
+                        spoken_name=vx_review_full_name(highest_player))
+        segments.append(beat)
 # Rebuild this week's editorial from verified review picks, official player
 # data, fixtures and explicitly attributed model estimates. No fixed targets.
 from vortex.day1_editorial import (
@@ -16449,11 +16453,11 @@ async def make_segment(seg):
     # Ryan boundaries; never fall back to segment start or an estimated time.
     seg["name_time"]=None
 
-    if seg.get("name"):
+    if seg.get("name") or seg.get("spotlight_player_id"):
         canonical_name = seg.get("spoken_name") or vx_narration_player(
             seg.get("player_id") if seg.get("player_id") is not None else seg["name"]
         )
-        canonical_name = str(canonical_name or seg["name"]).strip()
+        canonical_name = str(canonical_name or seg.get("name") or "").strip()
         seg["name"] = canonical_name
 
         def _review_boundary_key(value):
@@ -16895,7 +16899,7 @@ PLAYER_CARD_CSS = r"""
 }
 .pc-name-last{
   margin-top:calc(var(--u) * 2);
-  font-size:calc(var(--u) * 72);
+  font-size:calc(var(--u) * 50);
   line-height:.98;
   font-weight:1000;
   font-style:italic;
@@ -17181,6 +17185,8 @@ PLAYER_CARD_JS = r"""
   const svg = (key, size) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[key] || ICONS.star}</svg>`;
 
   function nameParts(p){
+    const common = text(p?.name, "").trim();
+    if (common) return {first:"", last:common};
     const explicitFirst = text(p?.first_name, "");
     const explicitLast  = text(p?.surname, "");
     if (explicitFirst || explicitLast){
@@ -17986,6 +17992,9 @@ def _vx_build_review_timeline(review_pkg, timing):
             spoken_end_offset = min(duration, max(0.0, spoken_end_offset))
         segment["speech_end_at"] = float(start + spoken_end_offset)
 
+        if segment.get("spotlight_player_id") is not None:
+            segment["reveal_at"] = start + float(segment["name_time"])
+
         if player_id is not None:
             reveal_at = float(start) + float(segment.get("name_time") or 0.0)
             segment["reveal_at"] = reveal_at
@@ -18581,21 +18590,25 @@ window.__seek=function(t){
     // LEFT Hero Card while their named narration is being spoken.
     const heroSeg = VX.segments
       .filter(s => s.player_id && (s.kind==="starter" || s.kind==="bench") &&
-        t >= Number(s.hero_on ?? s.reveal_at) &&
+        t >= Math.max(s.t0, Number(s.hero_on ?? s.reveal_at)-.14) &&
         t < Number(s.speech_end_at ?? s.t1))
       .sort((a,b)=>Number(b.reveal_at)-Number(a.reveal_at))[0];
+
+    const spotlight = VX.segments.find(s => s.spotlight_player_id &&
+      t >= Math.max(s.t0, s.reveal_at-.14) && t < s.speech_end_at);
+    const activeHero = spotlight || (t < VX.metrics_t ? heroSeg : null);
 
     const desk = (VX.market_cards || []).find(item => VX.segments.some(
       s => s.id === item.segment_id && t >= s.t0 && t < s.t1));
     const deskSeg = desk && VX.segments.find(s => s.id === desk.segment_id);
     const hw=$v("#vxHeroWrap");
 
-    if(heroSeg && t < VX.metrics_t){
+    if(activeHero){
 
         const all=[...VX.starters,...VX.bench];
 
         const p=all.find(
-          x=>x.id===heroSeg.player_id
+          x=>x.id===(activeHero.spotlight_player_id ?? activeHero.player_id)
         );
 
         if(p){
@@ -18608,10 +18621,10 @@ window.__seek=function(t){
                 hw.dataset.pid=String(p.id);
             }
 
-            const ein=ease(
-              (t-Number(heroSeg.hero_on ?? heroSeg.reveal_at))/Number(timing.hero_fade_in||.32)
-            );
-            const spokenEnd=Number(heroSeg.speech_end_at ?? heroSeg.t1);
+            const nameAt=Number(activeHero.hero_on ?? activeHero.reveal_at);
+            const enterAt=Math.max(activeHero.t0,nameAt-.14);
+            const ein=.18+.82*ease((t-enterAt)/.20);
+            const spokenEnd=Number(activeHero.speech_end_at ?? activeHero.t1);
             const eout=1-ease((t-(spokenEnd-.12))/.12);
             const vis=Math.min(ein,eout);
 
@@ -18687,7 +18700,7 @@ window.__seek=function(t){
         const scoreboardOpening = el.classList.contains("reviewPanel") &&
             t >= Number(timing.review_title_at ?? 0) + 0.60 &&
             t < Number(firstPlayer?.reveal_at || 0);
-        el.style.setProperty("opacity",desk ? 0 : scoreboardOpening ? 1 : panelsP,"important");
+        el.style.setProperty("opacity",desk || spotlight ? 0 : scoreboardOpening ? 1 : panelsP,"important");
         el.style.transform=scoreboardOpening ? "none" :
           `translateY(${(1-panelsP)*38}px) scale(${.985+.015*panelsP})`;
     });
@@ -18881,13 +18894,15 @@ _review_motion_windows = [
 ]
 
 for _segment in pkg["segments"]:
-    if _segment.get("player_id") is not None:
-        _review_motion_windows.append({
-            "id":f"player_{_segment['player_id']}_reveal",
-            "start":float(_segment["reveal_at"]),
-            "end":float(_segment["reveal_at"])
-                  + GW_REVIEW_ANIMATION_TIMING["entrance_duration"],
-        })
+    if _segment.get("player_id") is not None or _segment.get("spotlight_player_id") is not None:
+        _name_at = float(_segment["reveal_at"])
+        _speech_end = float(_segment["speech_end_at"])
+        _review_motion_windows.extend([
+            {"id": f"{_segment['id']}_name", "start": max(float(_segment["t0"]), _name_at - .14),
+             "end": min(_speech_end, _name_at + .20)},
+            {"id": f"{_segment['id']}_exit", "start": max(_name_at, _speech_end - .12),
+             "end": _speech_end + (0 if _segment.get("spotlight_player_id") else .98)},
+        ])
     if _segment.get("kind") == "starter":
         _review_motion_windows.append({
             "id":f"hero_{_segment['player_id']}_in",
@@ -19260,7 +19275,7 @@ VX_BRIEF = build_brief(GW_REVIEW, next_gw=int(NEXT_GW),
     player_model_rows=phase10_player_fixture_expected_points.to_dict(orient="records"),
     fixture_model_rows=fixture_fdr_model_only.to_dict(orient="records"))
 VX_INTRO_AGENDA = build_intro_agenda(
-    SELECTED_SCENES,
+    [*SELECTED_SCENES, "04_value_board"] if os.getenv("VORTEX_DAY1_COMPACT") == "1" else SELECTED_SCENES,
     next_gw=int(NEXT_GW),
     review_gw=int(REVIEW_GW) if SLIDE_SELECTION.get("gw_review") else None,
     review_status=str(GW_REVIEW_STATUS_LOCAL) if SLIDE_SELECTION.get("gw_review") else None,
@@ -24335,7 +24350,8 @@ else:
                 title_done = float(_vx17_timeline["review_title_at"]) + 0.60
                 pitch_done = float(_vx17_timeline["pitch_at"]) + 0.70
                 before_goalkeeper = (
-                    float(_vx17_timeline["first_player_at"]) - 1.0 / FPS
+                    max(float(_vx17_first_segment["t0"]),
+                        float(_vx17_timeline["first_player_at"]) - .14) - 1.0 / FPS
                 )
                 goalkeeper_done = float(_vx17_timeline["first_player_at"]) + 0.50
                 # The actual Hero opacity fades during the LAST 120 ms of
@@ -24446,6 +24462,13 @@ else:
                             "GW Review metric emphasis is not isolated to the narrated block: "
                             f"key={metric_key!r}, state={metric_state}"
                         )
+
+                for cue in _vx17_manifest["segments"]:
+                    if cue.get("spotlight_player_id") is None:
+                        continue
+                    state = await _vx17_dom_state(page, cue["reveal_at"] + .12)
+                    if state["cardPlayerId"] != cue["spotlight_player_id"] or state["hero"] < .5:
+                        raise RuntimeError(f"Spoken Gameweek hero card is missing: {state}")
 
                 # Verify each post-review card in the real scene before encoding.
                 for market_cue in _vx17_manifest.get("market_cues", []):
@@ -24922,13 +24945,13 @@ scripts = {
 
 f"""
 
-I'd roll the transfer if the starting eleven has cover.
+Who makes the squad?
 This is Fantasy Premier League Vortex.
-Welcome to The Gameweek Brief, for Gameweek {NEXT_GW}.
+Welcome to Gameweek {NEXT_GW}.
 
 {VX_INTRO_AGENDA_SPOKEN}
 
-Let's review the result, then pick a captain.
+Let's review the result.
 
 """.strip(),
 
@@ -25082,15 +25105,13 @@ async def make_audio(key,text,rate_override=None):
 
     out.write_bytes(raw)
     if key == "00_intro":
-        measured = vx_media_duration(out)
-        if measured > 40.0:
-            raise RuntimeError(f"Opening voice is {measured:.2f}s; shorten wording, never accelerate Ryan")
-        # A short final dashboard hold is allowed; no stretching or speeding audio.
-        if measured < 38.0:
-            padded = out.with_name("00_intro_padded.mp3")
-            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out),
-                "-af", "apad", "-t", "38", "-c:a", "libmp3lame", str(padded)], check=True)
-            padded.replace(out)
+        # Cut the encoder's silent tail at the measured end of Ryan's last word.
+        speech_end = max(float(word["start"]) + float(word["duration"]) for word in words)
+        cut = min(vx_media_duration(out), speech_end + 0.22)
+        trimmed = out.with_name("00_intro_trimmed.mp3")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out),
+            "-t", str(cut), "-c:a", "libmp3lame", str(trimmed)], check=True)
+        trimmed.replace(out)
 
     return {
         "audio":str(out),
@@ -25321,8 +25342,9 @@ def events_for(key, info):
         return round(float(start_time),3), max(float(min_duration),float(spoken_span))
 
     if key=="00_intro":
-        # The programme ident and each agenda card follow real speech boundaries.
-        welcome_at,_ = _sync("Welcome", 0.35)
+        # Sample the opening stagger and each narration-led highlight.
+        brief_timing = info["brief_timeline"]
+        welcome_at = brief_timing["title"]
         agenda_events = []
         last_cue = -1.0
         for _agenda_index, _agenda in enumerate(VX_INTRO_AGENDA, 1):
@@ -25333,9 +25355,11 @@ def events_for(key, info):
                 raise RuntimeError("Intro agenda word boundaries overlap or are out of order")
             last_cue = cue_at
             agenda_events.append({"sel":f".agenda-card:nth-child({_agenda_index})",
-                "at":cue_at,"dur":0.45,"stagger":0,"fx":"rise"})
-        return [{"sel":".brand","at":info["brief_timeline"]["brand"],"dur":0.45,"fx":"fade"},
-                {"sel":".title-row","at":welcome_at,"dur":0.55,"fx":"rise"}, *agenda_events]
+                "at":cue_at,"dur":0.05,"stagger":0,"fx":"fade"})
+        return [{"sel":".brand","at":brief_timing["brand"],"dur":0.45,"fx":"fade"},
+                {"sel":".title-row","at":welcome_at,"dur":0.55,"fx":"rise"},
+                {"sel":".agendaWrap","at":max(0, brief_timing["cards"][0] - .15),
+                 "dur":.7,"fx":"rise"}, *agenda_events]
 
     if key=="02_fdr":
 
@@ -26415,7 +26439,7 @@ async def _vx20_sample_times(page, cfg, duration, frame_plan):
 
     brief_timing = cfg.get("brief_timeline")
     if isinstance(brief_timing, dict):
-        start = float(brief_timing["transition"])
+        start = float(brief_timing["handoff"])
         _vx20_add_window(times, start, start + 0.85, last_t)
 
     fixture_window = cfg.get("fixture_grid_window")

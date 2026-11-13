@@ -9,6 +9,7 @@ from collections import Counter
 from itertools import combinations
 from math import isfinite
 
+SQUAD_BUDGET = 100
 POSITION = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 FORMATION = {"GK": (1, 1), "DEF": (3, 5), "MID": (2, 5), "FWD": (1, 3)}
 
@@ -115,15 +116,15 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
             "fixtures": tiles,
         })
     total_cost = sum(p["price"] for p in players)
-    if total_cost > 100.00001:
+    if total_cost > SQUAD_BUDGET + .00001:
         raise ValueError(f"Value Board exceeds £100m: {total_cost:.1f}")
     market = market or {}
     if market.get("bank") is not None:
         bank = _number(market["bank"], "bank")
-        if abs((100 - total_cost) - bank) > .11:
+        if abs((SQUAD_BUDGET - total_cost) - bank) > .11:
             raise ValueError("Bank and £100m squad budget disagree")
     else:
-        bank = 100 - total_cost
+        bank = SQUAD_BUDGET - total_cost
 
     lineups, projections = {}, []
     for gw in range(gameweek, gameweek + 5):
@@ -184,6 +185,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
                      f"{sum(p['position']=='FWD' for p in starters)}",
         "starters": starters,
         "bench": bench,
+        "budget": SQUAD_BUDGET,
         "totalCost": round(total_cost, 2),
         "bank": round(bank, 2),
         "fiveGwXpts": round(sum(p["xpts"] for p in projections), 2),

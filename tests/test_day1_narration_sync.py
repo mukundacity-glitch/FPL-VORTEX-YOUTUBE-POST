@@ -61,9 +61,8 @@ def required_animation_anchors(source: str) -> dict[str, list[str]]:
     animation_cell = source.split(
         "# CELL 19 — SHARED ANIMATION ENGINE", 1
     )[1].split("# CELL 20 —", 1)[0]
-    intro_section = animation_cell.split('if key=="00_intro":', 1)[1].split(
-        'if key=="02_fdr":', 1
-    )[0]
+    brief = (SOURCE_PATH.parent / "vortex" / "day1_brief.py").read_text(encoding="utf-8")
+    intro_timeline = brief.split("def build_timeline(", 1)[1].split("def build_intro_agenda(", 1)[0]
     outro_events = animation_cell.split(
         "# Anchor section transitions to spoken Ryan words", 1
     )[1].split("# COMMON 4K CSS", 1)[0]
@@ -77,7 +76,7 @@ def required_animation_anchors(source: str) -> dict[str, list[str]]:
         r'\s*,\s*required=True'
     )
     return {
-        "00_intro": re.findall(sync_pattern, intro_section),
+        "00_intro": re.findall(r'at\(\"([^\"]+)\"', intro_timeline),
         "05_outro": (
             re.findall(sync_pattern, outro_events)
             + re.findall(required_pattern, outro_manifest)

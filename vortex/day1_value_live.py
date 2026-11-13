@@ -16,7 +16,7 @@ from scipy.optimize import Bounds, LinearConstraint, milp
 import numpy as np
 import requests
 
-from .day1_value_board import build_value_board
+from .day1_value_board import SQUAD_BUDGET, build_value_board
 from .football_identity import full_club_name
 
 API = "https://fantasy.premierleague.com/api"
@@ -150,7 +150,7 @@ def _optimise(players, cost, points, next_scores):
         constraint([int(p["element_type"] == position) for p in players], amount, amount)
     for club_id in {p["team"] for p in players}:
         constraint([int(p["team"] == club_id) for p in players], 0, 3)
-    constraint(cost, 0, 100)
+    constraint(cost, 0, SQUAD_BUDGET)
     # One low-cost goalkeeper and one value defender, without excluding
     # playing backup options whose prices are slightly above the minimum.
     gk_floor = min(cost[i] for i,p in enumerate(players) if p["element_type"] == 1)
@@ -180,7 +180,7 @@ def make_live_value_board(*, session=None, snapshot=None):
     raw_teams = bootstrap["teams"]
     team_map = {t["id"]: {
         "id": t["id"], "name": t["name"], "short": t["short_name"],
-        "badge": f"https://resources.premierleague.com/premierleague/badges/50/t{t['code']}.png",
+        "badge": f"https://resources.premierleague.com/premierleague/badges/100/t{t['code']}.png",
     } for t in raw_teams}
     recent = _fetch_recent(all_players, session) if snapshot is None else snapshot.get("recent", {})
     valid = []
@@ -238,11 +238,9 @@ def make_live_value_board(*, session=None, snapshot=None):
             match["team_a"]: _week_ratings([match], match["team_a"], match["event"])[0][1],
         }
         enriched.append(item)
-    portraits = {p["id"]: f"https://resources.premierleague.com/premierleague/photos/players/110x140/p{p['code']}.png"
-                 for p in selected if p.get("code")}
     board = build_value_board(
         gameweek=gw, squad=selected, forecasts=selected_forecast,
-        fixtures=enriched, teams=team_map, portraits=portraits,
+        fixtures=enriched, teams=team_map,
         model_label="VORTEX research xPts · official FPL form / price / minutes / FDR",
     )
     board["marketSnapshotUTC"] = datetime.now(timezone.utc).isoformat()
@@ -253,6 +251,7 @@ def make_live_value_board(*, session=None, snapshot=None):
     market_by_id = {p["id"]: p for p in selected}
     for row in [*board["starters"], *board["bench"]]:
         raw = market_by_id[row["id"]]
+        row["photoCode"] = raw.get("code")
         row["clubSpeechName"] = full_club_name({**team_map[raw["team"]], "code": next(t["code"] for t in raw_teams if t["id"] == raw["team"])}, speech=True)
         for tile in row["fixtures"]:
             opponent_id = tile["opponentId"]

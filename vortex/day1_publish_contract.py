@@ -21,7 +21,7 @@ _ANIMATION_TIMES = (
     "t0", "t1", "speech_end_at", "reveal_at",
     "hero_on", "hero_exit_at", "hero_off",
 )
-_ANIMATION_FIELDS = ("id", "player_id", "kind", *_ANIMATION_TIMES)
+_ANIMATION_FIELDS = ("id", "player_id", "spotlight_player_id", "kind", *_ANIMATION_TIMES)
 _MANDATORY_DISCLOSURE = "Expected points are forecasts, not guaranteed returns"
 
 
@@ -64,6 +64,8 @@ def snapshot_review_animation_segments(segments: list[dict[str, Any]]) -> list[d
                     raise ValueError(f"Invalid or duplicated review player id {player_id}")
                 players.add(player_id)
                 item[key] = player_id
+            elif key == "spotlight_player_id":
+                item[key] = int(source[key])
             elif key == "kind":
                 item[key] = str(source[key])
         if "player_id" in item:
@@ -89,6 +91,12 @@ def snapshot_review_animation_segments(segments: list[dict[str, Any]]) -> list[d
             f"GW Review animation requires eleven starters and four reserves, "
             f"got players={len(players)} starters={starter_count}"
         )
+    for item in output:
+        if "spotlight_player_id" in item and (
+            item["spotlight_player_id"] not in players
+            or not item["t0"] <= item["reveal_at"] < item["speech_end_at"] <= item["t1"]
+        ):
+            raise ValueError(f"Invalid spoken hero cue in {item['id']}")
     return output
 
 

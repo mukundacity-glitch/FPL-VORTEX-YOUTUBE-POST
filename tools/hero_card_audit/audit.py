@@ -151,8 +151,8 @@ async def main():
         # 3) stress payloads mounted into the live hero slot
         await pg.evaluate('t=>window.__auditLayout(t)', vx['segments'][2]['hero_on'] + 3.0)
         stress = {
-            'long name + long club': variant(first_name='Trent', surname='Alexander-Arnold', club="NOTTINGHAM FOREST", position='DEF', position_label='DEFENDER'),
-            'very long single name': variant(first_name='', surname='Gabriel Teodoro Martinelli', club='ARSENAL'),
+            'long name + long club': variant(name='Alexander-Arnold', first_name='Trent', surname='Alexander-Arnold', club="NOTTINGHAM FOREST", position='DEF', position_label='DEFENDER'),
+            'very long single name': variant(name='Gabriel Teodoro Martinelli', first_name='', surname='Gabriel Teodoro Martinelli', club='ARSENAL'),
             'no photo, no crest': variant(player_image='', club_badge=''),
             'goalkeeper + captain': variant(position='GK', position_label='GOALKEEPER', captain=True),
             'double gameweek + blank': variant(fixtures=[
