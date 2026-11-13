@@ -46,6 +46,21 @@ class Scene2RendererIntegrationTests(unittest.TestCase):
                       '.reviewPanel .metric','pitchGW'):
             self.assertIn(token,SOURCE,token)
 
+    def test_scene2_review_table_is_hidden_at_frame_zero(self):
+        js=script_literal("JS")
+        self.assertIn('t >= Number(timing.review_title_at ?? 0) + 0.60',js)
+        self.assertIn('t < Number(firstPlayer?.reveal_at || 0)',js)
+        self.assertIn('const scoreboardOpening = el.classList.contains("reviewPanel") &&',js)
+
+    def test_real_pitch_landing_is_after_spoken_end_and_flight(self):
+        js=script_literal("JS")
+        self.assertIn("const end=Number(s.speech_end_at ?? s.t1);",js)
+        self.assertIn("const p=ease((t-end-flightSeconds)/Number(timing.entrance_duration||.42));",js)
+        self.assertIn('t >= Number(s.speech_end_at ?? s.t1)',js)
+        self.assertIn('t < Number(s.speech_end_at ?? s.t1)+flightSeconds',js)
+        self.assertIn('goalkeeper_speech_end = float(_vx17_first_segment["speech_end_at"])',SOURCE)
+        self.assertIn('landed_state = checkpoint_states["goalkeeper_landed"]',SOURCE)
+
     def test_extracted_review_js_parses_in_node(self):
         js=script_literal("JS").replace("__VX_DATA__","{}")
         js=re.sub(r'^\s*<script[^>]*>\s*','',js).replace("</script>","")
