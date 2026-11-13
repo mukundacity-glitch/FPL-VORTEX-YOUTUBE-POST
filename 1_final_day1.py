@@ -23591,13 +23591,11 @@ print("⏳ Rendering restored original matrix slides...")
 if SLIDE_SELECTION.get("02_fdr", True):
     from vortex.day1_scene3 import market_board, market_narration, render_market_html
     from zoneinfo import ZoneInfo
-    _scene3_session = _vx_http_session()
-    _scene3_fixtures = _vx_get_json(_scene3_session, "/fixtures/")
     _scene3_stamp = datetime.fromisoformat(data_snapshot_timestamp).astimezone(
         ZoneInfo("America/New_York")
     ).strftime("%Y-%m-%d %H:%M %Z")
     VX_SCENE3 = market_board(
-        int(NEXT_GW), _scene3_fixtures, team_meta_by_id, model_fixture_fdr_df.to_dict("records"),
+        int(NEXT_GW), data["fixtures"].to_dict("records"), team_meta_by_id, model_fixture_fdr_df.to_dict("records"),
         market_odds_benchmark.to_dict("records"), _scene3_stamp,
     )
     VX_SCENE3_BEATS = market_narration(VX_SCENE3)
@@ -23608,7 +23606,7 @@ if SLIDE_SELECTION.get("02_fdr", True):
 if SLIDE_SELECTION.get("03_projected_goals", True):
     from vortex.day1_scene4 import build_outlook, outlook_narration, outlook_script, render_outlook
     from zoneinfo import ZoneInfo
-    _scene4_session = _vx_http_session()
+    _scene4_session = _fpl_module._vx_http_session()
     _scene4_stamp = datetime.fromisoformat(data_snapshot_timestamp).astimezone(
         ZoneInfo("America/New_York")
     ).strftime("%Y-%m-%d %H:%M %Z")
@@ -23630,11 +23628,11 @@ if SLIDE_SELECTION.get("03_projected_goals", True):
         return vx_bytes_to_data_uri(payload) if payload else photo
 
     VX_SCENE4 = build_outlook(
-        int(NEXT_GW), _vx_get_json(_scene4_session, "/fixtures/"),
+        int(NEXT_GW), data["fixtures"].to_dict("records"),
         team_meta_by_id, data["bootstrap"]["elements"],
         phase10_player_gameweek_expected_points.to_dict("records"),
         model_fixture_fdr_df.to_dict("records"), data["review_ready_gws"],
-        lambda pid: _vx_get_json(_scene4_session, f"/element-summary/{pid}/"),
+        lambda pid: _fpl_module._vx_get_json(_scene4_session, f"/element-summary/{pid}/"),
         _vx_scene4_player_photo, CURRENT_SEASON, _scene4_stamp,
         "Production model" if PHASE10_PRODUCTION_ELIGIBLE else "Research-only model",
         _scene4_matches.to_dict("records"),
