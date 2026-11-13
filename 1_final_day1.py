@@ -17185,6 +17185,8 @@ PLAYER_CARD_JS = r"""
   const svg = (key, size) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[key] || ICONS.star}</svg>`;
 
   function nameParts(p){
+    const common = text(p?.name, "").trim();
+    if (common) return {first:"", last:common};
     const explicitFirst = text(p?.first_name, "");
     const explicitLast  = text(p?.surname, "");
     if (explicitFirst || explicitLast){
