@@ -19260,7 +19260,7 @@ VX_BRIEF = build_brief(GW_REVIEW, next_gw=int(NEXT_GW),
     player_model_rows=phase10_player_fixture_expected_points.to_dict(orient="records"),
     fixture_model_rows=fixture_fdr_model_only.to_dict(orient="records"))
 VX_INTRO_AGENDA = build_intro_agenda(
-    SELECTED_SCENES,
+    [*SELECTED_SCENES, "04_value_board"] if os.getenv("VORTEX_DAY1_COMPACT") == "1" else SELECTED_SCENES,
     next_gw=int(NEXT_GW),
     review_gw=int(REVIEW_GW) if SLIDE_SELECTION.get("gw_review") else None,
     review_status=str(GW_REVIEW_STATUS_LOCAL) if SLIDE_SELECTION.get("gw_review") else None,
@@ -24922,9 +24922,9 @@ scripts = {
 
 f"""
 
-I'd roll the transfer if the starting eleven has cover.
+Who makes the next squad?
 This is Fantasy Premier League Vortex.
-Welcome to The Gameweek Brief, for Gameweek {NEXT_GW}.
+Welcome to the Gameweek {NEXT_GW} brief.
 
 {VX_INTRO_AGENDA_SPOKEN}
 
@@ -25082,15 +25082,13 @@ async def make_audio(key,text,rate_override=None):
 
     out.write_bytes(raw)
     if key == "00_intro":
-        measured = vx_media_duration(out)
-        if measured > 40.0:
-            raise RuntimeError(f"Opening voice is {measured:.2f}s; shorten wording, never accelerate Ryan")
-        # A short final dashboard hold is allowed; no stretching or speeding audio.
-        if measured < 38.0:
-            padded = out.with_name("00_intro_padded.mp3")
-            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out),
-                "-af", "apad", "-t", "38", "-c:a", "libmp3lame", str(padded)], check=True)
-            padded.replace(out)
+        # Cut the encoder's silent tail at the measured end of Ryan's last word.
+        speech_end = max(float(word["start"]) + float(word["duration"]) for word in words)
+        cut = min(vx_media_duration(out), speech_end + 0.22)
+        trimmed = out.with_name("00_intro_trimmed.mp3")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out),
+            "-t", str(cut), "-c:a", "libmp3lame", str(trimmed)], check=True)
+        trimmed.replace(out)
 
     return {
         "audio":str(out),
@@ -26415,7 +26413,7 @@ async def _vx20_sample_times(page, cfg, duration, frame_plan):
 
     brief_timing = cfg.get("brief_timeline")
     if isinstance(brief_timing, dict):
-        start = float(brief_timing["transition"])
+        start = float(brief_timing["handoff"])
         _vx20_add_window(times, start, start + 0.85, last_t)
 
     fixture_window = cfg.get("fixture_grid_window")

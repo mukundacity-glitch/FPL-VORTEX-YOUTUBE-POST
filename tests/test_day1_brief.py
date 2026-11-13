@@ -32,7 +32,7 @@ def snapshot():
                     for k in ("bootstrap","fixtures","picks","history","live")})
 
 
-def cards(selected=("00_intro", "gw_review", "02_fdr", "03_projected_goals")):
+def cards(selected=("00_intro", "gw_review", "02_fdr", "03_projected_goals", "04_value_board")):
     return build_intro_agenda(selected,next_gw=10,review_gw=9,
         review_status="FINAL", review_segments=[{"id":x} for x in
             ("headline","editorial_squad_context","editorial_routes","editorial_verdict")])
@@ -170,7 +170,7 @@ class BriefFacts(unittest.TestCase):
 class BriefProduction(unittest.TestCase):
     def test_new_agenda_uses_exact_current_headings_and_anchors(self):
         self.assertEqual([c["title"] for c in cards()], ["GAMEWEEK REVIEW","PLAYERS AND FIXTURES",
-            "NUMBERS BEHIND THE POINTS"])
+            "NUMBERS BEHIND THE POINTS", "MARKET OUTLOOK", "THE VALUE BOARD"])
         self.assertEqual([c["key"] for c in cards(("00_intro", "gw_review"))], ["review"])
         for c in cards():self.assertIn(c["anchor"].lower(),c["speech"].lower())
 
@@ -179,13 +179,13 @@ class BriefProduction(unittest.TestCase):
             build_intro_agenda(["00_intro"],next_gw=10)
 
     def test_actual_timing_enforced_without_speed_changes(self):
-        sequence={"This is":4,"Welcome":9,"Let's review":33}
-        sequence.update({c["anchor"]:14+i*3.5 for i,c in enumerate(cards())})
+        sequence={"This is":3,"Welcome":6,"Let's review":24}
+        sequence.update({c["anchor"]:9+i*3 for i,c in enumerate(cards())})
         lookup=lambda words,phrase,**kw:(sequence[phrase],.5)
-        timeline=build_timeline([],duration=38,phrase_span=lookup,cards=cards())
-        self.assertLess(timeline["transition"],40)
-        for duration in (34,41):
-            with self.assertRaisesRegex(ValueError,"35–40"):
+        timeline=build_timeline([],duration=26,phrase_span=lookup,cards=cards())
+        self.assertEqual(timeline["handoff"], 25.5)
+        for duration in (0,41):
+            with self.assertRaisesRegex(ValueError,"within 40 seconds"):
                 build_timeline([],duration=duration,phrase_span=lookup,cards=cards())
 
     def test_html_escapes_news_and_handles_missing_data(self):
