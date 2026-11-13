@@ -10,6 +10,8 @@ on:
       - "vortex/expert_editorial.py"
       - "vortex/day1_agenda.py"
       - "vortex/day1_value_*.py"
+      - "vortex/day1_final_scenes.py"
+      - "tests/test_day1_final_scenes.py"
       - "tools/day1-broadcast/**"
       - "vortex/day1_brief.py"
       - "vortex/day1_brief.html"
@@ -631,7 +633,7 @@ jobs:
         shell: bash
         run: python -m vortex.day1_media
 
-      - name: Build private YouTube metadata package
+      - name: Verify all five scenes in the final MP4 and build YouTube chapters
         shell: bash
         run: python -m vortex.youtube_studio_package
 
@@ -672,9 +674,15 @@ jobs:
               or qa.get("output_contract", {}).get("passed") is not True
           ):
               raise SystemExit("Final video QA did not pass")
-          expected_scene_keys = ["00_intro", "gw_review", "02_fdr", "03_projected_goals", "04_value_board"]
-          if qa.get("scene_keys") != expected_scene_keys:
-              raise SystemExit(f"Day 1 must contain all five verified scenes in order: {qa.get('scene_keys')}")
+          from vortex.day1_final_scenes import SCENE_KEYS
+
+          verified_scenes = qa.get("verified_final_scenes") or []
+          if tuple(scene.get("key") for scene in verified_scenes) != SCENE_KEYS:
+              raise SystemExit("Final MP4 must contain all five verified scenes in order")
+          for scene in verified_scenes:
+              still = root / "SLIDE" / scene["screenshot"]
+              if not still.is_file() or still.stat().st_size == 0:
+                  raise SystemExit(f"Missing final MP4 evidence for {scene['title']}")
 
           scene5_qa = qa.get("scene05_verified") or {}
           if scene5_qa.get("squad") != 15 or scene5_qa.get("start_xi") != 11 or scene5_qa.get("bench") != 4:
@@ -860,7 +868,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install existing source-loader test dependencies
-        run: python -m pip install "pandas>=2.2,<3" "numpy>=2.0,<3"
+        run: python -m pip install "pandas>=2.2,<3" "numpy>=2.0,<3" Pillow
       - name: Compile the 33 untouched notebook-cell boundaries and check editorial binding
         run: python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
       - name: Compile Day 1 live editorial and packaging changes
@@ -898,7 +906,9 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
       - name: Validate retrospective review manifest and legitimate script file
         run: python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
-      - name: Verify no duplicate private upload across seasons
+      - name: Verify final Day 1 scene order and chapter timing
+        run: python -m unittest discover -s tests -p 'test_day1_final_scenes.py' -v
+      - name: Verify private upload deduplication by season and render revision
         run: python -m unittest discover -s tests -p 'test_day1_season_dedup.py' -v
       - name: Day 1 player card contract
         run: python -m unittest discover -s tests -p 'test_day1_player_card.py' -v

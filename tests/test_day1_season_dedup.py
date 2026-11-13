@@ -59,6 +59,15 @@ class Day1SeasonDedupeTests(unittest.TestCase):
         self.assertEqual(found["video_id"], "test-video-123")
         self.assertEqual(found["privacy_status"], "private")
 
+    def test_only_the_same_render_revision_can_reuse_a_private_draft(self):
+        marker = "fpl-vortex-2026-2027-gw12-video-1-of-3"
+        revision = "fpl-vortex-day1-" + "a" * 40
+        lookup = dict(marker=marker, legacy_marker="legacy", revision_tag=revision,
+                      season_start=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        self.assertIsNone(_find_existing_gameweek_video(self._client(tags=[marker]), **lookup))
+        found = _find_existing_gameweek_video(self._client(tags=[marker, revision]), **lookup)
+        self.assertEqual(found["video_id"], "test-video-123")
+
     def test_legacy_video_is_reused_only_in_current_season(self):
         marker = "fpl-vortex-2026-2027-gw12-video-1-of-3"
         old = "fpl-vortex-auto-gw12-video-1-of-3"

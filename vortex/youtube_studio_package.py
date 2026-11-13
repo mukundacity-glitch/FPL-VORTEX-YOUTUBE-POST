@@ -16,6 +16,8 @@ import os
 import re
 import subprocess
 
+from .day1_final_scenes import capture_scene_evidence, scene_timeline
+
 
 DEFAULT_OUTPUT_ROOT = Path("/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO")
 YT_VIDEO_PART = 1
@@ -112,56 +114,22 @@ def _vx23_timestamp(total_seconds):
     )
 
 
-def _vx23_chapters(qa, review_gw, close_offset=None):
-    labels = {
-        "00_intro": "The Gameweek Brief",
-        "gw_review": f"GW{review_gw} Review — The Real Story",
-        "02_fdr": "Players & Fixtures",
-        "03_projected_goals": "Numbers & Market Outlook",
-        "04_value_board": "The Value Board · Best £100m Squad",
-        "04_clean_sheets": "Clean-sheet odds",
-        "05_outro": "Next video",
-    }
-    integration = qa.get("external_media_integration")
-    if not isinstance(integration, dict):
-        integration = {}
-    opening = integration.get("opening")
-    if not isinstance(opening, dict):
-        opening = {}
-    opening_duration = (
-        float(opening.get("duration") or 0.0)
-        if integration.get("applied") is True
-        else 0.0
-    )
-    elapsed = opening_duration
-    rows = []
-    for index, section in enumerate(qa.get("sections", [])):
-        if not isinstance(section, dict):
-            continue
-        key = str(section.get("key") or "")
-        label = labels.get(key, str(section.get("scene") or key).title())
-        if index == 0 and key == "00_intro" and opening_duration > 0:
-            rows.append("0:00 Opening & The Gameweek Brief")
-        else:
-            rows.append(f"{_vx23_timestamp(elapsed)} {label}")
-        elapsed += float(section.get("duration") or 0.0)
-    if close_offset is not None:
-        last_section_duration = float(qa["sections"][-1]["duration"])
-        close_at = elapsed - last_section_duration + float(close_offset)
-        if elapsed - close_at >= 10.0:
-            rows.append(f"{_vx23_timestamp(close_at)} Final Transfer Call & Close")
-    if not rows or not rows[0].startswith("0:00 "):
-        raise RuntimeError("YouTube chapters must begin at 0:00")
-    return rows
+def _vx23_chapters(timeline, review_gw):
+    return [
+        f"{_vx23_timestamp(scene['start_seconds'])} "
+        + (f"GW{review_gw} Review — The Real Story" if scene["key"] == "gw_review"
+           else scene["title"])
+        for scene in timeline
+    ]
 
 
-def _vx23_metadata(preview_gw, review_gw, review_status, qa, board=None, close_offset=None):
-    title = f"FPL GW{preview_gw} | Use the Free Transfer or Roll?"
+def _vx23_metadata(preview_gw, review_gw, review_status, timeline, board=None):
+    title = f"FPL GW{preview_gw} | Fixtures, Market Outlook & Best £100m Squad"
     status = "provisional" if review_status == "LIVE/PARTIAL" else "final"
     hashtags = ["#FPL", "#FantasyPremierLeague", f"#FPLGameweek{preview_gw}"]
-    chapters = _vx23_chapters(qa, review_gw, close_offset)
+    chapters = _vx23_chapters(timeline, review_gw)
     captain = next((p for p in (board or {}).get("starters", []) if p.get("captain")), None)
-    captain_name = str((captain or {}).get("fullName") or (captain or {}).get("name") or "").strip()
+    captain_name = str((captain or {}).get("name") or "").strip()
     captain_line = (
         f"{captain_name} gets the armband on the Value Board, based on the strongest "
         "projected return in its starting eleven."
@@ -169,9 +137,7 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa, board=None, close_o
         "The Value Board highlights the captain with the strongest projected return in its starting eleven."
     )
     description = "\n".join([
-        f"FPL Gameweek {preview_gw} tips from FPL VORTEX start with one decision: use a free transfer or roll it?",
-        "My lean is to roll if the squad has cover. If team news rules out a starter, I’d make the move "
-        "only if the replacement improves the starting eleven and fits the budget.",
+        f"FPL VORTEX reviews the latest results and looks ahead to Gameweek {preview_gw}.",
         "",
         f"The {status} Gameweek {review_gw} review looks at the points, rank movement and the decision "
         "that shaped the result. Then I look ahead to the fixtures and where recent minutes give us "
@@ -181,8 +147,8 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa, board=None, close_o
         "points to judge whether an upgrade is worth a move and transfer activity to see where "
         "managers are going. Late team news can change the call.",
         "",
-        captain_line + " The board also shows the full 15-player model squad, money left in the "
-        "budget, bench order and the planned lineups across five Gameweeks.",
+        captain_line + " The Value Board shows the recommended 15-player squad, "
+        "with each player’s price and next-gameweek expected points.",
         "",
         "Which position are you weighing up? Tell me if you’d make the move or keep the transfer for another week.",
         "",
@@ -291,14 +257,25 @@ def build_youtube_studio_package(output_root):
     board = _vx23_read_json(data_dir / "scene05_value_board.json", "Value Board")
     if board.get("nextGameweek") != preview_gw:
         raise RuntimeError("Value Board Gameweek does not match the rendered video")
-    narration_path = _vx23_required_file(data_dir / "scene05_narration.json", "Scene 05 narration cues")
-    narration = json.loads(narration_path.read_text(encoding="utf-8"))
-    metadata = _vx23_metadata(preview_gw, review_gw, review_status, qa, board,
-                              close_offset=narration[-1]["start"])
+    timeline = scene_timeline(qa, video_probe["duration"])
+    capture_scene_evidence(final_video, timeline, output_root / "SLIDE")
+    metadata = _vx23_metadata(preview_gw, review_gw, review_status, timeline, board)
+    qa["verified_final_scenes"] = timeline
+    _vx23_atomic_json(data_dir / "final_video_qa.json", qa)
+    chapters = metadata["chapters"]
+    for chapter in chapters:
+        print(f"[DAY 1 SCENE] {chapter}")
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with Path(summary_path).open("a", encoding="utf-8") as summary:
+            summary.write("## Day 1 final video chapters\n\n")
+            summary.writelines(f"- {chapter}\n" for chapter in chapters)
+            summary.write("\nFive frames from the final MP4 are included in the Day 1 output artifact.\n")
 
     package = {
         "version": "FPL-VORTEX-YOUTUBE-PRIVATE-AUTO-V4",
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "render_revision": os.environ.get("GITHUB_SHA") or None,
         "manual_upload_only": False,
         "youtube_api_upload_enabled": True,
         "automatic_publication_enabled": False,
@@ -311,6 +288,7 @@ def build_youtube_studio_package(output_root):
         },
         "video": {
             "file": str(final_video),
+            "sha256": qa["external_media_integration"]["final_sha256"],
             "resolution": [video_probe["width"], video_probe["height"]],
             "codec": video_probe["codec"],
             "fps": video_probe["fps"],

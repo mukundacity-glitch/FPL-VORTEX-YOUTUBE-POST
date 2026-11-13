@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -105,13 +106,12 @@ def _official_season_identity(preview_gw: int) -> tuple[str, datetime]:
 def _find_existing_gameweek_video(youtube: Any, *, marker: str,
                                   legacy_marker: str,
                                   season_start: datetime,
+                                  revision_tag: str | None = None,
                                   max_pages: int = 100) -> dict[str, str] | None:
-    """Find an existing PRIVATE review copy in the owner's uploads.
+    """Find an owned private draft for the requested gameweek and render revision.
 
-    A previously published public/unlisted GW video must NOT block creation
-    of the next private review copy. Never modify or delete that publication.
-    Legacy unqualified markers count only in their original season.
-    Fail closed on incomplete inventory to prevent duplicate private uploads.
+    Legacy gameweek tags are matched against the official season start.
+    Incomplete inventory checks fail before an upload can begin.
     """
     response = youtube.channels().list(part="contentDetails", mine=True).execute()
     channels = response.get("items") or []
@@ -147,7 +147,10 @@ def _find_existing_gameweek_video(youtube: Any, *, marker: str,
                 if matched:
                     privacy = str((video.get("status") or {}).get("privacyStatus") or "")
                     if privacy == YOUTUBE_PRIVACY_STATUS:
-                        return {"video_id": str(video["id"]), "privacy_status": privacy}
+                        if revision_tag is None or revision_tag in tags:
+                            return {"video_id": str(video["id"]), "privacy_status": privacy}
+                        print(f"[YOUTUBE] Earlier Day 1 draft {video['id']} uses a different render revision.")
+                        continue
                     if privacy not in {"public", "unlisted"}:
                         raise RuntimeError(
                             f"Cannot verify privacy of existing GW upload {video['id']}; "
@@ -241,7 +244,20 @@ def _validate_package(output_root: Path) -> dict[str, Any]:
     if list(video.get("resolution") or []) != [3840, 2160]:
         raise RuntimeError("YouTube upload package is not true 4K")
 
+    revision = package.get("render_revision")
+    current_revision = os.environ.get("GITHUB_SHA")
+    if current_revision and revision != current_revision:
+        raise RuntimeError("YouTube package does not belong to the current Day 1 run revision")
+    if revision is not None:
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise RuntimeError("Invalid Day 1 render revision")
+        with video_path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if digest != video.get("sha256"):
+            raise RuntimeError("YouTube MP4 differs from the verified final Day 1 export")
+
     return {
+        "render_revision": revision,
         "package_path": package_path,
         "video_path": video_path,
         "metadata": metadata,
@@ -381,13 +397,18 @@ def upload_private(output_root: Path) -> dict[str, Any]:
     season_id, season_start = _official_season_identity(preview_gw)
     marker = f"fpl-vortex-{season_id}-gw{preview_gw:02d}-video-1-of-3"
     legacy_marker = _upload_marker(preview_gw)
-    # Preserve the pre-existing source tags AND add a season-qualified tag.
-    package["upload_tags"] = list(dict.fromkeys(package["upload_tags"] + [marker]))
+    revision = package.get("render_revision")
+    revision_tag = f"fpl-vortex-day1-{revision}" if revision else None
+    identity_tags = [marker, revision_tag] if revision_tag else [marker]
+    package["upload_tags"] = list(dict.fromkeys(package["upload_tags"] + identity_tags))
+    if len(",".join(package["upload_tags"])) > 500:
+        raise RuntimeError("YouTube tags exceed the 500-character limit after adding Day 1 identifiers")
     report: dict[str, Any] = {
         "version": "FPL-VORTEX-YOUTUBE-PRIVATE-UPLOAD-V3",
         "preview_gw": preview_gw,
         "season_id": season_id,
         "deduplication_tag": marker,
+        "render_revision": revision,
         "started_at": _utc_now(),
         "status": "starting",
         "package_file": str(package["package_path"]),
@@ -397,7 +418,7 @@ def upload_private(output_root: Path) -> dict[str, Any]:
             "automatic_publish": False,
             "automatic_schedule": False,
             "manual_publication_required": True,
-            "one_private_upload_per_season_gameweek": True,
+            "one_private_upload_per_season_gameweek_revision": True,
         },
     }
     _write_json_atomic(report_path, report)
@@ -409,11 +430,9 @@ def upload_private(output_root: Path) -> dict[str, Any]:
         report["status"] = "channel_verified"
         _write_json_atomic(report_path, report)
 
-        # Owner-authenticated, cross-season upload inventory check. Private and
-        # previously published videos are BOTH protected against replacement.
         existing = _find_existing_gameweek_video(
             youtube, marker=marker, legacy_marker=legacy_marker,
-            season_start=season_start,
+            season_start=season_start, revision_tag=revision_tag,
         )
         if existing:
             video_id = existing["video_id"]
@@ -429,11 +448,10 @@ def upload_private(output_root: Path) -> dict[str, Any]:
                 },
             })
             _write_json_atomic(report_path, report)
-            print("[YOUTUBE] Day 1 already uploaded for this season/GW; skipped duplicate.")
+            print("[YOUTUBE] Day 1 already uploaded for this season, gameweek and render revision.")
             return report
 
-        print("[YOUTUBE] No private review copy found for this season/GW; "
-              "uploading the current render as PRIVATE (published videos unchanged).")
+        print("[YOUTUBE] Uploading the current Day 1 render as PRIVATE.")
         video_id = _insert_private_video(youtube, package)
         report.update(
             {
