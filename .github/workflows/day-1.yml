@@ -863,8 +863,8 @@ jobs:
       actions: read
       contents: read
     env:
-      DAY1_OUTPUT_ROOT: ${{ runner.temp }}/day1-upload
-      DAY1_YOUTUBE_RECEIPT: ${{ runner.temp }}/day1-upload/DATA/youtube_private_upload.json
+      DAY1_OUTPUT_ROOT: ${{ github.workspace }}/.day1-upload
+      DAY1_YOUTUBE_RECEIPT: ${{ github.workspace }}/.day1-upload/DATA/youtube_private_upload.json
     steps:
       - uses: actions/checkout@v7
 
