@@ -662,12 +662,88 @@ def build_editorial_review(
                      'candidate_comparison':bool(cands)}
 
 
+def tighten_review_narration(segments, starters, context, *, review_gw, points,
+                             rank_change, partial, automatic_subs):
+    """Replace the spoken copy while retaining the existing player and panel cue IDs."""
+    by_id = {segment['id']: segment for segment in segments}
+    if points is None:
+        lead = f'Gameweek {review_gw} points are still unavailable.'
+    else:
+        lead = f"Gameweek {review_gw} {'stands at' if partial else 'finished on'} {points} points"
+        if rank_change:
+            direction = 'up' if rank_change > 0 else 'down'
+            lead += f', with overall rank {direction} {abs(rank_change):,} places'
+        elif rank_change == 0:
+            lead += ', with overall rank holding steady'
+        lead += '.'
+
+    for segment in segments:
+        if segment.get('player_id') is not None:
+            segment['text'] = segment['spoken_name'] + '.'
+    first = by_id[f"player_{starters[0]['id']}"]
+    first['text'] = f"In goal, {first['spoken_name']} was the starting pick."
+
+    captain = next((p for p in starters if p.get('captain')), None)
+    flagged = next((p for p in starters
+                    if context[int(p['id'])].get('status') not in ('', 'a', None)), None)
+    if flagged:
+        name = context[int(flagged['id'])]['full_name']
+        news = f'For {name}, I want an official update on availability before committing a transfer.'
+    else:
+        news = 'Watch the least secure starting spot. Team news will tell you whether you need cover.'
+    captain_line = by_id.get('metric_captain', {}).get('text', '')
+    if captain and not partial and 'completed fixture' in captain_line:
+        captain_line = captain_line.replace('did not feature in the completed fixture', 'missed out')
+    if captain_line:
+        captain_line = captain_line.split(';', 1)[0].rstrip('.') + '.'
+    substitutions = [] if partial else [
+        sub for sub in automatic_subs
+        if _integer(sub.get('element_in')) in context
+        and _integer(context[int(sub['element_in'])]['stats'].get('total_points')) not in (None, 0)
+    ]
+    if substitutions:
+        substitutions.sort(key=lambda sub: -abs(int(context[int(sub['element_in'])]['stats']['total_points'])))
+        incoming = context[int(substitutions[0]['element_in'])]
+        turn = f"{incoming['full_name']} came off the bench for {int(incoming['stats']['total_points'])} points."
+    else:
+        turn = 'The armband is where I’d start the review.' if captain else 'Start with the returns from the players who counted.'
+
+    copy = {
+        'headline': lead + ' ' + turn,
+        'bench_intro': 'The bench order is on the board.',
+        'metrics_intro': 'Here’s how the armband worked out.',
+        'metric_captain': captain_line or 'The captain return is unavailable in this snapshot.',
+        'hero_review': ('For the next armband, I’d look at how long the player is likely to be on the pitch '
+                        'and whether their role gives them more than one route to points.'),
+        'quietest_review': ('A quiet score can make a good pick look worse than it was. '
+                            'I’d only change my approach if there was a warning I could have spotted before the deadline.'),
+        'availability_review': news,
+        'review_close': 'That was the deadline lineup.',
+        'market_intro': 'The market cards show where managers are moving.',
+        'market_buy': 'For a buy, ask how often you’d start them.',
+        'market_hold': 'A hold gives you another deadline to judge the role.',
+        'market_sell': 'For a sell, check who takes the spot.',
+        'editorial_squad_context': 'Start your plan with the current squad.',
+        'editorial_squad_data': 'Price the move at your actual selling price.',
+        'editorial_routes': 'Check the bank and your free transfers before acting.',
+        'editorial_verdict': 'Expected points are forecasts, not guaranteed returns.',
+    }
+    for segment in segments:
+        key = segment['id']
+        if key in copy:
+            segment['text'] = copy[key]
+    if 'hero_review' not in by_id:
+        by_id['metric_captain']['text'] += ' ' + copy['hero_review']
+    if 'availability_review' not in by_id:
+        by_id['review_close']['text'] += ' ' + news
+
+
 def validate_narration(segments: list[dict[str, Any]], *, player_ids: list[int], max_words: int = 1700) -> None:
     spoken = [str(s.get('text') or '').strip() for s in segments]
     if not spoken or any(not line for line in spoken):
         raise ValueError('Empty narration segment')
     all_text = ' '.join(spoken)
-    if STAGE_DIRECTION.search(all_text) or PLACEHOLDER.search(all_text):
+    if STAGE_DIRECTION.search(all_text) or PLACEHOLDER.search(all_text) or re.search(r'\(xxx\)|\[MISSING DATA:', all_text, re.I):
         raise ValueError('Stage direction or unresolved placeholder in spoken text')
     if any(stock in all_text.lower() for stock in BANNED_STOCK):
         raise ValueError('Repetitive hype phrase in narration')

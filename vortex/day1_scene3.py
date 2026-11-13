@@ -267,26 +267,51 @@ def market_timestamp(value):
     return dt.astimezone(EASTERN).strftime("%b %d · %H:%M %Z") if dt.tzinfo else ""
 
 
-def market_narration(scene):
-    beats = [("opening", f"Five fixtures to target. Here are the best attacking fixture ratings for Gameweek {scene['gw']}. Market estimates are quoted only where verified data are available.")]
-    lead = ["First up", "Next on the board", "Third on the list", "Fourth in the rankings", "The fifth fixture"]
+def market_narration(scene, pair=(), *, team_name=None, player_name=None):
+    beats = [("opening", f"Here’s where I’d look in Gameweek {scene['gw']}. "
+              "I want a player who can use the matchup and stay useful afterwards.")]
+    reads = [
+        "This is the highest-rated attacking fixture on the board.",
+        "Check the venue.",
+        "Check who gets the attacking minutes.",
+        "Look one week ahead here.",
+        "That rounds out the shortlist.",
+    ]
+    leads = ("First", "Next", "Third on the board", "Fourth", "Last on the shortlist")
     for i, row in enumerate(scene["targets"]):
         where = "at home" if row["venue"] == "H" else "away"
-        win = row.get("win")
-        clean_sheet = row.get("clean_sheet")
-        team_name = row["team"]["name"]
-        if win is None and clean_sheet is None:
-            odds_note = f"Verified market win and clean-sheet percentages are unavailable for {team_name}."
-        else:
-            odds_parts = []
-            if win is not None:
-                odds_parts.append(f"market win chance {win:.0%}")
-            if clean_sheet is not None:
-                odds_parts.append(f"clean sheet chance {clean_sheet:.0%}")
-            odds_note = f"For {team_name}, verified " + " and ".join(odds_parts) + "."
-        beats.append((f"target-{i}", f"{lead[i]}, {team_name} against {row['opponent']['name']} {where}. "
-                      f"The VORTEX attacking difficulty for {team_name} is {row['rating']}. {odds_note}"))
-    beats.append(("transition", "Here is the full picture. Use attacking difficulty to shortlist attackers, and clean sheet chance to compare defensive options. Check starting minutes before you commit. Next, the numbers and market outlook."))
+        club = team_name(row["team"]["id"]) if team_name and "id" in row["team"] else row["team"]["name"]
+        opponent = team_name(row["opponent"]["id"]) if team_name and "id" in row["opponent"] else row["opponent"]["name"]
+        beats.append((f"target-{i}", f"{leads[i]}, {club} face {opponent} {where}. {reads[i]}"))
+    if pair:
+        lead, alternative = sorted(pair, key=lambda p: (-p["weeks"][0], -p["total"], p["id"]))
+        names = [player_name(p["id"], p["name"]) for p in (lead, alternative)]
+        lines = [f"For the same squad spot, I'd compare {names[0]} with {names[1]}."]
+        for p, name in zip((lead, alternative), names):
+            fixtures = [tile for tile in p["tiles"] if tile["gw"] == scene["gw"]]
+            if len(fixtures) == 1:
+                fixture = fixtures[0]
+                where = "at home" if fixture["venue"] == "H" else "away"
+                lines.append(f"{name} has {team_name(fixture['opponent_id'])} {where} on the schedule.")
+            elif len(fixtures) > 1:
+                lines.append(f"{name} has two or more fixtures on the schedule this Gameweek. "
+                             "Check both the spread of minutes and the opposition on the fixture list.")
+            if p["price"] is not None:
+                lines.append(f"The asking price for {name} is {p['price']:.1f} million pounds.")
+            recent = p.get("recent") or {}
+            if p.get("sample_matches") and recent.get("minutes") is not None:
+                minutes = round(recent["minutes"] / p["sample_matches"])
+                lines.append(f"In the recent sample, {name} averaged {minutes} minutes per recorded match.")
+        lines.append(f"I'd look at {names[0]} first, based on the model's ranking for this deadline. "
+                     "I'd still check the role before buying. A good matchup goes further if the player "
+                     "gets chances in the box or takes set pieces. When the first fixture "
+                     "does most of the work, check who you'd start a week later. "
+                     "If the manager hints at a bench role or a managed return, I'd keep the transfer.")
+        transition = " ".join(lines)
+    else:
+        transition = ("I'd shortlist from the fixtures, then check recent minutes and who actually starts. "
+                      "If I can't verify a like-for-like upgrade, my lean is to keep the transfer.")
+    beats.append(("transition", transition))
     return beats
 
 

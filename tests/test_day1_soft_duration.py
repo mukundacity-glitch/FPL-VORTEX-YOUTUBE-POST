@@ -26,7 +26,7 @@ class Day1SoftDurationTests(unittest.TestCase):
         self.assertIn("Day 1 final MP4 has missing or invalid duration", self.workflow)
         self.assertNotIn("Day 1 exceeds strict 7-minute MP4 limit", self.workflow)
         self.assertNotIn("Day 1 packaged video exceeds the seven-minute cap", self.package)
-        self.assertIn("preferred 7-minute runtime exceeded", self.package)
+        self.assertIn("DAY1_MAX_EXPORT_SECONDS = 535.0", self.package)
         self.assertIn("combined MP4 has missing or invalid duration", self.package)
 
     def test_rerender_only_for_real_integrity_errors_not_pacing(self):

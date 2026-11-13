@@ -16271,7 +16271,7 @@ for _segment_id, _section in (("metric_captain", "captain_review"), ("hero_revie
 # Rebuild this week's editorial from verified review picks, official player
 # data, fixtures and explicitly attributed model estimates. No fixed targets.
 from vortex.day1_editorial import (
-    build_editorial_review, validate_narration,
+    build_editorial_review, validate_narration, tighten_review_narration,
     review_voice_profile, measured_audio_report, word_timed_vtt,
 )
 _review_events = list(boot.get("events") or [])
@@ -16293,6 +16293,13 @@ segments, VX_REVIEW_EDITORIAL_META = build_editorial_review(
 from vortex.day1_market_desk import build_market_desk, insert_market_segments, market_card
 VX_DAY1_MARKET_DESK = build_market_desk(boot)
 segments = insert_market_segments(segments, VX_DAY1_MARKET_DESK)
+if __import__("os").environ.get("VORTEX_DAY1_COMPACT") == "1":
+    tighten_review_narration(
+        segments, review_starters, _review_narration_context,
+        review_gw=REVIEW_GW, points=gw_points if _review_points_available else None,
+        rank_change=int(prev_rank) - int(cur_rank) if prev_rank and cur_rank else None,
+        partial=GW_REVIEW_PARTIAL, automatic_subs=picks.get("automatic_subs") or [],
+    )
 for _segment in segments:
     _segment["text"] = vx_review_clean_text(_segment["text"])
 validate_narration(
@@ -23652,6 +23659,13 @@ if SLIDE_SELECTION.get("03_projected_goals", True):
         lambda pid, name: vx_narration_player({"id": pid, "name": name}),
     )
     VX_SCENE4_BEATS = outlook_narration(VX_SCENE4_SCRIPT)
+    if SLIDE_SELECTION.get("02_fdr", True):
+        from vortex.day1_scene4 import comparison_pair
+        VX_SCENE3_BEATS = market_narration(
+            VX_SCENE3, comparison_pair(VX_SCENE4),
+            team_name=_vx_scene4_speech_team,
+            player_name=lambda pid, name: vx_narration_player({"id": pid, "name": name}),
+        )
     XG_HTML_PATH.write_text(render_outlook(
         VX_SCENE4, [{"key":"summary","at":-4}], [], PLAYER_CARD_CSS,
         PLAYER_CARD_JS, vortex_logo_html,
@@ -24908,13 +24922,13 @@ scripts = {
 
 f"""
 
-The points are only the start. Which performances matter next?
+I'd roll the transfer if the starting eleven has cover.
 This is Fantasy Premier League Vortex.
 Welcome to The Gameweek Brief, for Gameweek {NEXT_GW}.
 
 {VX_INTRO_AGENDA_SPOKEN}
 
-Let's review the Gameweek, and decide what matters next.
+Let's review the result, then pick a captain.
 
 """.strip(),
 
@@ -25031,6 +25045,11 @@ scripts = {
     for key, text in scripts.items()
     if key in _selected_shared
 }
+
+for key, text in scripts.items():
+    if not text.strip() or re.search(r"\(xxx\)|\[MISSING DATA:", text, re.I):
+        raise RuntimeError(f"Unresolved or empty Day 1 narration in {key}")
+
 
 
 async def make_audio(key,text,rate_override=None):

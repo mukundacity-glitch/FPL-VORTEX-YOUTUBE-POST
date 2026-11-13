@@ -2,8 +2,7 @@
 
 This module never contacts YouTube. It validates the final true-4K video and
 creates JSON containing the dynamic title, description, hashtags, tags,
-chapters, and the private-upload safety policy. Thumbnail creation and upload
-are intentionally manual.
+chapters, and the private-upload safety policy for the existing uploader.
 """
 
 from __future__ import annotations
@@ -22,6 +21,7 @@ DEFAULT_OUTPUT_ROOT = Path("/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO")
 YT_VIDEO_PART = 1
 YT_VIDEO_TOTAL = 3
 YT_VIDEO_SIZE = (3840, 2160)
+DAY1_MAX_EXPORT_SECONDS = 535.0
 
 
 def _vx23_required_file(path, label):
@@ -112,7 +112,7 @@ def _vx23_timestamp(total_seconds):
     )
 
 
-def _vx23_chapters(qa, review_gw):
+def _vx23_chapters(qa, review_gw, close_offset=None):
     labels = {
         "00_intro": "The Gameweek Brief",
         "gw_review": f"GW{review_gw} Review — The Real Story",
@@ -145,45 +145,51 @@ def _vx23_chapters(qa, review_gw):
         else:
             rows.append(f"{_vx23_timestamp(elapsed)} {label}")
         elapsed += float(section.get("duration") or 0.0)
+    if close_offset is not None:
+        last_section_duration = float(qa["sections"][-1]["duration"])
+        close_at = elapsed - last_section_duration + float(close_offset)
+        if elapsed - close_at >= 10.0:
+            rows.append(f"{_vx23_timestamp(close_at)} Final Transfer Call & Close")
     if not rows or not rows[0].startswith("0:00 "):
         raise RuntimeError("YouTube chapters must begin at 0:00")
     return rows
 
 
-def _vx23_metadata(preview_gw, review_gw, review_status, qa):
-    title = (
-        f"FPL GW{preview_gw}: Roll or Transfer? "
-        f"GW{review_gw} Review | FPL VORTEX"
+def _vx23_metadata(preview_gw, review_gw, review_status, qa, board=None, close_offset=None):
+    title = f"FPL GW{preview_gw} | Use the Free Transfer or Roll?"
+    status = "provisional" if review_status == "LIVE/PARTIAL" else "final"
+    hashtags = ["#FPL", "#FantasyPremierLeague", f"#FPLGameweek{preview_gw}"]
+    chapters = _vx23_chapters(qa, review_gw, close_offset)
+    captain = next((p for p in (board or {}).get("starters", []) if p.get("captain")), None)
+    captain_name = str((captain or {}).get("fullName") or (captain or {}).get("name") or "").strip()
+    captain_line = (
+        f"{captain_name} gets the armband on the Value Board, based on the strongest "
+        "projected return in its starting eleven."
+        if captain_name else
+        "The Value Board highlights the captain with the strongest projected return in its starting eleven."
     )
-    status_text = "live/partial" if review_status == "LIVE/PARTIAL" else "completed"
-    hashtags = ["#FPL", "#FantasyPremierLeague", f"#FPLGW{preview_gw}"]
-    chapters = _vx23_chapters(qa, review_gw)
-    description = "\n".join(
-        [
-            (
-                f"My {status_text} "
-                f"GW{review_gw} review from FPL VORTEX."
-            ),
-            "",
-            f"VIDEO {YT_VIDEO_PART}/{YT_VIDEO_TOTAL} for Gameweek {preview_gw} covers:",
-            f"• THE GAMEWEEK BRIEF — key decisions for FPL Gameweek {preview_gw}",
-            f"• GAMEWEEK REVIEW — THE REAL STORY (GW{review_gw}), all 15 players, captaincy and bench points",
-            "• PLAYERS & FIXTURES — player availability, upcoming opponents and fixture difficulty",
-            "• NUMBERS & MARKET OUTLOOK — projected goals, defensive numbers and transfer trends",
-            "• THE VALUE BOARD — a 15-player squad within £100m, with five-Gameweek lineups and captain picks",
-            "",
-            "CHAPTERS",
-            *chapters,
-            "",
-            "FPL VORTEX reviews the recorded squad using official FPL data and its existing VORTEX models. Live or provisional returns are identified in the review.",
-            "Transfer routes are conditional: current editable squad, bank and free transfers must be verified.",
-            "Expected points and captaincy recommendations are forecasts, not guaranteed returns.",
-            "",
-            " ".join(hashtags),
-        ]
-    )
-    from vortex.day1_live_editorial import source_credits
-    description += source_credits(preview_gw)
+    description = "\n".join([
+        f"FPL Gameweek {preview_gw} tips from FPL VORTEX start with one decision: use a free transfer or roll it?",
+        "My lean is to roll if the squad has cover. If team news rules out a starter, I’d make the move "
+        "only if the replacement improves the starting eleven and fits the budget.",
+        "",
+        f"The {status} Gameweek {review_gw} review looks at the points, rank movement and the decision "
+        "that shaped the result. Then I look ahead to the fixtures and where recent minutes give us "
+        "a better idea of who can actually take advantage of the schedule.",
+        "",
+        "The Vortex model puts the next deadline alongside the longer fixture run. I use expected "
+        "points to judge whether an upgrade is worth a move and transfer activity to see where "
+        "managers are going. Late team news can change the call.",
+        "",
+        captain_line + " The board also shows the full 15-player model squad, money left in the "
+        "budget, bench order and the planned lineups across five Gameweeks.",
+        "",
+        "Which position are you weighing up? Tell me if you’d make the move or keep the transfer for another week.",
+        "",
+        *chapters,
+        "",
+        " ".join(hashtags),
+    ])
     tags = [
         "FPL",
         "Fantasy Premier League",
@@ -193,8 +199,8 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
         "FPL VORTEX",
         "FPL Value Board",
     ]
-    if len(title) > 100:
-        raise RuntimeError(f"YouTube title exceeds 100 characters: {len(title)}")
+    if len(title) > 70:
+        raise RuntimeError(f"YouTube title exceeds 70 characters: {len(title)}")
     if len(description.encode("utf-8")) > 5000:
         raise RuntimeError("YouTube description exceeds 5,000 UTF-8 bytes")
     if sum(len(tag) for tag in tags) + max(0, len(tags) - 1) > 500:
@@ -253,14 +259,12 @@ def build_youtube_studio_package(output_root):
         )
 
     video_probe = _vx23_probe_video(final_video)
-    # Check measured media integrity without blocking a naturally narrated
-    # episode solely because it exceeds the preferred seven-minute length.
     if not math.isfinite(video_probe["duration"]) or video_probe["duration"] <= 0:
         raise RuntimeError("Day 1 combined MP4 has missing or invalid duration")
-    if video_probe["duration"] > 420.0:
-        print(
-            f"ℹ️ Day 1 preferred 7-minute runtime exceeded "
-            f"({video_probe['duration']:.2f}s); preserving natural voice pace."
+    if video_probe["duration"] > DAY1_MAX_EXPORT_SECONDS:
+        raise RuntimeError(
+            f"Day 1 final export is {video_probe['duration']:.2f}s. "
+            f"The private upload requires {DAY1_MAX_EXPORT_SECONDS:.0f}s or less."
         )
     if (video_probe["width"], video_probe["height"]) != YT_VIDEO_SIZE:
         raise RuntimeError(
@@ -284,7 +288,13 @@ def build_youtube_studio_package(output_root):
     if review_status not in {"FINAL", "LIVE/PARTIAL"}:
         raise RuntimeError(f"Invalid Gameweek review status: {review_status!r}")
 
-    metadata = _vx23_metadata(preview_gw, review_gw, review_status, qa)
+    board = _vx23_read_json(data_dir / "scene05_value_board.json", "Value Board")
+    if board.get("nextGameweek") != preview_gw:
+        raise RuntimeError("Value Board Gameweek does not match the rendered video")
+    narration_path = _vx23_required_file(data_dir / "scene05_narration.json", "Scene 05 narration cues")
+    narration = json.loads(narration_path.read_text(encoding="utf-8"))
+    metadata = _vx23_metadata(preview_gw, review_gw, review_status, qa, board,
+                              close_offset=narration[-1]["start"])
 
     package = {
         "version": "FPL-VORTEX-YOUTUBE-PRIVATE-AUTO-V4",

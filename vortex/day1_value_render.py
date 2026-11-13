@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ import requests
 from PIL import Image
 
 from .day1_value_live import make_live_value_board
+from .youtube_studio_package import DAY1_MAX_EXPORT_SECONDS
 
 
 def run(*args, cwd=None):
@@ -65,65 +67,71 @@ def _speaking_name(player):
 def narration_parts(board):
     def price(value):
         return f"{float(value):.1f} million pounds"
-    gw = board["nextGameweek"]
+
     starters = board["starters"]
     bench = board["bench"]
-    parts = [(None, f"Welcome to FPL VORTEX, The Value Board. For gameweek {gw}, "
-                   f"our researched squad costs {price(board['totalCost'])}, "
-                   f"with a {board['formation']} starting formation. "
-                   "We prioritise verified minutes, official injury flags, fixture difficulty, "
-                   "predicted points, price value and actual market ownership trends. "
-                   "Expected points are estimates, not guaranteed returns.")]
-    for p in starters:
-        part = ("Our captain, " if p.get("captain") else
-                "Our vice-captain, " if p.get("viceCaptain") else "Next, ")
-        total = sum(float(v) for v in p["weekly"].values())
-        next_fixtures = [t for t in p["fixtures"] if t["gw"] == gw]
-        fixture_text = "A blank gameweek is currently scheduled. " if not next_fixtures else (
-            "The next fixture" + ("s are " if len(next_fixtures) > 1 else " is ") +
-            " and ".join(
-                f"versus {t.get('opponentSpeechName', t['opponentFullName'])} "
-                f"{'at home' if t['venue']=='H' else 'away'}, "
-                f"with difficulty {float(t['fdr']):.1f}"
-                if t.get("fdr") is not None else
-                f"versus {t.get('opponentSpeechName', t['opponentFullName'])} "
-                f"{'at home' if t['venue']=='H' else 'away'}"
-                for t in next_fixtures
-            ) + ". "
-        )
-        parts.append((p["id"],
-            f"{part}{_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, at {price(p['price'])}. "
-            f"He averages {float(p.get('minutesPerAppearance',0)):.1f} recent minutes per appearance. "
-            f"{fixture_text}"
-            f"The model estimates {float(p['nextGwXpts']):.2f} points next gameweek, "
-            f"and {total:.2f} points across the next five fixtures."))
-    for index, p in enumerate(bench, 1):
-        parts.append((p["id"],
-            f"Bench option {index}, {_speaking_name(p)} of {p.get('clubSpeechName', 'his club')}, costs {price(p['price'])}. "
-            f"His next gameweek projection is {float(p['nextGwXpts']):.2f}."))
-    market_leaders = sorted([*starters, *bench],
-                            key=lambda p: (-float(p.get("ownership", 0)), p["id"]))[:3]
-    for player in market_leaders:
-        flow = int(player.get("netTransfers", 0))
-        direction = "net transfers in" if flow >= 0 else "net transfers out"
-        parts.append((player["id"],
-                      f"Market trend: {_speaking_name(player)} is owned by "
-                      f"{float(player.get('ownership', 0)):.1f} percent of managers, "
-                      f"with {abs(flow):,} {direction} in the current gameweek snapshot."))
-    names = {p["id"]: _speaking_name(p) for p in [*starters, *bench]}
-    plans = {p["gameweek"]: p for p in board["weeklyPlans"]}
-    for projection in board["projections"]:
-        plan = plans[projection["gameweek"]]
-        captain_name = names[plan["captainId"]]
-        reserve_names = ", ".join(names[pid] for pid in plan["bench"])
-        parts.append((-projection["gameweek"], f"Gameweek {projection['gameweek']}: the optimal "
-                            f"{plan['formation']} lineup, with {captain_name} as captain, "
-                            f"is estimated at {projection['xpts']:.2f} expected points. "
-                            f"Our four bench players are {reserve_names}. "
-                            "Review actual starting lineups before the deadline."))
-    parts.append((None, "That is our five gameweek Value Board. Check late "
-                         "injury updates, official lineups and deadlines before "
-                         "making transfers. Subscribe to FPL VORTEX for the next analysis."))
+    players = {p["id"]: p for p in [*starters, *bench]}
+    captain = next(p for p in starters if p["captain"])
+    vice = next(p for p in starters if p["viceCaptain"])
+    first_sub = next(p for p in bench if p["position"] != "GK")
+    budget = min((p for p in starters if p["position"] != "GK"),
+                 key=lambda p: (p["price"], -p["nextGwXpts"], p["id"]))
+    formation = " ".join(board["formation"].split("-"))
+    parts = [(None, f"The Value Board comes in at {price(board['totalCost'])}, with "
+                   f"{price(board['bank'])} left from the model squad budget. "
+                   f"I'd set up in a {formation}. The full squad and bench order are on the board."),
+             (budget["id"], f"{_speaking_name(budget)} is the cheapest outfield starter here, at "
+                            f"{price(budget['price'])}. That keeps more of the budget available for "
+                            "the positions where I'd back a player to start and contribute most weeks. "
+                            "For a cheaper pick, I want to see how often the planner actually starts them."),
+             (captain["id"], f"I'd captain {_speaking_name(captain)}. The model gives this pick "
+                             "the strongest points projection in the starting eleven. If the team "
+                             "update puts those minutes in doubt, I'd revisit the armband."),
+             (vice["id"], f"{_speaking_name(vice)} is my vice-captain. If the captain doesn't play "
+                          "at all, the vice gets double points provided they play."),
+             (first_sub["id"], f"First outfield substitute is {_speaking_name(first_sub)}. "
+                               "Bench order matters, and an automatic change still has to leave a legal formation.")]
+    plans = board["weeklyPlans"]
+    projections = {p["gameweek"]: p["xpts"] for p in board["projections"]}
+    first = plans[0]
+    biggest = max(plans[1:], key=lambda plan: (
+        len(set(first["starters"]) - set(plan["starters"])),
+        plan["captainId"] != first["captainId"],
+        plan["formation"] != first["formation"],
+        -plan["gameweek"],
+    ), default=first)
+    for plan in plans:
+        gw = plan["gameweek"]
+        if plan is first:
+            line = f"Gameweek {gw} is the starting point. Watch how the lineup changes across the run."
+        elif plan is biggest:
+            swaps = len(set(first["starters"]) - set(plan["starters"]))
+            new_captain = plan["captainId"] != first["captainId"]
+            if swaps:
+                line = (f"Gameweek {gw} has the biggest change, with {swaps} "
+                        f"starting {'spot' if swaps == 1 else 'spots'} changing from the opening lineup.")
+            else:
+                line = f"The starting eleven holds in Gameweek {gw}."
+            if swaps == 0 and not new_captain:
+                line += " I’d keep the same captain if the team news stays clear."
+            if new_captain:
+                line += f" The armband switches to {_speaking_name(players[plan['captainId']])}."
+            line += " That’s the week I’d check again before locking the plan."
+        else:
+            previous = projections[gw - 1]
+            projected = projections[gw]
+            if projected > previous:
+                line = f"The team projection rises in Gameweek {gw}."
+            elif projected < previous:
+                line = f"Gameweek {gw} looks a little tougher for this squad."
+            else:
+                line = f"The projected team return holds steady in Gameweek {gw}."
+        parts.append((-gw, line))
+    parts.append((None, "My call is to roll if the current squad has cover. I'd use a free transfer "
+                        "if the team update rules out a starter and the replacement fits your squad and budget."))
+    parts.append((None, f"Which spot in your squad would you use a transfer on this week? Tell me the "
+                        "position you're weighing up in the comments. I'll be back with the next "
+                        f"Fantasy Premier League Vortex update before the Gameweek {board['nextGameweek']} deadline."))
     return parts
 
 
@@ -226,8 +234,16 @@ def integrate(output_root, *, remotion_root):
         work = Path(staging)
         public = remotion_root / "public"
         assets = public / "value-assets"
+        parts = narration_parts(board)
+        if any(not line.strip() or re.search(r"\(xxx\)|\[MISSING DATA:", line, re.I)
+               for _, line in parts):
+            raise RuntimeError("Unresolved or empty Scene 05 narration")
+        voice, cues, voice_duration = asyncio.run(render_voice(parts, work))
+        if before_seconds + voice_duration + .55 > DAY1_MAX_EXPORT_SECONDS:
+            raise RuntimeError(
+                f"Day 1 narration and first four scenes exceed the {DAY1_MAX_EXPORT_SECONDS:.0f}s export limit"
+            )
         local_assets(board, assets)
-        voice, cues, voice_duration = asyncio.run(render_voice(narration_parts(board), work))
         shutil.copy2(voice, assets / "scene-5-narration.mp3")
         board["narrationCues"] = [dict(playerId=c["playerId"] if c["playerId"] > 0 else None,
                                       gameweek=-c["playerId"] if c["playerId"] < 0 else None,

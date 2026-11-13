@@ -54,7 +54,8 @@ class Day1Scene3Tests(unittest.TestCase):
         self.assertNotIn("Market win chance: unavailable.", script)
         self.assertNotIn("Clean sheet chance: unavailable.", script)
         for i in range(5):
-            self.assertIn(f"unavailable for Club {i}.", script)
+            self.assertIn(f"Club {i} face Rival {i} at home.", script)
+        self.assertNotIn("unavailable", script.lower())
         import re
         sentences = [x.strip().lower() for x in re.split(r"(?<=[.!?])\s+", script) if x.strip()]
         self.assertEqual(len(sentences), len(set(sentences)))

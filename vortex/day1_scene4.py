@@ -209,72 +209,78 @@ def _decimal(value, digits):
     return integer + (" point " + " ".join(digit_words[int(d)] for d in fraction) if fraction else "")
 
 
-def outlook_script(scene, team_name, player_name):
-    """Keep text, semantic cells and spoken values together until speech alignment."""
-    beats = [("opening", None, [
-        ("The fixtures give us a shortlist. Which players are worth a transfer?", None, None),
-        ("Let’s compare projected points, recent performances and the transfer market.", None, None),
-    ])]
-    for p in scene["board"]:
-        lines = []
-        def say(text, metric=None, value=None):
-            lines.append((text, metric, value))
+def comparison_pair(scene):
+    """Compare like-for-like options from the existing on-screen shortlist."""
+    eligible = [p for p in scene["board"]
+                if p["weeks"][0] is not None and not p["forecast_review"]
+                and not p.get("team_news") and p["verdict"] != "SELL"]
+    eligible.sort(key=lambda p: (-p["weeks"][0], -p["total"], p["id"]))
+    for lead in eligible:
+        alternatives = [p for p in eligible
+                        if p["id"] != lead["id"] and p.get("position") == lead.get("position")]
+        if alternatives:
+            return lead, max(alternatives, key=lambda p: (p["total"], -p["id"]))
+    return ()
 
+
+def outlook_script(scene, team_name, player_name):
+    """Keep the visual beats and align only the metrics we actually discuss."""
+    pair = comparison_pair(scene)
+    opening = "The projection tells me how much of an upgrade I might actually get."
+    if pair:
+        lead, alternative = pair
+        winner_name = player_name(lead["id"], lead["name"])
+        if round(lead["weeks"][0], 1) == round(alternative["weeks"][0], 1):
+            opening += " The options are level for this deadline. The longer run breaks the tie."
+        else:
+            gap = _decimal(abs(round(lead["weeks"][0], 1) - round(alternative["weeks"][0], 1)), 1)
+            opening += f" {winner_name} leads by {gap} expected points for the next deadline."
+    beats = [("opening", None, [(opening, None, None)])]
+    verdicts = {
+        "BUY": "I'd consider buying if the role holds and the move fits your budget.",
+        "HOLD": "I'd hold while the evidence for an upgrade is mixed.",
+        "SELL": "I'd consider selling if a fit replacement improves your starting eleven.",
+        "REVIEW": "I'd wait until the model assumptions can be checked.",
+    }
+    for index, p in enumerate(scene["board"]):
         pid = p["id"]
         name = player_name(pid, p["name"])
-        club = team_name(p["team_id"])
-        say(f"Let’s look at {name} of {club}.", "identity.player")
-        if p["price"] is not None:
-            price = _decimal(p["price"], 1)
-            say(f"{name} costs {price} million pounds.", "identity.price", price)
-        for tile in (t for t in p["tiles"] if t["gw"] == scene["gw"]):
-            opponent = team_name(tile["opponent_id"])
-            venue = "at home" if tile["venue"] == "H" else "away"
-            if tile["band"] == "missing":
-                say(f"{name} faces {opponent} {venue}.", fixture_metric(tile))
-            else:
-                fdr = _decimal(float(tile["rating"]), 1)
-                say(f"{name} faces {opponent} {venue}, with a fixture difficulty of {fdr}.", fixture_metric(tile), fdr)
-        for value, label, metric in (
-            (p["weeks"][0], "in the next gameweek", "forecast.nextGwXpts"),
-            (p["total"], f"over {len(scene['weeks'])} gameweeks", "forecast.fiveGwXpts"),
-        ):
-            if value is not None:
-                points = _decimal(value, 2)
-                say(f"The Vortex model projects {points} points for {name} {label}.", metric, points)
-        if p.get("value_pick") and p["value"] is not None:
-            value = _decimal(p["value"], 2)
-            say(f"For {name}, that works out at {value} projected points per million pounds.", "forecast.valuePerMillion", value)
-
-        recent = p["recent"]
-        if recent.get("minutes") is not None and p["sample_matches"]:
-            minutes = str(int(recent["minutes"]))
-            say(f"Over the last {p['sample_matches']} recorded matches, {name} played {minutes} minutes.", "performance.minutes", minutes)
-        if recent.get("total_points") is not None:
-            points = str(int(recent["total_points"]))
-            say(f"{name} scored {points} actual Fantasy Premier League points in that sample.", "performance.actualPoints", points)
-        if recent.get("expected_goal_involvements") is not None:
-            threat = _decimal(recent["expected_goal_involvements"], 2)
-            say(f"{name} recorded {threat} expected goal involvements in that sample.", "performance.xGI", threat)
-        defence = p.get("defence")
-        probabilities = defence["cs_probabilities"] if defence else []
-        if len(probabilities) == 1 and probabilities[0] is not None and 0 <= probabilities[0] <= 1:
-            chance = _decimal(100 * probabilities[0], 1)
-            say(f"For {name}, the model puts the next match clean sheet chance at {chance} percent.", "defensive.cleanSheetChance", chance)
-        if p["forecast_review"]:
-            say(f"The model gives {name} an unusually large share of the attack, so I would review that assumption before using the estimate.", "verdict")
-        if p["net"] is not None:
-            net = str(abs(int(p["net"])))
-            if p["net"] == 0:
-                say(f"The market snapshot shows a net movement of {net} transfers for {name}.", "transfers.net", net)
-            else:
-                direction = "net transfers in" if p["net"] > 0 else "net transfers out"
-                say(f"The market snapshot shows {net} {direction} for {name}.", "transfers.net", net)
-        say(f"My verdict for {name} is {p['verdict'].lower()}, because {p['reason'][:1].lower() + p['reason'][1:]}.", "verdict")
+        line = [
+            f"Start with {name}.",
+            f"Compare that with {name}.",
+            f"Then there's {name}.",
+            f"Next, {name}.",
+            f"Also consider {name}.",
+            f"Finally, {name}.",
+        ][index]
+        lines = [(line, "identity.player", None)]
+        if p in pair:
+            for value, label, metric in (
+                (p["weeks"][0], "for the next Gameweek", "forecast.nextGwXpts"),
+                (p["total"], f"across {len(scene['weeks'])} Gameweeks", "forecast.fiveGwXpts"),
+            ):
+                if value is not None:
+                    points = _decimal(value, 1)
+                    lines.append((f"The model has {name} at {points} expected points {label}.", metric, points))
+        elif p.get("value_pick") and p["value"] is not None:
+            value = _decimal(p["value"], 1)
+            lines.append((f"At this price, {name} projects for {value} points per million over the forecast window.",
+                          "forecast.valuePerMillion", value))
+        if pair and p is pair[0] and p["net"] is not None and p["net"] != 0:
+            direction = "more transfers in than out" if p["net"] > 0 else "more transfers out than in"
+            lines.append((f"{name} has {direction} this Gameweek. Keep an eye on the price.",
+                          "transfers.net", None))
+        verdict = p["verdict"]
+        lines.append((f"My verdict for {name} is {verdict.lower()}.", "verdict", None))
+        if pair and p is pair[0]:
+            lines.append((verdicts[verdict], None, None))
         beats.append((f"hero-{pid}", pid, lines))
-    beats.append(("summary", None, [
-        ("Compare the next fixture with the longer run, then check the latest line-up news before deciding where to use your transfer.", None, None),
-    ]))
+    summary = (
+        "A stronger five-week total can still depend on one big week. Check when you'd actually start the player. "
+        "If the projected leader looks likely to lose minutes after the team update, I’d hold the transfer "
+        "unless the alternative still improves the starting eleven and fits the budget."
+    )
+    beats.append(("summary", None, [(summary, None, None)]))
     return beats
 
 
