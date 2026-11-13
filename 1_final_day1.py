@@ -24945,13 +24945,13 @@ scripts = {
 
 f"""
 
-Who makes the next squad?
+Who makes the squad?
 This is Fantasy Premier League Vortex.
-Welcome to the Gameweek {NEXT_GW} brief.
+Welcome to Gameweek {NEXT_GW}.
 
 {VX_INTRO_AGENDA_SPOKEN}
 
-Let's review the result, then pick a captain.
+Let's review the result.
 
 """.strip(),
 

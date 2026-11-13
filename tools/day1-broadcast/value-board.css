@@ -20,22 +20,22 @@
 }
 .vb-pitch-lines { position:absolute; inset:0; width:100%; height:100%; stroke:#f7fff0; stroke-width:5; opacity:.95; }
 .vb-line {
-  position: absolute; left: 38px; right: 104px; height: 214px;
-  display: grid; grid-template-columns: 376px minmax(0, 1fr); align-items: center;
+  position: absolute; left: 38px; right: 108px; height: 214px;
+  display: grid; grid-template-columns: 388px minmax(0, 1fr); align-items: center;
 }
-.vb-line--gk { top: 7px; }
+.vb-line--gk { top: 14px; }
 .vb-line--def { top: 222px; }
 .vb-line--mid { top: 445px; }
 .vb-line--fwd { top: 664px; }
 .vb-players { display:flex; align-items:center; justify-content:center; gap: 22px; }
-.vb-line--gk .vb-players { gap: 125px; padding-right: 70px; }
+.vb-line--gk .vb-players { gap: 125px; padding-right: 210px; }
 .vb-line--fwd .vb-players { gap: 108px; padding-right: 70px; }
 .vb-position {
   display:flex; align-items:center; gap:8px; width:max-content; margin:0;
   padding:0 20px 0 0; height:56px; border:3px solid var(--vb-white); border-radius:35px;
   background: linear-gradient(#6908a3 0%, var(--vb-violet) 46%, var(--vb-plum) 100%);
   box-shadow:0 6px 8px #08230670; color:var(--vb-white); text-transform:uppercase;
-  font-size:31px; font-weight:900; letter-spacing:-.8px; white-space:nowrap;
+  font-size:30px; font-weight:900; letter-spacing:-.8px; white-space:nowrap;
 }
 .vb-position span {
   width:71px; height:71px; display:grid; place-items:center; margin-left:-5px; border-radius:50%;
@@ -51,7 +51,7 @@
 }
 .vb-player--active .vb-card-outline { border-color:var(--vb-yellow); box-shadow:0 0 12px #ffed55a0; }
 .vb-photo { position:absolute; inset:0 15px 72px 10px; overflow:hidden; }
-.vb-photo img { position:absolute; bottom:-28px; left:50%; transform:translateX(-50%); width:205px; height:172px; object-fit:contain; object-position:center bottom; }
+.vb-photo img { position:absolute; bottom:-22px; left:50%; transform:translateX(-50%); width:205px; height:172px; object-fit:contain; object-position:center bottom; }
 .vb-crest { position:absolute; top:38px; right:13px; width:69px; height:69px; object-fit:contain; filter:drop-shadow(0 2px 2px #10250d80); }
 .vb-player-copy { position:absolute; inset:auto 0 0; overflow:hidden; border:3px solid var(--vb-white); border-radius:17px; background:var(--vb-white); }
 .vb-name { display:flex; justify-content:center; align-items:center; height:36px; color:#14112b; font-weight:900; line-height:1; white-space:nowrap; }

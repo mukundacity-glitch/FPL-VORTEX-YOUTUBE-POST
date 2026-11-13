@@ -25,7 +25,7 @@ h1 { margin:0; color:#fff; font-size:51px; line-height:1.02; font-weight:900; te
   background:linear-gradient(180deg,#4f0795 0%,#25013f 40%,#140322 78%,#420675 100%);
 }
 .canvas--value-board .header { top:0; height:123px; padding:0 43px; gap:16px; border-bottom:4px solid #e783ff; box-shadow:0 3px 15px #f36cff; }
-.canvas--value-board .brand { min-width:397px; gap:19px; font-size:53px; letter-spacing:-.06em; }
+.canvas--value-board .brand { min-width:397px; gap:19px; font-size:51px; letter-spacing:-.06em; }
 .canvas--value-board .brand img { width:97px; height:108px; object-fit:contain; border:0; border-radius:0; box-shadow:none; }
 .canvas--value-board .heading { text-align:center; }
 .canvas--value-board .heading h1 { font-size:66px; white-space:nowrap; text-shadow:0 3px 5px #100020; }
@@ -36,7 +36,7 @@ h1 { margin:0; color:#fff; font-size:51px; line-height:1.02; font-weight:900; te
   line-height:1.12; font-weight:900; text-transform:uppercase; letter-spacing:.015em;
 }
 .vb-league { width:110px; height:105px; display:grid; place-items:center; text-align:center; font-size:21px; }
-.vb-league img { width:100%; height:100%; object-fit:contain; filter:brightness(0) invert(1); }
+.vb-league img { width:100%; height:100%; object-fit:contain; }
 .canvas--value-board .footer { bottom:0; height:69px; padding:0 55px; border-top:4px solid #e783ff; box-shadow:0 -3px 14px #f36cff; }
 .canvas--value-board .social { font-size:32px; gap:14px; }
 .canvas--value-board .icon { width:43px; height:43px; }

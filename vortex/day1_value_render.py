@@ -158,6 +158,10 @@ def local_assets(board, root):
     if league.is_file():
         with Image.open(league) as img:
             rgba = img.convert("RGBA")
+            if rgba.getchannel("A").getextrema()[0] < 255:
+                alpha = rgba.getchannel("A")
+                rgba = Image.new("RGBA", rgba.size, "white")
+                rgba.putalpha(alpha)
             rgba.crop(rgba.getbbox()).save(root / "league-logo.png")
         board["leagueLogo"] = "value-assets/league-logo.png"
 

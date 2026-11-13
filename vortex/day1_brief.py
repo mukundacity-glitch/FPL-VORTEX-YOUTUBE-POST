@@ -247,15 +247,15 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None,
         raise ValueError("Review agenda references missing editorial sections")
     rows = [
         ("gw_review", "review", "GAMEWEEK REVIEW", f"GW{review_gw} · " + ("Final points" if review_status == "FINAL" else "Provisional — results may change"),
-         "Gameweek review", "Gameweek review: what swung the score?"),
+         "Gameweek review", "Gameweek review."),
         ("02_fdr", "fixtures", "PLAYERS AND FIXTURES", "Role · minutes · next opponents",
-         "Players and fixtures", "Players and fixtures: who has the better matchup?"),
+         "Players and fixtures", "Players and fixtures."),
         ("03_projected_goals", "numbers", "NUMBERS BEHIND THE POINTS", "Actual returns and model estimates kept separate",
-         "Numbers behind the points", "Numbers behind the points: where does the model see an edge?"),
+         "Numbers behind the points", "Numbers behind the points."),
         ("03_projected_goals", "market", "MARKET OUTLOOK", "Ownership · transfers · price",
-         "Market outlook", "Market outlook: where are transfers going?"),
+         "Market outlook", "Market outlook."),
         ("04_value_board", "value", "THE VALUE BOARD", f"Recommended squad for Gameweek {next_gw}",
-         "Value Board", "The Value Board: the recommended squad for the next deadline."),
+         "Value Board", "The Value Board picks the squad for the deadline."),
     ]
     cards = [dict(key=k, title=t, subtitle=s, anchor=a, speech=v)
              for scene, k, t, s, a, v in rows if scene in selected_scenes]
