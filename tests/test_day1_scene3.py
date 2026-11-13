@@ -1,6 +1,6 @@
 import unittest
 
-from vortex.day1_scene3 import build_scene, market_board, narration, tile_rating, timing
+from vortex.day1_scene3 import build_scene, market_board, market_narration, narration, tile_rating, timing
 
 
 class Day1Scene3Tests(unittest.TestCase):
@@ -40,6 +40,24 @@ class Day1Scene3Tests(unittest.TestCase):
         a, b = market_board(11, fixtures, teams, model, market, "QA")["targets"]
         self.assertEqual((a["team"]["name"], a["venue"], a["win"], a["clean_sheet"]), ("2", "A", .15, None))
         self.assertEqual((b["team"]["name"], b["venue"], b["win"]), ("1", "H", .7))
+
+    def test_missing_market_odds_do_not_repeat_filler_sentences(self):
+        scene = {
+            "gw": 11,
+            "targets": [
+                {"team": {"name": f"Club {i}"}, "opponent": {"name": f"Rival {i}"},
+                 "venue": "H", "rating": "2.0", "win": None, "clean_sheet": None}
+                for i in range(5)
+            ],
+        }
+        script = " ".join(line for _, line in market_narration(scene))
+        self.assertNotIn("Market win chance: unavailable.", script)
+        self.assertNotIn("Clean sheet chance: unavailable.", script)
+        for i in range(5):
+            self.assertIn(f"unavailable for Club {i}.", script)
+        import re
+        sentences = [x.strip().lower() for x in re.split(r"(?<=[.!?])\s+", script) if x.strip()]
+        self.assertEqual(len(sentences), len(set(sentences)))
 
     def test_measured_cues_must_remain_in_order(self):
         beats = [("opening", "Welcome."), ("fixtures", "Here is the full schedule."), ("heatmap", "Five week map.")]
