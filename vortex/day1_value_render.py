@@ -269,7 +269,7 @@ def integrate(output_root, *, remotion_root):
                 raise RuntimeError("Five-scene duration mismatch")
             # Perform video+audio decoding, not simply a file existence check.
             run("ffmpeg", "-hide_banner", "-loglevel", "error", "-sseof", "-1",
-                "-i", temporary, "-t", ".8", "-f", "null", "-")
+                "-i", temporary, "-t", "0.8", "-f", "null", "-")
             os.replace(temporary, master)
         finally:
             temporary.unlink(missing_ok=True)
