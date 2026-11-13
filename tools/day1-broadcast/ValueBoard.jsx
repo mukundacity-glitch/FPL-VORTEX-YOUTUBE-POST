@@ -1,5 +1,5 @@
 import React from 'react';
-import {Img, interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
+import {Img, interpolate, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import './value-board.css';
 
 // Everything displayed here comes from a validated episode payload.
@@ -8,10 +8,14 @@ const POSITIONS = ['GK', 'DEF', 'MID', 'FWD'];
 const fmt = (value, digits=1) => Number.isFinite(value) ? Number(value).toFixed(digits) : 'N/A';
 const money = value => Number.isFinite(value) ? `£${fmt(value)}m` : 'N/A';
 const list = value => Array.isArray(value) ? value : [];
-const url = value => typeof value === 'string' && /^(https?:|data:|\/)/.test(value) ? value : '';
+function assetUrl(value) {
+  if (typeof value !== 'string') return '';
+  if (value.startsWith('/value-assets/')) return staticFile(value.slice(1));
+  return /^(https?:|data:|\/)/.test(value) ? value : '';
+}
 
 function Crest({player}) {
-  const src = url(player.clubLogo);
+  const src = assetUrl(player.clubLogo);
   return src ? <Img className="vb-crest" src={src} alt=""/> :
     <span className="vb-crest vb-crest--fallback" aria-label="Club crest unavailable">{player.clubShortName || "FC"}</span>;
 }
@@ -27,7 +31,7 @@ function Fixture({fixture}) {
 }
 
 function PlayerCard({player, frame, fps, active}) {
-  const photo = url(player.portrait);
+  const photo = assetUrl(player.portrait);
   const cue = active === player.id;
   const pulse = cue ? interpolate(frame % Math.max(1, fps), [0, Math.max(1, fps)/2, Math.max(1, fps)], [0, 1, 0]) : 0;
   return <article className={`vb-player ${cue?'vb-player--active':''}`} style={{'--vb-pulse':pulse}} aria-label={player.fullName || player.name}>
