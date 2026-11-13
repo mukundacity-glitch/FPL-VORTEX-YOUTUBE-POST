@@ -114,10 +114,10 @@ def _vx23_timestamp(total_seconds):
 
 def _vx23_chapters(qa, review_gw):
     labels = {
-        "00_intro": "FPL VORTEX intro",
-        "gw_review": f"GW{review_gw} review",
-        "02_fdr": "Fixture difficulty",
-        "03_projected_goals": "Projected goals",
+        "00_intro": "The Gameweek Brief",
+        "gw_review": f"GW{review_gw} Review — The Real Story",
+        "02_fdr": "Players & Fixtures",
+        "03_projected_goals": "Numbers & Market Outlook",
         "04_value_board": "The Value Board · Best £100m Squad",
         "04_clean_sheets": "Clean-sheet odds",
         "05_outro": "Next video",
@@ -141,7 +141,7 @@ def _vx23_chapters(qa, review_gw):
         key = str(section.get("key") or "")
         label = labels.get(key, str(section.get("scene") or key).title())
         if index == 0 and key == "00_intro" and opening_duration > 0:
-            rows.append("0:00 Opening & FPL VORTEX intro")
+            rows.append("0:00 Opening & The Gameweek Brief")
         else:
             rows.append(f"{_vx23_timestamp(elapsed)} {label}")
         elapsed += float(section.get("duration") or 0.0)
@@ -166,13 +166,11 @@ def _vx23_metadata(preview_gw, review_gw, review_status, qa):
             ),
             "",
             f"VIDEO {YT_VIDEO_PART}/{YT_VIDEO_TOTAL} for Gameweek {preview_gw} covers:",
-            f"• GAMEWEEK REVIEW — THE REAL STORY (GW{review_gw})",
-            "• SQUAD PRESSURE — WHAT NEEDS FIXING?",
-            "• TRANSFER TARGETS — BUY / HOLD / SELL",
-            "• TRANSFER PLANS — ROLL, MOVE OR TAKE A HIT?",
-            "• THE FINAL VORTEX VERDICT",
-            "• THE VALUE BOARD — 15 players under £100m, with five-GW projected lineups",
-            "• All 15 original player cards; focused commentary on the key decisions",
+            f"• THE GAMEWEEK BRIEF — key decisions for FPL Gameweek {preview_gw}",
+            f"• GAMEWEEK REVIEW — THE REAL STORY (GW{review_gw}), all 15 players, captaincy and bench points",
+            "• PLAYERS & FIXTURES — player availability, upcoming opponents and fixture difficulty",
+            "• NUMBERS & MARKET OUTLOOK — projected goals, defensive numbers and transfer trends",
+            "• THE VALUE BOARD — a 15-player squad within £100m, with five-Gameweek lineups and captain picks",
             "",
             "CHAPTERS",
             *chapters,

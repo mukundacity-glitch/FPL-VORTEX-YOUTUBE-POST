@@ -12,9 +12,10 @@ Open a workflow and select **Run workflow** on `main`.
 | [WC-FH](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/wc-fh.yml) | Wildcard and Free Hit videos. |
 | [XG-DEFCON](https://github.com/mukundacity-glitch/FPL-VORTEX-YOUTUBE-POST/actions/workflows/xg-defcon.yml) | xG and DEFCON video with public YouTube publishing. |
 
-Day 1 and Day 2 include automated QA jobs for relevant code changes. For a
-manual Scene 2 restoration check, select **Run Scene 2 restoration tests only**
-in Day 1.
+Day 1 and Day 2 run automated QA on relevant code changes. A manual Day 1 run
+renders the five-scene video and automatically uploads it to YouTube as Private
+after QA passes, with a gameweek-specific title, description, chapters, tags,
+and hashtags.
 
 ## Day 1 five-scene live production (Scene 05 integrated)
 

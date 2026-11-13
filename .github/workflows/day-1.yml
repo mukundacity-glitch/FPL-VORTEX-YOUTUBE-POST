@@ -2,11 +2,6 @@ name: Day 1
 
 on:
   workflow_dispatch:
-    inputs:
-      scene2_qa_only:
-        description: Run Scene 2 restoration tests only
-        type: boolean
-        default: false
   pull_request:
     paths:
       - "1_final_day1.py"
@@ -76,7 +71,7 @@ permissions:
 
 jobs:
   run-day-1:
-    if: github.event_name == 'workflow_dispatch' && inputs.scene2_qa_only != true
+    if: github.event_name == 'workflow_dispatch'
     concurrency:
       group: fpl-vortex-day-1
       cancel-in-progress: false
@@ -963,7 +958,7 @@ jobs:
 
   scene2-restoration:
     name: Scene 2 restoration
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.scene2_qa_only == true)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
