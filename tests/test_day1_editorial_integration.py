@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import ast
+import asyncio
+import inspect
+import json
 import re
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+
+
+from test_day1_player_hero import example as hero_example
+from vortex.day1_player_hero import analyze
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "1_final_day1.py"
@@ -31,6 +40,59 @@ class Day1EditorialIntegrationTests(unittest.TestCase):
         self.assertIn('if event.get("is_next")', source)
         self.assertIn("validate_narration(", source)
         self.assertIn("gw_review_final_script.txt", source)
+
+    def test_player_hero_scene_passes_the_production_cleanroom_gate(self):
+        tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
+        gate_functions = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and (node.name.startswith("_vx_phase0") or node.name == "vx_phase0_assert_cleanroom")
+        ]
+        scene = next(
+            node for node in tree.body
+            if isinstance(node, ast.If)
+            and ast.unparse(node.test) == "SLIDE_SELECTION.get('03_projected_goals', True)"
+            and any(isinstance(child, ast.ImportFrom) and "day1_player_hero" in ast.unparse(child)
+                    for child in node.body)
+        )
+        bootstrap, fixtures, live = hero_example()
+
+        def fetch(_session, endpoint):
+            return fixtures if endpoint == "/fixtures/" else {"history": []}
+
+        async def skip_screenshot(*_args):
+            pass
+
+        # The workflow runs this test before installing pandas. The scene
+        # retains plain mappings and does not construct frames or series.
+        pandas_types = SimpleNamespace(DataFrame=type("DataFrame", (), {}),
+                                      Series=type("Series", (), {}))
+
+        with TemporaryDirectory() as work:
+            folder = Path(work)
+            namespace = {
+                "pd": pandas_types, "re": re, "inspect": inspect, "Path": Path, "json": json,
+                "DATA_DIR": folder, "boot": bootstrap, "live": live, "REVIEW_GW": 8,
+                "SLIDE_SELECTION": {"03_projected_goals": True},
+                "_fpl_module": SimpleNamespace(_vx_http_session=lambda: None, _vx_get_json=fetch),
+                "resolve_player_photo": lambda _player: "",
+                "vx_narration_player": lambda player: player["name"],
+                "team_meta_by_id": {1: {"badge": ""}}, "vortex_logo_html": "",
+                "XG_HTML_PATH": folder / "hero.html", "XG_PNG_PATH": folder / "hero.png",
+                "export_4k_png": skip_screenshot,
+            }
+            exec(compile(ast.Module(body=gate_functions, type_ignores=[]), str(SOURCE), "exec"), namespace)
+            execute_scene = compile(ast.Module(body=[scene], type_ignores=[]), str(SOURCE),
+                                    "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+            asyncio.run(eval(execute_scene, namespace))
+            gate = namespace["vx_phase0_assert_cleanroom"]
+            self.assertTrue(gate("pre-publish"))
+            html = (folder / "hero.html").read_text(encoding="utf-8")
+            self.assertEqual(html.count('class="profile"'), 3)
+            # Confirm the existing gate still rejects the exact failing binding.
+            namespace["analyze"] = analyze
+            with self.assertRaisesRegex(RuntimeError, "helper_source:analyze"):
+                gate("pre-publish")
 
     def test_measured_voice_and_subtitles_replace_short_report(self):
         source = SOURCE.read_text(encoding="utf-8")
