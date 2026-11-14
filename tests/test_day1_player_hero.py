@@ -1,3 +1,4 @@
+import re
 import unittest
 
 from vortex.day1_player_hero import add_recent_context, analyze, narration, render, spoken_scoring
@@ -69,6 +70,21 @@ class PlayerHeroTests(unittest.TestCase):
         self.assertNotIn("Long forename", script)
         self.assertIn("1 lost to yellow cards", spoken_scoring({"yellow_cards": -1}))
 
+
+    def test_shared_match_and_takeaway_are_narrated_once(self):
+        report = analyze(*example(), 8)
+        for player in report["players"]:
+            player["takeaway"] = "Goals ran ahead of chance quality. Check whether the chances recur."
+        names = [p["name"] for p in report["players"]]
+        for compact in (False, True):
+            with self.subTest(compact=compact):
+                script = narration(report, names, compact=compact)
+                sentences = [" ".join(s.lower().split())
+                             for s in re.split(r"(?<=[.!?])\s+", script)]
+                self.assertEqual(len(sentences), len(set(sentences)))
+                self.assertEqual(script.count("Check whether the chances recur."), 1)
+                self.assertEqual(script.count("The match against Example Town"), int(not compact))
+                self.assertTrue(all(name in script for name in names))
 
     def test_exceptional_defender_can_fill_third_slot_when_no_differential_qualifies(self):
         bootstrap, fixtures, live = example()

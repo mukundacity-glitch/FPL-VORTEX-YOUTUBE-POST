@@ -66,16 +66,16 @@ def _say_count(count):
 def _evidence(player, *, compact=False):
     chance = player["chance"]
     if status := AVAILABILITY.get(player["status"]):
-        return f"FPL flags the player as {status}, which could help explain the activity."
+        return f"FPL lists this player as {status}"
     if chance is not None and 0 <= chance < 100:
-        return f"Availability is a factor. FPL lists a {chance:g} percent chance of playing."
+        return f"FPL gives this player a {chance:g} percent chance of playing"
     form = player["form"]
     if form is not None:
-        return f"Recent form is {form:g} points per match."
+        return f"recent form is {form:g} points per match"
     if player["opponents"] and not compact:
-        return f"The next opponent is {player['opponents'][0]}."
+        return f"the next opponent is {player['opponents'][0]}"
     if player["price"] is not None and not compact:
-        return f"The current price is {player['price']:.1f} million pounds."
+        return f"the current price is {player['price']:.1f} million pounds"
     return ""
 
 
@@ -87,17 +87,20 @@ def narration(board, name_for, *, compact=False):
     def beat(side, index, player, comparison=None):
         action = "sale" if side == "out" else "buy"
         anchor = f"The {ORDINALS[index]} {action}"
-        parts = [f"{anchor} is {name_for(player)}, with {_say_count(player[side])} moving {side}."]
-        parts.append(_evidence(player, compact=compact))
+        name = name_for(player)
+        line = f"{anchor} is {name}, with {_say_count(player[side])} moving {side}"
+        if evidence := _evidence(player, compact=compact):
+            line += f"; {evidence}"
+        parts = [line + "."]
         if comparison and player["price"] is not None and comparison["price"] is not None:
             difference = round(player["price"] - comparison["price"], 1)
             if difference:
-                parts.append(f"This {player['position'].lower()} is {abs(difference):.1f} million "
+                parts.append(f"{name} is {abs(difference):.1f} million "
                              f"{'cheaper' if difference < 0 else 'more expensive'} than {name_for(comparison)}.")
         if comparison and not compact and player["form"] is not None and comparison["form"] is not None:
             gap = round(player["form"] - comparison["form"], 1)
             if abs(gap) >= 1:
-                parts.append(f"That is {abs(gap):g} {'more' if gap > 0 else 'fewer'} form points per match.")
+                parts.append(f"{name} has {abs(gap):g} {'more' if gap > 0 else 'fewer'} form points per match than {name_for(comparison)}.")
         return {"anchor": anchor, "row": f"{side}-{player['id']}", "text": " ".join(filter(None, parts))}
 
     for index, sell in enumerate(sells):

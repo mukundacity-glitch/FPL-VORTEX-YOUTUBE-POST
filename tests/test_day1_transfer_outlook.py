@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 import unittest
 
 from vortex.day1_transfer_outlook import build_outlook, narration, render
@@ -38,6 +39,22 @@ class TransferOutlookTests(unittest.TestCase):
         self.assertIn("18,700", html)
         self.assertIn("-20,388", html)
         self.assertEqual(html.count('<tr id='), 12)
+
+    def test_shared_availability_passes_production_sentence_check(self):
+        board = example()
+        for player in board["out"][:3]:
+            player.update(status="d", chance=75, form=2)
+        for player in board["in"][:3]:
+            player.update(form=4)
+        for compact in (False, True):
+            with self.subTest(compact=compact):
+                speech, beats = narration(board, lambda p: p["name"], compact=compact)
+                sentences = [re.sub(r"\s+", " ", s.strip().lower())
+                             for s in re.split(r"(?<=[.!?])\s+", speech) if s.strip()]
+                self.assertEqual(len(sentences), len(set(sentences)))
+                self.assertEqual(speech.count("75 percent chance of playing"), 3)
+                self.assertEqual(len(beats), 6)
+                self.assertTrue(all(beat["text"].startswith(beat["anchor"]) for beat in beats))
 
     def test_missing_activity_does_not_generate_fake_rows_or_cues(self):
         board = dict(example(), **{"in": [], "out": []})
