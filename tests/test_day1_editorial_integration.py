@@ -10,7 +10,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
-import pandas as pd
 
 from test_day1_player_hero import example as hero_example
 from vortex.day1_player_hero import analyze
@@ -64,10 +63,15 @@ class Day1EditorialIntegrationTests(unittest.TestCase):
         async def skip_screenshot(*_args):
             pass
 
+        # The workflow runs this test before installing pandas. The scene
+        # retains plain mappings and does not construct frames or series.
+        pandas_types = SimpleNamespace(DataFrame=type("DataFrame", (), {}),
+                                      Series=type("Series", (), {}))
+
         with TemporaryDirectory() as work:
             folder = Path(work)
             namespace = {
-                "pd": pd, "re": re, "inspect": inspect, "Path": Path, "json": json,
+                "pd": pandas_types, "re": re, "inspect": inspect, "Path": Path, "json": json,
                 "DATA_DIR": folder, "boot": bootstrap, "live": live, "REVIEW_GW": 8,
                 "SLIDE_SELECTION": {"03_projected_goals": True},
                 "_fpl_module": SimpleNamespace(_vx_http_session=lambda: None, _vx_get_json=fetch),
