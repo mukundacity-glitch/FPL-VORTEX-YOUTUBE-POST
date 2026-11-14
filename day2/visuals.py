@@ -63,7 +63,7 @@ html body .sceneTitle h1 .accentGold,html body .sceneTitle h1 .goldAccent{{color
    The notebook still owns the keyframes, durations and narration cue delays. */
 html body .sceneTitle h1,
 html body .sceneSub,
-html body [style*="animation:vxFadeUp "]{{
+html body [style*="vxFadeUp"]{{
     animation-timing-function:cubic-bezier(.22,.61,.36,1)!important;
 }}
 """
