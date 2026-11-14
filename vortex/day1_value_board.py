@@ -41,7 +41,7 @@ def _best_xi(players, gw):
 
 def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
                       portraits=None, market=None, narration_cues=None,
-                      model_label="VORTEX model · research estimates"):
+                      model_label="VORTEX model · research estimates", budget=SQUAD_BUDGET):
     """Return validated JSON-ready data for tools/day1-broadcast/ValueBoard.jsx.
 
     squad: the existing optimiser's selected 15 official player dicts.
@@ -83,7 +83,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
                 raise ValueError(f"Missing player projection: {key}")
             weekly[gw] = model[key]
         team_fixtures = sorted(
-            (f for f in fixtures if gameweek <= f.get("event", -1) < gameweek + 5
+            (f for f in fixtures if gameweek <= (f.get("event") or 0) < gameweek + 6
              and tid in (f.get("team_h"), f.get("team_a"))),
             key=lambda f: (f["event"], f.get("kickoff_time") or "", f["id"]),
         )
@@ -116,15 +116,15 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
             "fixtures": tiles,
         })
     total_cost = sum(p["price"] for p in players)
-    if total_cost > SQUAD_BUDGET + .00001:
-        raise ValueError(f"Value Board exceeds £100m: {total_cost:.1f}")
+    if total_cost > budget + .00001:
+        raise ValueError(f"Value Board exceeds £{budget:g}m: {total_cost:.1f}")
     market = market or {}
     if market.get("bank") is not None:
         bank = _number(market["bank"], "bank")
-        if abs((SQUAD_BUDGET - total_cost) - bank) > .11:
-            raise ValueError("Bank and £100m squad budget disagree")
+        if abs((budget - total_cost) - bank) > .11:
+            raise ValueError("Bank and squad budget disagree")
     else:
-        bank = SQUAD_BUDGET - total_cost
+        bank = budget - total_cost
 
     lineups, projections = {}, []
     for gw in range(gameweek, gameweek + 5):
@@ -185,7 +185,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
                      f"{sum(p['position']=='FWD' for p in starters)}",
         "starters": starters,
         "bench": bench,
-        "budget": SQUAD_BUDGET,
+        "budget": budget,
         "totalCost": round(total_cost, 2),
         "bank": round(bank, 2),
         "fiveGwXpts": round(sum(p["xpts"] for p in projections), 2),

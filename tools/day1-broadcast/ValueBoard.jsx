@@ -9,6 +9,37 @@ const positions = [
   ['FWD', 'Strikers', 'M29 16a13 13 0 1 1-26 0 13 13 0 0 1 26 0ZM16 10l6 4-2 7h-8l-2-7Zm0 0V3m6 11 6-4m-8 11 5 5m-13-5-5 5m3-12-6-4'],
 ];
 const revealEasing = Easing.out(Easing.cubic);
+const positionName = {GK:'Goalkeeper', DEF:'Defender', MID:'Midfielder', FWD:'Forward'};
+
+function HeroCard({player, opacity, lift}) {
+  const stat = player.heroStats || {};
+  const actions = [['Defensive actions / 90', stat.defensiveActions90],
+    ['Matches reaching DefCon', stat.defconAppearances ? `${stat.defconHits} / ${stat.defconAppearances}` : null]];
+  const stats = [
+    ...(player.position === 'DEF' ? actions : []),
+    ...(player.position === 'GK' ? [['Saves / 90', stat.saves90]] : [
+      ['xG / 90', stat.xg90], ['xA / 90', stat.xa90],
+      ...(player.position === 'DEF' ? [] : [['Goals / 90', stat.goals90], ['Assists / 90', stat.assists90]]),
+    ]),
+    ['Minutes per start', stat.minutesPerStart],
+  ].filter(([, value]) => value !== null && value !== undefined);
+  return <article className="vb-hero" style={{opacity, transform: `translateY(${lift}px)`}} aria-label={player.name}>
+    {player.portrait && <Img className="vb-hero-photo" src={staticFile(player.portrait.slice(1))} alt=""/>}
+    <header className="vb-hero-title">
+      {player.clubLogo && <Img src={staticFile(player.clubLogo.slice(1))} alt=""/>}
+      <div><h2>{player.name}</h2><p>{player.clubSpeechName || player.clubShortName} · {positionName[player.position]}</p></div>
+    </header>
+    <div className="vb-hero-stats">
+      <div className="vb-hero-price"><b>£{player.price.toFixed(1)}m</b><b>{player.nextGwXpts.toFixed(2)} xPts</b>
+        {player.ownership != null && <b>{player.ownership.toFixed(1)}% owned</b>}</div>
+      <dl>{stats.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : value}</dd></div>)}</dl>
+    </div>
+    {player.fixtures?.length > 0 && <ul className="vb-hero-fixtures" aria-label="Upcoming fixtures">
+      {player.fixtures.slice(0, 6).map(fixture => <li key={fixture.id} data-fdr={fixture.fdr || undefined}>
+        <span>{fixture.opponentShortName} ({fixture.venue})</span><small>GW {fixture.gw}</small></li>)}
+    </ul>}
+  </article>;
+}
 
 function PitchMarkings() {
   return <svg className="vb-pitch-lines" viewBox="0 0 1920 885" fill="none" aria-hidden="true">
@@ -47,6 +78,9 @@ export default function ValueBoard({board}) {
   }
   const seconds = frame / fps;
   const cue = (board.narrationCues || []).find(c => seconds >= c.start && seconds < c.end);
+  const featured = squad.find(player => player.id === cue?.playerId);
+  const fade = featured ? interpolate(seconds - cue.start, [0, .23], [0, 1],
+    {easing: revealEasing, extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}) : 0;
   return <main className="vb-pitch" aria-label={`Recommended Gameweek ${board.nextGameweek} squad`}>
     <PitchMarkings/>
     {positions.map(([position, label, icon], index) => {
@@ -61,5 +95,6 @@ export default function ValueBoard({board}) {
         </div>
       </section>;
     })}
+    {featured && <HeroCard player={featured} opacity={fade} lift={(1 - fade) * 12}/>}
   </main>;
 }

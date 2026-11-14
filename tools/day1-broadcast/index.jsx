@@ -26,8 +26,9 @@ function Broadcast({scene, media = false}) {
       <div className="sheen" style={{left:`${light}%`,opacity:light>100?0:.7}}/>
       <div className="brand" aria-label="FPL VORTEX official channel branding"><Img src={scene.logo || staticFile('vortex.jpg')} alt="FPL VORTEX original channel logo"/><strong>FPL<br/>VORTEX</strong></div>
       {value ? <>
+        <div className="vb-total"><span>Squad value</span><strong>£{scene.valueBoard.totalCost.toFixed(1)}m</strong></div>
         <div className="heading"><h1>Value Board <span>– Gameweek {scene.valueBoard.nextGameweek}</span></h1>
-          <span className="value-board-kicker">The best £{scene.valueBoard.budget}m squad</span></div>
+          <span className="value-board-kicker">Recommended squad · £{scene.valueBoard.budget}m cap</span></div>
         <div className="vb-league">{scene.leagueLogo ? <Img src={scene.leagueLogo} alt="Premier League"/> : <span>Premier League</span>}</div>
       </> : <>
         <div className="heading"><div>FPL VORTEX · DAY 1 · SCENE {String(scene.number).padStart(2,'0')}</div><h1>{scene.title}</h1></div>

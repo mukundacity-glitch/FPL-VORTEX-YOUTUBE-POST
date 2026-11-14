@@ -42,3 +42,12 @@ h1 { margin:0; color:#fff; font-size:51px; line-height:1.02; font-weight:900; te
 .canvas--value-board .icon { width:43px; height:43px; }
 .canvas--value-board .icon svg { width:39px; height:39px; }
 .canvas--value-board .icon.youtube { width:65px; height:44px; border-radius:11px; }
+
+.canvas--value-board .brand { min-width:252px; font-size:37px; gap:11px; padding-right:14px; }
+.canvas--value-board .brand img { width:78px; height:93px; }
+.canvas--value-board .heading h1 { font-size:53px; }
+.vb-total { display:grid; gap:4px; min-width:226px; padding:10px 17px;
+  border:1px solid #8cebfd6b; border-radius:12px; background:#151532; }
+.vb-total span { color:#c2edfb; font-size:20px; letter-spacing:.1em; text-transform:uppercase; }
+.vb-total strong { color:#fff; font-size:43px; line-height:1; font-variant-numeric:tabular-nums; }
+.value-board-kicker { min-width:0; font-size:25px; }

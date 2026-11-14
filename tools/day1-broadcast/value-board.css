@@ -61,3 +61,47 @@
   color:var(--vb-white); font-size:23px; font-weight:850; letter-spacing:-.5px; font-variant-numeric:tabular-nums;
 }
 .vb-player-info b { padding-left:10px; border-left:2px solid #e4c6ec; color:var(--vb-cyan); }
+
+.vb-hero {
+  position:absolute; inset:16px 52px 18px; isolation:isolate; overflow:hidden;
+  display:grid; grid-template-rows:154px minmax(0,1fr) auto; gap:22px;
+  padding:31px 46px; border:2px solid #759cec; border-radius:22px;
+  background:repeating-linear-gradient(153deg,#6b9feb0f 0 2px,transparent 2px 24px),
+    linear-gradient(110deg,#10263f 10%,#182652 50%,#472d8a);
+  box-shadow:0 19px 60px #05111ebd;
+}
+.vb-hero-photo {
+  position:absolute; z-index:-1; right:-3%; bottom:-15%; width:66%; height:125%;
+  object-fit:contain; object-position:right bottom; filter:drop-shadow(-14px 4px 30px #0a153268);
+}
+.vb-hero-title {
+  display:flex; align-items:center; gap:23px; width:65%; padding:15px 23px;
+  background:linear-gradient(95deg,#49dfef,#60aefd 80%,#60aefd00);
+  color:#10152f;
+}
+.vb-hero-title img { width:94px; height:94px; object-fit:contain; }
+.vb-hero-title h2 {
+  font-size:clamp(42px,4.7vw,86px); line-height:1; letter-spacing:-.045em;
+  margin:0; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;
+}
+.vb-hero-title div { min-width:0; }
+.vb-hero-title p { margin:8px 0 0; font-size:30px; }
+.vb-hero-stats { width:51%; border-radius:12px; background:#101c38e8; overflow:hidden; }
+.vb-hero-price { display:flex; flex-wrap:wrap; gap:12px 28px; padding:17px 24px; font-size:34px; color:#79efbe; }
+.vb-hero-stats dl { margin:0; }
+.vb-hero-stats dl div {
+  display:flex; justify-content:space-between; gap:15px; padding:12px 24px;
+  font-size:30px; border-top:1px solid #88b4ff48; color:#f0f6ff;
+}
+.vb-hero-stats dd { margin:0; font-weight:900; color:#79efbe; font-variant-numeric:tabular-nums; }
+.vb-hero-fixtures {
+  display:flex; margin:0; padding:0; gap:8px; align-items:stretch; list-style:none;
+}
+.vb-hero-fixtures li {
+  flex:0 1 16.67%; min-width:0; border-radius:8px; overflow:hidden; text-align:center;
+  background:#cedafa; color:#17223e; font-size:30px;
+}
+.vb-hero-fixtures li[data-fdr='1'], .vb-hero-fixtures li[data-fdr='2'] { background:#a4edca; }
+.vb-hero-fixtures li[data-fdr='4'], .vb-hero-fixtures li[data-fdr='5'] { background:#6d2546; color:white; }
+.vb-hero-fixtures span, .vb-hero-fixtures small { display:block; padding:10px 2px; }
+.vb-hero-fixtures small { color:#e8f0ff; background:#14213d; font-size:23px; }
