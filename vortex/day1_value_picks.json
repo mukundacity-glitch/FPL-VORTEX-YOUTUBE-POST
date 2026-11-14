@@ -1,0 +1,11 @@
+{
+  "budget": 101,
+  "goalkeepers": ["Trafford", "Kinsky"],
+  "defenders": ["Gabriel", "Muharemović", "Vušković", "James Hill", "Van Hecke"],
+  "midfielders": ["Bruno Fernandes", "Gibbs-White", "Morgan Rogers", "Groß", "Marcus Tavernier"],
+  "forwards": ["Haaland", "Nicolas Jackson", "Evanilson"],
+  "alternatives": {
+    "Bruno Fernandes": ["Mbeumo"],
+    "Morgan Rogers": ["Cole Palmer"]
+  }
+}

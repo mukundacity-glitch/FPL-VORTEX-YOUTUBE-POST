@@ -63,37 +63,63 @@ def _speaking_name(player):
     return re.sub(r"^[A-Za-z]\.\s*", "", player["name"].strip())
 
 
-def narration_parts(board):
+SCENE_LIMIT_SECONDS = 120
+
+
+def narration_parts(board, *, compact=False):
     def price(value):
         return f"{float(value):.1f} million pounds"
 
     starters = board["starters"]
-    bench = board["bench"]
-    players = {p["id"]: p for p in [*starters, *bench]}
+    players = [*starters, *board["bench"]]
     captain = next(p for p in starters if p["captain"])
-    vice = next(p for p in starters if p["viceCaptain"])
-    first_sub = next(p for p in bench if p["position"] != "GK")
-    budget = min((p for p in starters if p["position"] != "GK"),
-                 key=lambda p: (p["price"], -p["nextGwXpts"], p["id"]))
-    formation = " ".join(board["formation"].split("-"))
     gameweek = board["nextGameweek"]
-    parts = [
-        (None, f"Here’s the recommended squad for Gameweek {gameweek}. "
-               f"It costs {price(board['totalCost'])}, with {price(board['bank'])} left. "
-               f"The model recommends a {formation} starting formation."),
-        (budget["id"], f"{_speaking_name(budget)} is the cheapest outfield starter at {price(budget['price'])}."),
-        (captain["id"], f"{_speaking_name(captain)} is the recommended captain, with the highest "
-                        f"projection in the starting eleven at {captain['nextGwXpts']:.1f} points."),
-        (vice["id"], f"{_speaking_name(vice)} is the recommended vice-captain."),
-        (first_sub["id"], f"{_speaking_name(first_sub)} is first among the outfield substitutes."),
-    ]
-    change = next((plan for plan in board["weeklyPlans"][1:]
-                   if plan["captainId"] != captain["id"]), None)
-    if change:
-        pick = players[change["captainId"]]
-        parts.append((pick["id"], f"The model switches captaincy to {_speaking_name(pick)} "
-                                  f"in Gameweek {change['gameweek']}."))
-    parts.append((None, f"See you in the next video, where I will analyze transfer options "
+    parts = [(None, f"Here’s the recommended Gameweek {gameweek} squad, at {price(board['totalCost'])}.")]
+    changes = board.get("selectionChanges", {})
+    removed, added = changes.get("omitted", []), changes.get("added", [])
+    if removed and added and board.get("preferredCost", 0) and board["preferredCost"] > board["budget"]:
+        parts.append((None, "To stay within budget, "
+                            f"the model adds {' and '.join(added)} and leaves out {' and '.join(removed)}."))
+    for position in ("GK", "DEF", "MID", "FWD"):
+        picks = [p for p in players if p["position"] == position]
+        for index, player in enumerate(picks):
+            name = _speaking_name(player)
+            stats = player.get("heroStats", {})
+            points = player["nextGwXpts"]
+            if position == "GK":
+                if index == 0:
+                    line = f"{name} starts in goal, projected at {points:.1f} points."
+                else:
+                    line = f"{name} is the playing reserve at {price(player['price'])}."
+            elif position == "DEF":
+                actions = stats.get("defensiveActions90")
+                hits, games = stats.get("defconHits"), stats.get("defconAppearances")
+                if hits is not None and games and not compact:
+                    patterns = (
+                        "{name} reached the mark in {hits} of {games} tracked appearances.",
+                        "For {name}, it was {hits} from {games}.",
+                        "{name} qualified {hits} times across {games} appearances.",
+                        "{name} hit ten actions in {hits} of {games}.",
+                        "{name} earned those points in {hits} of {games} tracked appearances.",
+                    )
+                    line = patterns[index].format(name=name, hits=hits, games=games)
+                elif actions is not None:
+                    line = f"{name} averages {actions:.1f} defensive actions per ninety."
+                else:
+                    line = f"{name} projects at {points:.1f} points."
+                if index == 0:
+                    line = "Defenders earn two points for ten defensive actions in a match. " + line
+            elif player["id"] == captain["id"]:
+                line = f"{name} takes the armband, at {points:.1f} projected points."
+            else:
+                keys = ("xa90", "xg90") if position == "MID" else ("xg90", "goals90")
+                key = keys[index % 2]
+                amount = stats.get(key)
+                wording = {"xa90": "expected assists", "xg90": "expected goals", "goals90": "goals"}
+                line = (f"{name} averages {amount:.2f} {wording[key]} per ninety."
+                        if amount is not None and not compact else f"{name} projects at {points:.1f}.")
+            parts.append((player["id"], line))
+    parts.append((None, "See you in the next video, where I will analyze transfer options "
                         f"before the Gameweek {gameweek} deadline."))
     return parts
 
@@ -226,9 +252,12 @@ def integrate(output_root, *, remotion_root):
                for _, line in parts):
             raise RuntimeError("Unresolved or empty Scene 05 narration")
         voice, cues, voice_duration = asyncio.run(render_voice(parts, work))
-        if before_seconds + voice_duration + .55 > DAY1_MAX_EXPORT_SECONDS:
+        scene_limit = min(SCENE_LIMIT_SECONDS, DAY1_MAX_EXPORT_SECONDS - before_seconds)
+        if voice_duration + .55 >= scene_limit:
+            voice, cues, voice_duration = asyncio.run(render_voice(narration_parts(board, compact=True), work))
+        if voice_duration + .55 >= scene_limit:
             raise RuntimeError(
-                f"Day 1 narration and first four scenes exceed the {DAY1_MAX_EXPORT_SECONDS:.0f}s export limit"
+                f"Scene 05 exceeds its {scene_limit:.1f}s remaining export allowance"
             )
         local_assets(board, assets)
         shutil.copy2(voice, assets / "scene-5-narration.mp3")
