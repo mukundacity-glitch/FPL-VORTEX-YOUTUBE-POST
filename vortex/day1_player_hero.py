@@ -25,6 +25,9 @@ SCORING = {
     "defensive_contribution_points": ("Defensive contribution", "defensive contribution"),
 }
 METRICS = {
+    "goals_scored": "Goals",
+    "assists": "Assists",
+    "bonus": "Bonus",
     "minutes": "Minutes played",
     "starts": "Starts",
     "expected_goals": "Expected goals",
@@ -46,12 +49,12 @@ WEIGHTS = {
     "defensive_contribution": .04, "clean_sheets": .035, "saves": .035,
     "penalties_saved": .015, "bonus": .035, "ownership": .015, "difficulty": .025, "captaincy": .015, "relevance": .035,
 }
-SECTIONS = {
-    "score": "Here is the points breakdown",
-    "metrics": "Now for the underlying numbers",
-    "context": "Here is the fixture context",
-    "takeaway": "The Fantasy takeaway",
-}
+PLAYER_LIMIT = 3
+DIFFERENTIAL_OWNERSHIP = 10
+# Leave room for encoder padding when the final scene is extracted.
+NARRATION_LIMIT = 119
+PLAYER_CUES = ("The overall hero", "The second profile", "The third profile")
+
 
 
 def number(value):
@@ -116,10 +119,13 @@ def analyze(bootstrap, fixtures, live, gameweek):
         if not breakdown or not any(breakdown.values()) or sum(breakdown.values()) != points:
             continue
         price = number(player.get("now_cost"))
-        match_ids = [x["fixture"] for x in row["explain"]]
+        match_ids = list(dict.fromkeys(item["fixture"] for item in row["explain"]))
         team = player["team"]
-        ratings = [number(f.get("team_h_difficulty" if team == f["team_h"] else "team_a_difficulty"))
-                   for match_id in match_ids for f in [matches[match_id]] if team in (f["team_h"], f["team_a"])]
+        player_matches = [matches[match_id] for match_id in match_ids]
+        if any(team not in (match["team_h"], match["team_a"]) for match in player_matches):
+            continue
+        ratings = [number(match.get("team_h_difficulty" if team == match["team_h"] else "team_a_difficulty"))
+                   for match in player_matches]
         difficulty = sum(ratings) / len(ratings) if ratings and all(r is not None for r in ratings) else None
         measures = {key: number(stats.get(key)) for key in WEIGHTS}
         captain_count = number(stats.get("captained") if stats.get("captained") is not None else row.get("captained"))
@@ -131,152 +137,228 @@ def analyze(bootstrap, fixtures, live, gameweek):
         pool.append(dict(player=player, stats=stats, points=points, price=price / 10 if price else None,
                          breakdown=breakdown, fixtures=match_ids, measures=measures))
 
-    if not pool:
-        raise ValueError("No verified hero candidate reconciles to its official points breakdown")
+    if len(pool) < PLAYER_LIMIT:
+        raise ValueError("Fewer than three verified players reconcile to their official points breakdown")
     # Compare observed values on the same scale. Missing observations contribute no evidence.
     maxima = {key: max((p["measures"][key] or 0 for p in pool), default=0) for key in WEIGHTS}
     for candidate in pool:
         candidate["score"] = sum(weight * candidate["measures"][key] / maxima[key]
                                  for key, weight in WEIGHTS.items()
                                  if maxima[key] > 0 and candidate["measures"][key] is not None)
-    hero = max(pool, key=lambda p: (p["score"], p["points"], -p["player"]["id"]))
-    player = hero["player"]
+    return select_profiles(pool, bootstrap, matches, gameweek)
+
+
+def select_profiles(pool, bootstrap, matches, gameweek):
+    def rank(candidate):
+        return candidate["score"], candidate["points"], -candidate["player"]["id"]
+
+    def underlying(candidate):
+        measures = candidate["measures"]
+        return sum(measures[key] or 0 for key in ("expected_goals", "expected_assists"))
+
+    overall = max(pool, key=rank)
+    remaining = [candidate for candidate in pool if candidate is not overall]
+    priced = [candidate for candidate in remaining if candidate["measures"]["value"] is not None]
+    value = max(priced, key=lambda p: (p["measures"]["value"], rank(p))) if priced else max(remaining, key=rank)
+    remaining = [candidate for candidate in remaining if candidate is not value]
+    differentials = [p for p in remaining if p["measures"]["ownership"] is not None
+                     and 0 <= p["measures"]["ownership"] < DIFFERENTIAL_OWNERSHIP
+                     and underlying(p) >= .35 and p["measures"]["minutes"] >= 45]
+    defensive = [p for p in remaining if p["player"]["element_type"] in (1, 2)
+                 and p["points"] >= 9 and any(p["breakdown"].get(key, 0) > 0 for key in (
+                     "clean_sheets", "saves", "penalties_saved", "defensive_contribution",
+                     "defensive_contribution_points"))]
+    if differentials:
+        third = max(differentials, key=lambda p: (underlying(p), rank(p)))
+        category = "Differential"
+        why = "Strongest combined expected goals and assists among eligible players below ten percent ownership."
+    elif defensive:
+        third = max(defensive, key=rank)
+        category = "Defensive standout"
+        why = "Highest weighted score among the remaining exceptional defensive returns."
+    else:
+        third = max(remaining, key=rank)
+        category = "Underlying performance"
+        why = "Highest remaining weighted score after the overall and value selections."
+    choices = [
+        (overall, "Overall hero", "Highest weighted score across official points, value and available match indicators."),
+        (value, "Best value" if priced else "Performance profile",
+         "Most points per million among the remaining players with a verified price."
+         if priced else "Highest remaining weighted score with prices unavailable."),
+        (third, category, why),
+    ]
     teams = {team["id"]: team for team in bootstrap["teams"]}
-    position = next(t["singular_name"] for t in bootstrap["element_types"] if t["id"] == player["element_type"])
-    contexts = []
-    for match_id in dict.fromkeys(hero["fixtures"]):
-        match = matches[match_id]
-        contexts.append({
-            "home": full_club_name(teams[match["team_h"]], speech=True),
-            "away": full_club_name(teams[match["team_a"]], speech=True),
-            "home_score": match["team_h_score"], "away_score": match["team_a_score"],
-        })
+    positions = {position["id"]: position["singular_name"] for position in bootstrap["element_types"]}
     return {
-        "gameweek": gameweek, "name": player["web_name"], "player_id": player["id"],
-        "club": full_club_name(teams[player["team"]], speech=True), "position": position,
-        "player": player, "price": hero["price"], "points": hero["points"],
-        "captain_points": hero["points"] * 2, "breakdown": hero["breakdown"],
-        "metrics": {label: value for key, label in METRICS.items()
-                    if (value := number(hero["stats"].get(key))) is not None},
-        "fixtures": contexts, "observation_scope": "Completed gameweek",
-        "current_ownership": hero["measures"]["ownership"],
-        "gameweek_captaincy_rate": hero["measures"]["captaincy"],
-        "points_per_million": hero["measures"]["value"],
-        "selection": {"candidates": len(pool), "weights": WEIGHTS, "score": hero["score"],
-                      "measures": hero["measures"],
-                      "reason": "Highest combined score across official points, minutes, value and available performance and fixture indicators."},
+        "gameweek": gameweek,
+        "candidates_analyzed": len(pool),
+        "weights": WEIGHTS,
+        "players": [_profile(candidate, label, why, teams, positions, matches)
+                    for candidate, label, why in choices],
         "sources": ["FPL bootstrap-static", "FPL fixtures", f"FPL event/{gameweek}/live"],
         "analyzed_at_utc": datetime.now(timezone.utc).isoformat(),
     }
 
 
-
-def add_recent_context(hero, history):
-    previous = sorted({int(row["round"]) for row in history
-                       if row.get("round") and int(row["round"]) < hero["gameweek"]})[-3:]
-    minutes = [number(row.get("minutes")) for row in history if row.get("round") in previous]
-    if len(previous) == 3 and all(value is not None for value in minutes):
-        hero["recent_context"] = {"gameweeks": previous, "minutes": int(sum(minutes))}
-        hero["sources"].append(f"FPL element-summary/{hero['player_id']}")
-
-def narration(hero, spoken_name):
-    points = _fmt(hero["points"])
-    opening = (f"{spoken_name} is the player in focus for Gameweek {hero['gameweek']}. "
-               f"The {hero['club']} {hero['position'].lower()} finished on {points} points. "
-               f"That is {_fmt(hero['captain_points'])} with standard captaincy.")
-    scoring = spoken_scoring(hero["breakdown"])
-    breakdown = f"{SECTIONS['score']}. The official scoring shows {scoring}."
-    metrics = hero["metrics"]
-    details = [f"{_fmt(value)} {label.lower()}" for label, value in metrics.items()
-               if value or label in {"Expected goals", "Expected assists"}]
-    underlying = f"{SECTIONS['metrics']}. "
-    if details:
-        underlying += f"The gameweek records {_join(details)}. "
-    xg = metrics.get("Expected goals")
-    goals = hero["selection"]["measures"]["goals"]
-    if xg is not None and goals is not None:
-        relation = "above" if goals > xg else "below" if goals < xg else "in line with"
-        underlying += f"The goal return was {relation} the expected goal total for this gameweek. "
-    history = hero.get("recent_context")
-    if history:
-        underlying += f"Across the previous three Gameweeks, {spoken_name} played {history['minutes']} minutes. "
-    underlying += "Check whether the same playing time and involvement hold across several fixtures before using this return to judge future points."
-    results = [f"{m['home']} {m['home_score']}, {m['away']} {m['away_score']}" for m in hero["fixtures"]
-               if m["home_score"] is not None and m["away_score"] is not None]
-    context = f"{SECTIONS['context']}. "
-    if results:
-        context += f"The final {'scores were' if len(results) > 1 else 'score was'} {_join(results[:3])}. "
-    difficulty = hero["selection"]["measures"]["difficulty"]
-    if difficulty is not None:
-        context += f"The official fixture rating was {_fmt(difficulty)} out of five on average. "
-    if hero["price"] is not None:
-        context += f"At the time of analysis, {spoken_name} cost {_fmt(hero['price'])} million pounds. "
-    if hero["current_ownership"] is not None:
-        context += f"Current ownership was {_fmt(hero['current_ownership'])} percent. "
-    if hero["gameweek_captaincy_rate"] is not None:
-        context += f"The gameweek captaincy rate was {_fmt(hero['gameweek_captaincy_rate'])} percent. "
-    takeaway = (f"{SECTIONS['takeaway']}. Use the verified scoring actions to understand this return, "
-                "then check the role, the playing time and the upcoming opponents before making a transfer.")
-    return " ".join((opening, breakdown, underlying, context, takeaway))
+def _profile(candidate, label, why, teams, positions, matches):
+    player = candidate["player"]
+    measures = candidate["measures"]
+    stats = candidate["stats"]
+    contexts = []
+    for match_id in dict.fromkeys(candidate["fixtures"]):
+        match = matches[match_id]
+        home = match["team_h"] == player["team"]
+        opponent = match["team_a"] if home else match["team_h"]
+        contexts.append({
+            "fixture": match_id,
+            "opponent": full_club_name(teams[opponent], speech=True),
+            "venue": "home" if home else "away",
+            "goals_for": match["team_h_score" if home else "team_a_score"],
+            "goals_against": match["team_a_score" if home else "team_h_score"],
+        })
+    metrics = {title: value for key, title in METRICS.items()
+               if (value := number(stats.get(key))) is not None}
+    takeaway = "Check repeat starts before acting on one gameweek."
+    goals = measures["goals"]
+    expected_goals = measures["expected_goals"]
+    if goals is not None and expected_goals is not None and goals - expected_goals >= .5:
+        takeaway = "Goals ran ahead of chance quality. Check whether the chances recur."
+    elif label == "Best value":
+        takeaway = "Check repeat minutes before treating the price as lasting value."
+    elif label == "Defensive standout":
+        takeaway = "Check the next opponent before expecting another defensive return."
+    elif label == "Differential":
+        takeaway = "Check whether the chance involvement carries into the next fixture."
+    return {
+        "name": player["web_name"], "player_id": player["id"], "player": player,
+        "club": full_club_name(teams[player["team"]], speech=True),
+        "position": positions[player["element_type"]], "price": candidate["price"],
+        "points": candidate["points"], "captain_points": candidate["points"] * 2,
+        "breakdown": candidate["breakdown"], "metrics": metrics, "fixtures": contexts,
+        "current_ownership": measures["ownership"], "gameweek_captaincy_rate": measures["captaincy"],
+        "points_per_million": measures["value"], "takeaway": takeaway,
+        "goals_above_expected": goals - expected_goals if goals is not None and expected_goals is not None else None,
+        "selection": {"category": label, "reason": why, "score": candidate["score"], "measures": measures},
+    }
 
 
-def render(hero, cue_times, portrait, crest, logo):
-    def rows(items, signed=False):
-        return "".join(
-            f'<div><span>{escape(label)}</span><b>{value:+g}</b></div>' if signed else
-            f'<div><span>{escape(label)}</span><b>{_fmt(value)}</b></div>'
-            for label, value in items
-        )
+def add_recent_context(profile, history, gameweek):
+    previous = set(range(max(1, gameweek - 3), gameweek))
+    rows = [row for row in history if row.get("round") in previous]
+    minutes = [number(row.get("minutes")) for row in rows]
+    if previous and {row["round"] for row in rows} == previous and all(v is not None for v in minutes):
+        profile["recent_context"] = {"gameweeks": sorted(previous), "minutes": int(sum(minutes)),
+                                     "source": f"FPL element-summary/{profile['player_id']}"}
 
-    scoring_rows = rows([
-        (SCORING.get(k, (k.replace("_", " ").title(),))[0], v)
-        for k, v in hero["breakdown"].items() if v
-    ], signed=True)
+
+def narration(analysis, spoken_names, *, compact=False):
+    lines = [f"Three players from Gameweek {analysis['gameweek']} show how different performances earn Fantasy Premier League points."]
+    for cue, profile, name in zip(PLAYER_CUES, analysis["players"], spoken_names, strict=True):
+        breakdown = sorted(((key, value) for key, value in profile["breakdown"].items() if value),
+                           key=lambda item: (-abs(item[1]), item[0]))
+        scoring = spoken_scoring(dict(breakdown[:2 if compact else 3]))
+        opening = f"{cue} is {name}, with {_fmt(profile['points'])} points."
+        category = profile["selection"]["category"]
+        if category == "Best value":
+            opening += " This was the best value among the remaining players."
+        elif category == "Differential":
+            opening += f" Ownership at analysis was {_fmt(profile['current_ownership'])} percent."
+        elif category == "Defensive standout":
+            opening += f" The {profile['position'].lower()} stood out for defensive returns."
+        returns = f"The main scoring actions were {scoring}."
+        details = []
+        if profile["metrics"].get("Minutes played") is not None:
+            details.append(f"{_fmt(profile['metrics']['Minutes played'])} minutes")
+        if profile["selection"]["category"] == "Best value":
+            details.append(f"{_fmt(profile['points_per_million'])} points per million")
+        elif profile["selection"]["category"] == "Defensive standout":
+            for metric in ("Saves", "Clean sheets", "Defensive actions"):
+                if profile["metrics"].get(metric):
+                    details.append(f"{_fmt(profile['metrics'][metric])} {metric.lower()}")
+                    break
+        else:
+            for metric in ("Expected goals", "Expected assists"):
+                if profile["metrics"].get(metric) is not None:
+                    details.append(f"{_fmt(profile['metrics'][metric])} {metric.lower()}")
+        evidence = f"The record shows {_join(details)}." if details else ""
+        fixture = profile["fixtures"][0]
+        venue = "at home" if fixture["venue"] == "home" else "away"
+        context = ""
+        if len(profile["fixtures"]) > 1 and not compact:
+            context = "The return spans fixtures against " + _join([m["opponent"] for m in profile["fixtures"]]) + "."
+        elif not compact:
+            score = (fixture["goals_for"], fixture["goals_against"])
+            if None not in score:
+                context = f"The match against {fixture['opponent']} ended {score[0]} to {score[1]} {venue}."
+            else:
+                context = f"The match against {fixture['opponent']} was {venue}."
+        history = profile.get("recent_context")
+        if history and not compact:
+            evidence += f" Recent playing time was {history['minutes']} minutes across {len(history['gameweeks'])} gameweeks."
+        lines.append(" ".join(part for part in (opening, returns, evidence, context, profile["takeaway"]) if part))
+    return "\n\n".join(lines)
+
+
+def _rows(items, signed=False):
+    return "".join(
+        f'<div><span>{escape(label)}</span><b>{value:+g}</b></div>' if signed else
+        f'<div><span>{escape(label)}</span><b>{_fmt(value)}</b></div>'
+        for label, value in items
+    )
+
+
+def _card(profile, portrait, crest):
+    scoring = _rows(((SCORING.get(k, (k.replace("_", " ").title(),))[0], v)
+                     for k, v in profile["breakdown"].items() if v), signed=True)
     images = "".join(f'<img class="{kind}" src="{escape(src, quote=True)}" alt="">'
                      for kind, src in (("portrait", portrait), ("crest", crest)) if src)
-    results = "".join(
-        f"<p>{escape(m['home'])} <b>{m['home_score']}–{m['away_score']}</b> {escape(m['away'])}</p>"
-        for m in hero["fixtures"] if m["home_score"] is not None and m["away_score"] is not None
-    )
-    details = [
-        ("Price at analysis", f"£{_fmt(hero['price'])}m") if hero["price"] is not None else None,
-        ("Ownership at analysis", f"{_fmt(hero['current_ownership'])}%") if hero["current_ownership"] is not None else None,
-    ]
-    if hero["gameweek_captaincy_rate"] is not None:
-        details.append(("Gameweek captaincy", f"{_fmt(hero['gameweek_captaincy_rate'])}%"))
-    details = "".join(f"<p>{item[0]} <b>{item[1]}</b></p>" for item in details if item)
-    metrics = rows(hero["metrics"].items())
-    modules = [
-        ("score", "How the points were earned", scoring_rows),
-        ("metrics", "The underlying numbers", metrics),
-        ("context", "Fixture context", results + details),
-        ("takeaway", "The Fantasy takeaway", "<p>Check playing time, role and upcoming opposition before acting on one return.</p>"),
-    ]
-    sidebar = "".join(f'<section id="{key}"><h2>{heading}</h2><div class="rows">{body}</div></section>'
-                      for key, heading, body in modules if body)
+    matches = " · ".join(
+        f"{escape(m['opponent'])} ({m['venue'][0].upper()}) {m['goals_for']}–{m['goals_against']}"
+        if m["goals_for"] is not None and m["goals_against"] is not None
+        else f"{escape(m['opponent'])} ({m['venue'][0].upper()})"
+        for m in profile["fixtures"])
+    stats = [(label, value) for label, value in profile["metrics"].items() if value or label.startswith("Expected")]
+    for field, name in (("points_per_million", "Points per million"),
+                        ("current_ownership", "Ownership at analysis (%)"),
+                        ("gameweek_captaincy_rate", "Gameweek captaincy (%)")):
+        if profile[field] is not None:
+            stats.append((name, profile[field]))
+    price = f" · £{_fmt(profile['price'])}m" if profile["price"] is not None else ""
+    difficulty = profile["selection"]["measures"]["difficulty"]
+    difficulty_label = f" · Fixture difficulty {_fmt(difficulty)}/5" if difficulty is not None else ""
+    return f"""<main class="profile" id="hero-{profile['player_id']}" hidden>
+    <article class="{'has-portrait' if portrait else 'without-portrait'}">{images}
+      <div class="identity"><span class="category">{escape(profile['selection']['category'])}</span>
+      <h1>{escape(profile['name'])}</h1><span>{escape(profile['club'])} · {escape(profile['position'])}{price}</span>
+      <div class="returns"><div><strong>{_fmt(profile['points'])}</strong>FPL points</div>
+      <div><strong>{_fmt(profile['captain_points'])}</strong>With standard captaincy</div></div></div></article>
+    <aside><h2>Where the points came from</h2><div class="rows scoring">{scoring}</div>
+    <h2>Underlying numbers</h2><div class="rows metrics">{_rows(stats)}</div>
+    <p class="fixture">{matches}{difficulty_label}</p>
+    <p class="takeaway">{escape(profile['takeaway'])}</p></aside></main>"""
+
+
+def render(analysis, cue_times, assets, logo):
+    profiles = "".join(_card(profile, *assets[profile["player_id"]]) for profile in analysis["players"])
     style = Path(__file__).with_name("day1_player_hero.css").read_text()
     return f"""<!DOCTYPE html><html lang="en"><meta charset="utf-8"><style>{style}</style>
     <body><header>{logo}<div>FPL PLAYER HERO CARD<strong>The Numbers Behind the Points</strong></div>
-    <b>GAMEWEEK {hero['gameweek']}</b></header>
-    <main><article class="{'has-portrait' if portrait else 'without-portrait'}">{images}<div class="identity"><span>{escape(hero['club'])} · {escape(hero['position'])}</span>
-    <h1>{escape(hero['name'])}</h1><div class="returns"><div><strong>{_fmt(hero['points'])}</strong>FPL points</div>
-    <div><strong>{_fmt(hero['captain_points'])}</strong>With standard captaincy</div></div></div></article>
-    <aside>{sidebar}</aside></main><footer>OFFICIAL FPL MATCH DATA <b>FPL VORTEX</b></footer>
+    <b>GAMEWEEK {analysis['gameweek']}</b></header>
+    <div class="profiles">{profiles}</div>
+    <footer>OFFICIAL FPL MATCH DATA <b>FPL VORTEX</b></footer>
     <script>
     const cues={json.dumps(cue_times)};
+    const cards=[...document.querySelectorAll(".profile")];
     window.__seek=t=>{{
-      let active="score";
-      for(const [key, start] of Object.entries(cues)) if(t>=start) active=key;
-      const selected=document.getElementById(active);
-      if(selected) for(const node of document.querySelectorAll("aside section")) {{
-        node.hidden=node!==selected;
-        if(node===selected) {{
-          const phase=Math.max(0,Math.min(1,(t-(cues[active]??0))/.32));
-          const progress=1-(1-phase)**3;
-          node.style.opacity=.78+.22*progress;
-          node.style.transform=`translateY(${{(1-progress)*16}}px)`;
-        }}
-      }}
+      const active=Math.max(0,cues.findLastIndex(start=>t>=start));
+      cards.forEach((card,index)=>{{
+        card.hidden=index!==active;
+        if(card.hidden)return;
+        const phase=Math.max(0,Math.min(1,(t-(cues[active]??0))/.38));
+        const progress=1-(1-phase)**3;
+        card.style.opacity=.75+.25*progress;
+        card.style.transform=`translateY(${{(1-progress)*22}}px)`;
+      }});
     }};
     window.__seek(0);
     window.__ready=true;
@@ -303,7 +385,8 @@ def upload_hero(output_root):
     source = _safe_child(qa["final_file"], video_dir, "Verified Day 1 MP4")
     if not qa.get("passed") or _sha256(source) != qa["external_media_integration"]["final_sha256"]:
         raise RuntimeError("Player Hero upload requires the verified Day 1 master")
-    gameweek, name = review["gameweek"], review["name"]
+    gameweek = review["gameweek"]
+    names = _join([profile["name"] for profile in review["players"]])
     clip = video_dir / f"FPL_VORTEX_GW{gameweek}_PLAYER_HERO.mp4"
     subprocess.run([
         "ffmpeg", "-v", "error", "-y", "-ss", str(scene["start_seconds"]),
@@ -320,9 +403,9 @@ def upload_hero(output_root):
         "video_path": clip,
         "upload_tags": ["Fantasy Premier League", "FPL VORTEX", f"FPL GW{gameweek}", "FPL Player Hero Card"],
         "metadata": {
-            "preview_gw": gameweek, "title": f"{name} | The Numbers Behind the Points | FPL GW{gameweek}",
-            "description": f"How {name} earned {_fmt(review['points'])} FPL points in Gameweek {gameweek}. "
-                           "Scoring and underlying numbers come from official Fantasy Premier League data.",
+            "preview_gw": gameweek, "title": f"The Numbers Behind the Points | FPL Gameweek {gameweek}",
+            "description": f"How {names} earned their FPL points in Gameweek {gameweek}. "
+                           "The video uses official Fantasy Premier League scoring and available match stats.",
             "category_id": "17", "language": "en-GB",
         },
     }
