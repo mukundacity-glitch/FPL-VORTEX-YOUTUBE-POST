@@ -13,8 +13,8 @@ PROJECT = Path(__file__).resolve().parents[1] / "tools" / "day1-broadcast"
 SCENES = {
     "00_intro": (1, "The Gameweek Brief", 150, 1080),
     "gw_review": (2, "Gameweek Review", 198, 1042),
-    "02_fdr": (3, "Players & Fixtures", 78, 1080),
-    "03_projected_goals": (4, "Numbers & Market Outlook", 109, 990),
+    "03_projected_goals": (3, "The Numbers Behind the Points", 170, 1020),
+    "02_fdr": (4, "Players & Fixtures and Market Outlook", 78, 1080),
     "04_value_board": (5, "The Value Board", 0, 1080),
 }
 
@@ -34,7 +34,7 @@ def scene_manifest(reports, review_gw, next_gw, fps, logo, *, review_status, lat
         if frames < 1:
             raise ValueError(f"{key} has no usable video frames")
         entry = dict(number=number, title=title, top=top, bottom=bottom, frames=frames,
-                     label=f"GW{review_gw if key == 'gw_review' else next_gw}", logo=logo)
+                     label=f"GW{review_gw if key in {'gw_review', '03_projected_goals'} else next_gw}", logo=logo)
         if key == "04_value_board" and report.get("value_board") is not None:
             payload = report["value_board"]
             if payload.get("nextGameweek") != next_gw:

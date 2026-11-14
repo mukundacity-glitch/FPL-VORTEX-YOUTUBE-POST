@@ -143,9 +143,9 @@ def _vx23_metadata(preview_gw, review_gw, review_status, timeline, board=None):
         "that shaped the result. Then I look ahead to the fixtures and where recent minutes give us "
         "a better idea of who can actually take advantage of the schedule.",
         "",
-        "The Vortex model puts the next deadline alongside the longer fixture run. I use expected "
-        "points to judge whether an upgrade is worth a move and transfer activity to see where "
-        "managers are going. Late team news can change the call.",
+        "The Numbers Behind the Points profiles one player from the completed gameweek "
+        "using official scoring actions and available underlying numbers. The fixtures chapter "
+        "looks ahead to the next deadline.",
         "",
         captain_line + " The Value Board shows the recommended 15-player squad, "
         "with each player’s price and next-gameweek expected points.",

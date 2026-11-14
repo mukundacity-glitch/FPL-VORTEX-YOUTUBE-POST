@@ -23,6 +23,7 @@ import requests
 from PIL import Image
 
 from .day1_value_live import make_live_value_board
+from .day1_final_scenes import SCENE_KEYS
 from .youtube_studio_package import DAY1_MAX_EXPORT_SECONDS
 
 
@@ -186,7 +187,7 @@ def local_assets(board, root):
 
 
 def _check_previous_program(qa, review, board):
-    expected = ["00_intro", "gw_review", "02_fdr", "03_projected_goals"]
+    expected = list(SCENE_KEYS[:-1])
     if qa.get("passed") is not True or qa.get("scene_keys") != expected:
         raise RuntimeError(f"Expected four verified original scenes before Scene 05, found {qa.get('scene_keys')}")
     actual_review_gw = int(review.get("gw") or 0)

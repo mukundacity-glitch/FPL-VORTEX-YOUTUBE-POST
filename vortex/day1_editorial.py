@@ -695,7 +695,7 @@ def tighten_review_narration(segments, starters, context, *, review_gw, points,
     if captain and not partial and 'completed fixture' in captain_line:
         captain_line = captain_line.replace('did not feature in the completed fixture', 'missed out')
     if captain_line:
-        captain_line = captain_line.split(';', 1)[0].rstrip('.') + '.'
+        captain_line = captain_line.rstrip('.') + '.'
     substitutions = [] if partial else [
         sub for sub in automatic_subs
         if _integer(sub.get('element_in')) in context

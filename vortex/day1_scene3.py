@@ -226,7 +226,7 @@ def render_html(scene, cues, captions, original_css, original_js, logo, handoff=
         prior = f'<img class="vx-s3-handoff" src="data:image/png;base64,{uri}" alt="">'
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Day 1 · Players &amp; Fixtures</title><style>{css}</style></head>'
             f'<body><main class="vx-s3{" vx-s3-market" if market else ""}"><header class="vx-s3-header"><div class="vx-s3-brand">{logo}<span>FPL VORTEX</span></div>'
-            f'<span>CHAPTER 03 · PLAYERS &amp; FIXTURES · GW{scene["gw"]}</span></header>'
+            f'<span>CHAPTER 04 · PLAYERS &amp; FIXTURES · GW{scene["gw"]}</span></header>'
             f'<div class="vx-s3-stage"></div><div class="vx-s3-scanner"></div><div class="vx-s3-caption"></div>{prior}'
             f'<footer>THE ROAD AHEAD <span>FPL DATA · {escape(scene["stamp"])}</span></footer></main>'
             f'{original_js}<script>const S3={payload};\n{js}</script></body></html>')

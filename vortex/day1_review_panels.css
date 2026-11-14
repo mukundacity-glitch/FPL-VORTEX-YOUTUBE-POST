@@ -63,3 +63,42 @@
   object-fit:contain;
   object-position:center top;
 }
+
+/* The match review table shares the broadcast's plum and cool white palette. */
+.left > .reviewPanel {
+  background:#150f27 !important;
+  border:2px solid #584575 !important;
+  box-shadow:0 18px 44px #07051180 !important;
+  overflow:hidden;
+}
+.left > .reviewPanel::after { display:none; }
+.reviewPanel .panelTitle {
+  color:#f9f6ff !important;
+  background:#221735 !important;
+  border-bottom:2px solid #584575 !important;
+  font-style:normal;
+  text-shadow:none !important;
+  letter-spacing:.02em;
+}
+.reviewPanel .reviewGrid { gap:2px; background:#433254 !important; }
+.reviewPanel .metric {
+  padding:20px 23px !important;
+  background:#191126 !important;
+}
+.reviewPanel .metric .metricLabel {
+  opacity:1 !important;
+  color:#bfacd8 !important;
+  font-size:25px !important;
+}
+.reviewPanel .metric .metricValue {
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.055em;
+}
+.reviewPanel .metric .metricSub {
+  opacity:1 !important;
+  color:#ddd1ee !important;
+  font-size:21px !important;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}

@@ -11,6 +11,9 @@ on:
       - "vortex/day1_agenda.py"
       - "vortex/day1_value_*.py"
       - "vortex/day1_final_scenes.py"
+      - "vortex/day1_player_hero.*"
+      - "vortex/day1_review_panels.css"
+      - "tests/test_day1_player_hero.py"
       - "tests/test_day1_final_scenes.py"
       - "tools/day1-broadcast/**"
       - "vortex/day1_brief.py"
@@ -621,6 +624,14 @@ jobs:
           print("Day 1 execution: PASS")
           PY
 
+      - name: Save the standalone Player Hero MP4
+        uses: actions/upload-artifact@v7
+        with:
+          name: day-1-player-hero-${{ github.run_number }}
+          path: /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/MP4/03_projected_goals.mp4
+          if-no-files-found: error
+          compression-level: 0
+
       - name: Build and verify the live Value Board
         shell: bash
         run: |
@@ -906,6 +917,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
       - name: Validate retrospective review manifest and legitimate script file
         run: python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
+      - name: Verify Day 1 player hero points and missing-data rules
+        run: python -m unittest discover -s tests -p 'test_day1_player_hero.py' -v
       - name: Verify final Day 1 scene order and chapter timing
         run: python -m unittest discover -s tests -p 'test_day1_final_scenes.py' -v
       - name: Verify private upload deduplication by season and render revision
