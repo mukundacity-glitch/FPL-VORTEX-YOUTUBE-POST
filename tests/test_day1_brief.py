@@ -169,8 +169,8 @@ class BriefFacts(unittest.TestCase):
 
 class BriefProduction(unittest.TestCase):
     def test_new_agenda_uses_exact_current_headings_and_anchors(self):
-        self.assertEqual([c["title"] for c in cards()], ["GAMEWEEK REVIEW","PLAYERS AND FIXTURES",
-            "NUMBERS BEHIND THE POINTS", "MARKET OUTLOOK", "THE VALUE BOARD"])
+        self.assertEqual([c["title"] for c in cards()], ["GAMEWEEK REVIEW","NUMBERS BEHIND THE POINTS",
+            "PLAYERS AND FIXTURES", "MARKET OUTLOOK", "THE VALUE BOARD"])
         self.assertEqual([c["key"] for c in cards(("00_intro", "gw_review"))], ["review"])
         for c in cards():self.assertIn(c["anchor"].lower(),c["speech"].lower())
 

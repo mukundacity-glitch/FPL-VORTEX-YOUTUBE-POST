@@ -391,12 +391,15 @@ def _confirm_private(youtube, video_id: str) -> None:
 
 def upload_private(output_root: Path) -> dict[str, Any]:
     output_root = output_root.resolve()
-    package = _validate_package(output_root)
-    report_path = output_root / "DATA" / REPORT_NAME
+    return upload_day1_package(_validate_package(output_root), output_root / "DATA" / REPORT_NAME)
+
+
+def upload_day1_package(package, report_path, *, hero=False):
     preview_gw = int(package["metadata"]["preview_gw"])
     season_id, season_start = _official_season_identity(preview_gw)
-    marker = f"fpl-vortex-{season_id}-gw{preview_gw:02d}-video-1-of-3"
-    legacy_marker = _upload_marker(preview_gw)
+    series = "player-hero" if hero else "video-1-of-3"
+    marker = f"fpl-vortex-{season_id}-gw{preview_gw:02d}-{series}"
+    legacy_marker = f"fpl-vortex-auto-gw{preview_gw:02d}-player-hero" if hero else _upload_marker(preview_gw)
     revision = package.get("render_revision")
     revision_tag = f"fpl-vortex-day1-{revision}" if revision else None
     identity_tags = [marker, revision_tag] if revision_tag else [marker]

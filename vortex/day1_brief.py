@@ -248,11 +248,11 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None,
     rows = [
         ("gw_review", "review", "GAMEWEEK REVIEW", f"GW{review_gw} · " + ("Final points" if review_status == "FINAL" else "Provisional — results may change"),
          "Gameweek review", "Gameweek review."),
+        ("03_projected_goals", "numbers", "NUMBERS BEHIND THE POINTS", "The completed gameweek’s standout player",
+         "Numbers behind the points", "Numbers behind the points."),
         ("02_fdr", "fixtures", "PLAYERS AND FIXTURES", "Role · minutes · next opponents",
          "Players and fixtures", "Players and fixtures."),
-        ("03_projected_goals", "numbers", "NUMBERS BEHIND THE POINTS", "Actual returns and model estimates kept separate",
-         "Numbers behind the points", "Numbers behind the points."),
-        ("03_projected_goals", "market", "MARKET OUTLOOK", "Ownership · transfers · price",
+        ("02_fdr", "market", "MARKET OUTLOOK", "Upcoming fixture difficulty and match outlook",
          "Market outlook", "Market outlook."),
         ("04_value_board", "value", "THE VALUE BOARD", f"Recommended squad for Gameweek {next_gw}",
          "Value Board", "The Value Board picks the squad for the deadline."),
@@ -264,11 +264,6 @@ def build_intro_agenda(selected_scenes, *, next_gw, review_gw=None,
         score = brief["scoreboard"]["Official GW points"]
         rank = brief["scoreboard"]["Rank movement"]
         by_key["review"]["subtitle"] = f"GW{review_gw} · {format_datum(score)} points · rank movement {format_datum(rank)} · {brief['status']}"
-        if "numbers" in by_key:
-            if not brief.get("modelDataAvailable") and brief["projections"]["xPts"]["freshnessStatus"] != "fresh":
-                by_key["numbers"]["subtitle"] = "Actual returns verified where sourced · projection unavailable"
-            else:
-                by_key["numbers"]["subtitle"] = "FPL VORTEX model estimates · actual points kept separate"
         if not brief["personalTeamAvailable"]:
             by_key["review"]["subtitle"] = f"GW{review_gw} · Presenter team unavailable"
     return cards

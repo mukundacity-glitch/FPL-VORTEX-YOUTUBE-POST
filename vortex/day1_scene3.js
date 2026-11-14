@@ -31,7 +31,7 @@
   const {attack,defence} = scene.watch;
   const risk = scene.risk[0];
   const panels = {
-    opening: `<div class="vx-s3-hero-title">${header('CHAPTER 03 · PLAYERS &amp; FIXTURES','THE ROAD<br><em>AHEAD</em>','THE NEXT FIVE GAMEWEEKS · FIXTURE INTELLIGENCE')}</div>`,
+    opening: `<div class="vx-s3-hero-title">${header('CHAPTER 04 · PLAYERS &amp; FIXTURES','THE ROAD<br><em>AHEAD</em>','THE NEXT FIVE GAMEWEEKS · FIXTURE INTELLIGENCE')}</div>`,
     fixtures: header('THE COMPLETE SCHEDULE',`GAMEWEEK ${scene.gw} <em>FIXTURES</em>`, 'Kickoff times in New York')+
       `<div class="vx-s3-fixtures" style="--fixture-rows:${Math.max(1,Math.ceil(scene.fixtures.length/2))}">${scene.fixtures.map(f=>
         `<article class="vx-s3-fixture"><small>${esc(f.kickoff)}</small><div>${crest(f.home)}<b>${esc(f.home.name)}</b><span>VS</span><b>${esc(f.away.name)}</b>${crest(f.away)}</div></article>`).join('')||empty}</div>`,

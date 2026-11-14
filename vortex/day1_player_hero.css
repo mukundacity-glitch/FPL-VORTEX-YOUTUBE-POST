@@ -1,0 +1,21 @@
+*{box-sizing:border-box}body{margin:0;width:3840px;height:2160px;overflow:hidden;background:radial-gradient(ellipse at 18% 74%,#262044,#100c1d 70%);color:#f8f5fc;font-family:Arial,sans-serif;padding:87px 132px 60px;display:grid;grid-template-rows:216px 1fr 76px;gap:55px}
+header{display:flex;align-items:center;gap:45px;border-bottom:3px solid #6e5485;padding-bottom:36px}
+header img{width:130px;height:130px;object-fit:contain}header div{color:#d4bdf2;font-size:33px;font-weight:700;letter-spacing:.13em}header strong{display:block;color:#fff;font-size:101px;line-height:1.05;letter-spacing:-.045em;margin-top:10px}header b{margin-left:auto;color:#d3f991;font-size:45px;white-space:nowrap}
+main{display:grid;grid-template-columns:1460px 1fr;gap:85px;min-height:0}
+article{position:relative;overflow:hidden;border:3px solid #6e5485;border-radius:41px;background:radial-gradient(ellipse at 52% 18%,#5c397c,#191129 75%)}
+.portrait{position:absolute;left:100px;top:28px;width:1240px;height:1050px;object-fit:contain;object-position:center bottom}
+.crest{position:absolute;top:60px;right:70px;width:185px;height:185px;object-fit:contain}
+.identity{position:absolute;inset:auto 0 0;padding:88px 68px 63px;background:linear-gradient(transparent,#1b102b 23%,#150d23)}
+.identity>span{font-size:43px;color:#dbc7ee}
+h1{font-size:clamp(84px,7vw,165px);line-height:1;margin:16px 0 32px;letter-spacing:-.04em;overflow-wrap:anywhere}
+.returns{display:flex;gap:44px;border-top:2px solid #705387;padding-top:35px;color:#e2d5ed;font-size:42px}
+.returns div{flex:1}.returns strong{display:block;font-size:101px;color:#d3f991;font-variant-numeric:tabular-nums}
+aside{align-self:center;min-width:0}aside h2{font-size:94px;letter-spacing:-.045em;line-height:1.03;margin:0 0 46px}
+.rows{display:grid;grid-template-columns:1fr 1fr;gap:18px 30px}
+.rows div,.rows p{margin:0;border-top:2px solid #665175;padding:27px 9px;color:#ddcfea;font-size:43px}
+.rows div{display:flex;align-items:center;justify-content:space-between;gap:14px}.rows b{color:#d3f991;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rows p{grid-column:1/-1;line-height:1.32;font-size:62px}
+footer{display:flex;justify-content:space-between;border-top:2px solid #6e5485;align-items:end;color:#cdbedb;font-size:33px;font-weight:700;letter-spacing:.12em}
+
+.without-portrait .identity{inset:0;display:flex;flex-direction:column;justify-content:center;background:none;padding:100px 68px}
+.without-portrait .crest{opacity:.8}

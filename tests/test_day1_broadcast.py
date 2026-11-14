@@ -7,7 +7,7 @@ class Day1BroadcastTests(unittest.TestCase):
     reports = [
         {"key": key, "duration": duration}
         for key, duration in zip(
-            ("00_intro", "gw_review", "02_fdr", "03_projected_goals"),
+            ("00_intro", "gw_review", "03_projected_goals", "02_fdr"),
             (38.5, 180, 85.5, 240),
         )
     ]
@@ -19,7 +19,7 @@ class Day1BroadcastTests(unittest.TestCase):
                 review_status="FINAL", latest_completed=review,
             )
             self.assertEqual([s["label"] for s in scenes],
-                             [f"GW{review+1}", f"GW{review}", f"GW{review+1}", f"GW{review+1}"])
+                             [f"GW{review+1}", f"GW{review}", f"GW{review}", f"GW{review+1}"])
             self.assertEqual([s["frames"] for s in scenes], [924, 4320, 2052, 5760])
             self.assertEqual([s["number"] for s in scenes], [1, 2, 3, 4])
 

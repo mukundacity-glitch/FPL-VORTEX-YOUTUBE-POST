@@ -16170,11 +16170,11 @@ for _player in review_starters:
         _spoken += " His place was covered by an automatic substitution."
     _review_narration[_review_section_names[_player["pos"]]] += _spoken + " "
     segments.append({"id": f"player_{_player['id']}", "player_id": _player["id"], "name": _player["name"], "spoken_name": vx_review_full_name(_player), "kind": "starter", "text": _spoken})
-segments.append({"id": "bench_intro", "text": "Before we move on, let's check the bench."})
+segments.append({"id": "bench_intro", "text": "On the bench, I had..."})
 for _index, _player in enumerate(review_bench):
-    _spoken = vx_review_creator_player_text(_player, _index, bench=True)
-    if _review_final_available and int(_player["id"]) in _review_final_ids and int(_player["id"]) not in _review_selected_ids:
-        _spoken += " His points counted after an automatic substitution."
+    _spoken = vx_review_full_name(_player) + (", " if _index < len(review_bench) - 1 else ".")
+    if _index == len(review_bench) - 1:
+        _spoken = "and " + _spoken
     _review_narration["bench_review"] += _spoken + " "
     segments.append({"id": f"player_{_player['id']}", "player_id": _player["id"], "name": _player["name"], "spoken_name": vx_review_full_name(_player), "kind": "bench", "text": _spoken})
 
@@ -16184,7 +16184,6 @@ _captain_text = ""
 if captain_player:
     _captain_stats = _review_narration_context[int(captain_player["id"])]["stats"]
     _captain_raw = vx_review_number(_captain_stats.get("total_points"))
-    _captain_minutes = vx_review_number(_captain_stats.get("minutes"))
     _captain_name = vx_review_full_name(captain_player)
     _captain_multiplier = int(captain_player.get("multiplier") or 0)
     _captain_state = vx_review_player_result_state(captain_player)
@@ -16201,12 +16200,15 @@ if captain_player:
         _captain_text = f"Captain {_captain_name} has {int(_captain_raw)} points so far, with the match still to finish."
     elif _captain_raw is not None:
         captain_return = int(_captain_raw) * _captain_multiplier
-        _other_returns = [vx_review_number(_review_narration_context[int(player["id"])]["stats"].get("total_points")) for player in _review_final_players if int(player["id"]) != int(captain_player["id"]) and vx_review_player_result_state(player) == "COMPLETE"]
-        _other_returns = [value for value in _other_returns if value is not None]
-        _captain_average = sum(_other_returns) / len(_other_returns) if _other_returns else None
-        _captain_verdict = "above the other starters' average" if _captain_average is not None and _captain_raw > _captain_average else "below the other starters' average" if _captain_average is not None and _captain_raw < _captain_average else "level with the other starters' average" if _captain_average is not None else "the captain result this week"
-        _multiplier_word = "doubled" if _captain_multiplier == 2 else "tripled" if _captain_multiplier == 3 else "counted"
-        _captain_text = f"Captain {_captain_name} returned {int(_captain_raw)}, {_multiplier_word} to {captain_return}; that was {_captain_verdict}."
+        _multiplier_word = "doubled" if _captain_multiplier == 2 else "tripled" if _captain_multiplier == 3 else ""
+        _captain_text = f"Captain {_captain_name} scored {int(_captain_raw)} points."
+        if _multiplier_word:
+            _captain_text += f" The armband {_multiplier_word} that to {captain_return}."
+        from vortex.day1_player_hero import spoken_scoring
+        _cause = spoken_scoring(_review_narration_context[int(captain_player["id"])]["point_breakdown"])
+        if _cause:
+            _captain_text += f" The breakdown was {_cause}."
+
 else:
     _review_data_warnings.append("Captain flag missing; captain result omitted")
 if not _captain_text:
@@ -16268,9 +16270,10 @@ segments.append({"id": "metrics_intro", "text": "Now, did the captaincy pay off?
 for _segment_id, _section in (("metric_captain", "captain_review"), ("hero_review", "gameweek_hero"), ("quietest_review", "quietest_return"), ("availability_review", "availability_alerts"), ("review_close", "outro")):
     if _review_narration[_section]:
         beat = {"id": _segment_id, "text": _review_narration[_section]}
-        if _segment_id == "hero_review":
-            beat.update(spotlight_player_id=int(highest_player["id"]),
-                        spoken_name=vx_review_full_name(highest_player))
+        _spotlight = captain_player if _segment_id == "metric_captain" else highest_player if _segment_id == "hero_review" else None
+        if _spotlight and vx_review_full_name(_spotlight) in beat["text"]:
+            beat.update(spotlight_player_id=int(_spotlight["id"]),
+                        spoken_name=vx_review_full_name(_spotlight))
         segments.append(beat)
 # Rebuild this week's editorial from verified review picks, official player
 # data, fixtures and explicitly attributed model estimates. No fixed targets.
@@ -16304,7 +16307,13 @@ if __import__("os").environ.get("VORTEX_DAY1_COMPACT") == "1":
         rank_change=int(prev_rank) - int(cur_rank) if prev_rank and cur_rank else None,
         partial=GW_REVIEW_PARTIAL, automatic_subs=picks.get("automatic_subs") or [],
     )
+_bench_line = next((beat for beat in segments if beat["id"] == "bench_intro"), None)
+if _bench_line:
+    _bench_line["text"] = "On the bench, I had..."
 for _segment in segments:
+    if _segment.get("kind") == "bench":
+        _prefix = "and " if _segment["player_id"] == review_bench[-1]["id"] else ""
+        _segment["text"] = _prefix + _segment["spoken_name"] + "."
     _segment["text"] = vx_review_clean_text(_segment["text"])
 validate_narration(
     segments, player_ids=[int(p["id"]) for p in review_starters + review_bench],
@@ -18026,10 +18035,8 @@ def _vx_build_review_timeline(review_pkg, timing):
         # Edge TTS commonly leaves ~0.8s of silence after its last word.
         # Schedule from the spoken end plus a small natural gap; the MP3 tail may
         # overlap because it contains silence, not narration.
-        cursor = min(
-            float(segment["t1"]),
-            float(segment.get("speech_end_at", segment["t1"])) + 0.35,
-        )
+        pause = .18 if segment.get("kind") == "bench" or segment["id"] == "bench_intro" else .35
+        cursor = min(float(segment["t1"]), float(segment["speech_end_at"]) + pause)
 
     if not first_player_seen:
         raise RuntimeError("Goalkeeper narration segment is missing from GW Review.")
@@ -23622,69 +23629,36 @@ if SLIDE_SELECTION.get("02_fdr", True):
         int(NEXT_GW), data["fixtures"].to_dict("records"), team_meta_by_id, model_fixture_fdr_df.to_dict("records"),
         market_odds_benchmark.to_dict("records"), _scene3_stamp,
     )
-    VX_SCENE3_BEATS = market_narration(VX_SCENE3)
+    VX_SCENE3_BEATS = market_narration(VX_SCENE3, team_name=lambda tid: vx_narration_team(tid))
     FDR_HTML_PATH.write_text(render_market_html(
         VX_SCENE3, [{"key":"transition","at":-4}], [], vortex_logo_html,
     ), encoding="utf-8")
     await export_4k_png(FDR_HTML_PATH, FDR_PNG_PATH)
 if SLIDE_SELECTION.get("03_projected_goals", True):
-    from vortex.day1_scene4 import build_outlook, outlook_narration, outlook_script, render_outlook
-    from zoneinfo import ZoneInfo
-    _scene4_session = _fpl_module._vx_http_session()
-    _scene4_stamp = datetime.fromisoformat(data_snapshot_timestamp).astimezone(
-        ZoneInfo("America/New_York")
-    ).strftime("%Y-%m-%d %H:%M %Z")
-    _scene4_matches = phase10_player_match_all
-    if not _scene4_matches.empty:
-        _scene4_matches = _scene4_matches.loc[
-            _scene4_matches["season_label"].eq(CURRENT_SEASON)
-            & _scene4_matches["match_id"].map(_vx_phase10_is_prem)
-        ]
-    def _vx_scene4_player_photo(player):
-        photo = resolve_player_photo(player)
-        record = _vx_day1_photo_records[int(player["id"])]
-        if record.get("photo_kind") == "player" or not record.get("photo_code"):
-            return photo
-        # Current official profile crop, using the same verified player code.
-        base = _vx_day1_photo_module.PL_PHOTO_BASE_CURRENT
-        url = f"{base}/110x140/{record['photo_code']}.png"
-        payload = _vx_day1_photo_module._download_image(url)
-        return vx_bytes_to_data_uri(payload) if payload else photo
+    from vortex.day1_player_hero import add_recent_context, analyze, narration as hero_narration, render as render_hero
 
-    VX_SCENE4 = build_outlook(
-        int(NEXT_GW), data["fixtures"].to_dict("records"),
-        team_meta_by_id, data["bootstrap"]["elements"],
-        phase10_player_gameweek_expected_points.to_dict("records"),
-        model_fixture_fdr_df.to_dict("records"), data["review_ready_gws"],
-        lambda pid: _fpl_module._vx_get_json(_scene4_session, f"/element-summary/{pid}/"),
-        _vx_scene4_player_photo, CURRENT_SEASON, _scene4_stamp,
-        "Production model" if PHASE10_PRODUCTION_ELIGIBLE else "Research-only model",
-        _scene4_matches.to_dict("records"),
-        phase10_player_fixture_expected_points.to_dict("records"),
-        fixture_probabilities_model_only.to_dict("records"),
+    _hero_session = _fpl_module._vx_http_session()
+    _hero_fixtures = _fpl_module._vx_get_json(_hero_session, "/fixtures/")
+    VX_PLAYER_HERO = analyze(boot, _hero_fixtures, live, int(REVIEW_GW))
+    _hero_id = VX_PLAYER_HERO["player_id"]
+    try:
+        _hero_history = _fpl_module._vx_get_json(_hero_session, f"/element-summary/{_hero_id}/")
+    except (RuntimeError, OSError, ValueError) as exc:
+        print(f"Official player history unavailable for Player Hero: {exc}")
+    else:
+        add_recent_context(VX_PLAYER_HERO, _hero_history.get("history", []))
+    (Path(DATA_DIR) / "player_hero_analysis.json").write_text(
+        json.dumps(VX_PLAYER_HERO, ensure_ascii=False, indent=2), encoding="utf-8")
+    _hero_player = VX_PLAYER_HERO["player"]
+    VX_PLAYER_HERO_ASSETS = (
+        resolve_player_photo(_hero_player),
+        team_meta_by_id[_hero_player["team"]]["badge"],
+        vortex_logo_html,
     )
-    from vortex.football_identity import full_club_name
-
-    def _vx_scene4_speech_team(team_id):
-        team = team_meta_by_id[team_id]
-        return full_club_name(team, vx_narration_team(team), speech=True)
-
-    VX_SCENE4_SCRIPT = outlook_script(
-        VX_SCENE4, _vx_scene4_speech_team,
-        lambda pid, name: vx_narration_player({"id": pid, "name": name}),
+    VX_PLAYER_HERO_SCRIPT = hero_narration(
+        VX_PLAYER_HERO, vx_narration_player({"id": _hero_player["id"], "name": _hero_player["web_name"]}),
     )
-    VX_SCENE4_BEATS = outlook_narration(VX_SCENE4_SCRIPT)
-    if SLIDE_SELECTION.get("02_fdr", True):
-        from vortex.day1_scene4 import comparison_pair
-        VX_SCENE3_BEATS = market_narration(
-            VX_SCENE3, comparison_pair(VX_SCENE4),
-            team_name=_vx_scene4_speech_team,
-            player_name=lambda pid, name: vx_narration_player({"id": pid, "name": name}),
-        )
-    XG_HTML_PATH.write_text(render_outlook(
-        VX_SCENE4, [{"key":"summary","at":-4}], [], PLAYER_CARD_CSS,
-        PLAYER_CARD_JS, vortex_logo_html,
-    ), encoding="utf-8")
+    XG_HTML_PATH.write_text(render_hero(VX_PLAYER_HERO, {}, *VX_PLAYER_HERO_ASSETS), encoding="utf-8")
     await export_4k_png(XG_HTML_PATH, XG_PNG_PATH)
 if SLIDE_SELECTION.get("04_clean_sheets", True):
     await export_4k_png(CS_HTML_PATH, CS_PNG_PATH)
@@ -23716,8 +23690,8 @@ HTML_ROOT.mkdir(parents=True, exist_ok=True)
 _preview_specs = [
     ("00_intro", "INTRO", "intro_scene_4k.html"),
     ("gw_review", "GW REVIEW", "gw_review_scene_4k.html"),
+    ("03_projected_goals", "THE NUMBERS BEHIND THE POINTS", "projected_goals_scene_4k.html"),
     ("02_fdr", "PLAYERS & FIXTURES", "fdr_scene_4k.html"),
-    ("03_projected_goals", "NUMBERS & MARKET OUTLOOK", "projected_goals_scene_4k.html"),
     ("04_clean_sheets", "CLEAN SHEET ODDS", "clean_sheet_scene_4k.html"),
     ("05_outro", "OUTRO", "outro_scene_4k.html"),
 ]
@@ -24464,11 +24438,14 @@ else:
                         )
 
                 for cue in _vx17_manifest["segments"]:
-                    if cue.get("spotlight_player_id") is None:
+                    if cue.get("spotlight_player_id") is None and cue.get("kind") != "bench":
                         continue
-                    state = await _vx17_dom_state(page, cue["reveal_at"] + .12)
-                    if state["cardPlayerId"] != cue["spotlight_player_id"] or state["hero"] < .5:
-                        raise RuntimeError(f"Spoken Gameweek hero card is missing: {state}")
+                    spoken_stop = float(cue["speech_end_at"])
+                    sample = min(float(cue["reveal_at"]) + .12, (float(cue["reveal_at"]) + spoken_stop) / 2)
+                    state = await _vx17_dom_state(page, sample)
+                    expected_card = cue.get("spotlight_player_id") or cue.get("player_id")
+                    if state["cardPlayerId"] != expected_card or state["hero"] <= .1:
+                        raise RuntimeError(f"Spoken Gameweek hero card is missing: {cue['id']}: {state}")
 
                 # Verify each post-review card in the real scene before encoding.
                 for market_cue in _vx17_manifest.get("market_cues", []):
@@ -24959,7 +24936,7 @@ Let's review the result.
 "02_fdr": "\n\n".join(line for _, line in globals().get("VX_SCENE3_BEATS", [])),
 
 
-"03_projected_goals": "\n\n".join(line for _, line in globals().get("VX_SCENE4_BEATS", [])),
+"03_projected_goals": globals().get("VX_PLAYER_HERO_SCRIPT", ""),
 
 
 "04_clean_sheets":
@@ -25001,10 +24978,10 @@ Subscribe if that helps you make clearer decisions. And remember, one Gameweek n
 
 # The Scene 3 time target is editorial. The recorded audio is authoritative.
 if "02_fdr" in SELECTED_SCENES:
-    print(f"Scene 3 narration: {len(scripts['02_fdr'].split())} words • editorial target 295 seconds")
+    print(f"Players and Fixtures narration: {len(scripts['02_fdr'].split())} words • editorial target 295 seconds")
 
 if "03_projected_goals" in SELECTED_SCENES:
-    print(f"Scene 4 narration: {len(scripts['03_projected_goals'].split())} words")
+    print(f"Player Hero narration: {len(scripts['03_projected_goals'].split())} words")
 
 _cs_word_count=len(re.findall(r"\b[\w’'-]+\b", scripts["04_clean_sheets"]))
 if not 320 <= _cs_word_count <= 460:
@@ -25930,36 +25907,26 @@ for key,(src_name,out_name) in SCENES.items():
 
         cues = scene3_timing(VX_SCENE3_BEATS, words, vx_phrase_span, vx_full_word_narration)
         captions = scene3_caption_cues(words)
-        out.write_text(render_market_html(VX_SCENE3, cues, captions, vortex_logo_html,
-                                  Path(SLIDE_DIR) / "gw_review_animated_final.png"
-                                  if "gw_review" in SELECTED_SCENES else None), encoding="utf-8")
+        out.write_text(render_market_html(VX_SCENE3, cues, captions, vortex_logo_html), encoding="utf-8")
         events = [{"sel":".vx-s3-market-table", "at":cue["at"], "dur":.55} for cue in cues]
         manifest[key] = {"html":str(out),"audio":info["audio"],"duration":duration,
                          "canvas":[3840,2160],"events":events,"caption_cues":captions}
         continue
 
     if key == "03_projected_goals":
-        from vortex.day1_scene4 import outlook_timing
-        from vortex.day1_brief import caption_cues as scene4_caption_cues
+        from vortex.day1_player_hero import SECTIONS
+        from vortex.day1_brief import caption_cues
 
-        cues, metric_cues = outlook_timing(
-            VX_SCENE4_SCRIPT, words, duration, vx_phrase_span, vx_full_word_narration,
-        )
-        captions = scene4_caption_cues(words)
-        events = [{"sel":".vx-s4-stage", "at":cue["at"], "dur":.6} for cue in cues]
-        for cue, following in zip(cues, cues[1:]):
-            end = max((c["end"] for c in captions if cue["at"] <= c["start"] < following["at"]),
-                      default=following["at"])
-            cue["settle_at"] = min(end, following["at"])
-            events.append({"sel":".vx-s4-stage", "at":cue["settle_at"], "dur":.65})
-        for metric in metric_cues:
-            for at in (metric["start"], metric["end"], metric["emphasis"]):
-                if at is not None:
-                    events.append({"sel": ".vx-s4-stage", "at": at, "dur": .36})
-        out.write_text(render_outlook(VX_SCENE4, cues, captions, PLAYER_CARD_CSS,
-                                      PLAYER_CARD_JS, vortex_logo_html, metric_cues), encoding="utf-8")
-        manifest[key] = {"html":str(out),"audio":info["audio"],"duration":duration,
-                         "canvas":[3840,2160],"events":events,"caption_cues":captions}
+        if duration >= 120:
+            raise RuntimeError(f"Player Hero segment must be under two minutes, got {duration:.2f}s")
+        cues = {topic: vx_phrase_span(words, anchor, required=True, context="Player Hero")[0]
+                for topic, anchor in SECTIONS.items()}
+        out.write_text(render_hero(VX_PLAYER_HERO, cues, *VX_PLAYER_HERO_ASSETS), encoding="utf-8")
+        manifest[key] = {"html": str(out), "audio": info["audio"], "duration": duration,
+                         "canvas": [3840, 2160],
+                         "events": [{"sel": f"#{topic}", "at": at, "dur": .32}
+                                    for topic, at in cues.items()],
+                         "caption_cues": caption_cues(words)}
         continue
 
     events=events_for(key,info)
@@ -26863,8 +26830,8 @@ if not str(ASSEMBLY_WORK.resolve()).startswith("/content/"):
 ALL_ORDER = [
     ("00_intro",           "INTRO",            VIDEO / "00_intro.mp4"),
     ("gw_review",          "GW REVIEW",        VIDEO / "gw_review.mp4"),
-    ("02_fdr",             "PLAYERS & FIXTURES",              VIDEO / "02_fdr.mp4"),
-    ("03_projected_goals", "NUMBERS & MARKET OUTLOOK",  VIDEO / "03_projected_goals.mp4"),
+    ("03_projected_goals", "THE NUMBERS BEHIND THE POINTS", VIDEO / "03_projected_goals.mp4"),
+    ("02_fdr",             "PLAYERS & FIXTURES", VIDEO / "02_fdr.mp4"),
     ("04_clean_sheets",    "CLEAN SHEET ODDS", VIDEO / "04_clean_sheets.mp4"),
     ("05_outro",           "OUTRO",            VIDEO / "05_outro.mp4"),
 ]
