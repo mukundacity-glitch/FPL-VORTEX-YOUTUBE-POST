@@ -12,6 +12,8 @@ on:
       - "vortex/day1_value_*.py"
       - "vortex/day1_final_scenes.py"
       - "vortex/day1_player_hero.*"
+      - "vortex/day1_transfer_outlook.*"
+      - "tests/test_day1_transfer_outlook.py"
       - "vortex/day1_review_panels.css"
       - "tests/test_day1_player_hero.py"
       - "tests/test_day1_final_scenes.py"
@@ -923,6 +925,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_day1_runner_diagnostics.py' -v
       - name: Validate retrospective review manifest and legitimate script file
         run: python -m unittest discover -s tests -p 'test_day1_publish_contract.py' -v
+      - name: Verify Market Outlook transfer counts and narration
+        run: python -m unittest discover -s tests -p 'test_day1_transfer_outlook.py' -v
       - name: Verify Day 1 player hero points and missing-data rules
         run: python -m unittest discover -s tests -p 'test_day1_player_hero.py' -v
       - name: Verify final Day 1 scene order and chapter timing

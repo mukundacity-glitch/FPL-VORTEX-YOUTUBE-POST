@@ -124,7 +124,7 @@ def _vx23_chapters(timeline, review_gw):
 
 
 def _vx23_metadata(preview_gw, review_gw, review_status, timeline, board=None):
-    title = f"FPL GW{preview_gw} | Fixtures, Market Outlook & Best £100m Squad"
+    title = f"FPL GW{preview_gw} | Transfer Market Outlook & Best £100m Squad"
     status = "provisional" if review_status == "LIVE/PARTIAL" else "final"
     hashtags = ["#FPL", "#FantasyPremierLeague", f"#FPLGameweek{preview_gw}"]
     chapters = _vx23_chapters(timeline, review_gw)
@@ -144,8 +144,8 @@ def _vx23_metadata(preview_gw, review_gw, review_status, timeline, board=None):
         "a better idea of who can actually take advantage of the schedule.",
         "",
         "The Numbers Behind the Points profiles one player from the completed gameweek "
-        "using official scoring actions and available underlying numbers. The fixtures chapter "
-        "looks ahead to the next deadline.",
+        "using official scoring actions and available underlying numbers. The market chapter "
+        "compares the leading transfer activity ahead of the next deadline.",
         "",
         captain_line + " The Value Board shows the recommended 15-player squad, "
         "with each player’s price and next-gameweek expected points.",

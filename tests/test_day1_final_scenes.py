@@ -21,7 +21,7 @@ class FinalSceneTests(unittest.TestCase):
         metadata = _vx23_metadata(11, 10, "FINAL", timeline)
         self.assertEqual(metadata["chapters"], [
             "0:00 The Gameweek Brief", "0:25 GW10 Review — The Real Story",
-            "1:55 The Numbers Behind the Points", "3:15 Players & Fixtures and Market Outlook",
+            "1:55 The Numbers Behind the Points", "3:15 Market Outlook",
             "4:40 The Value Board",
         ])
 

@@ -23620,18 +23620,23 @@ if "export_4k_png" not in globals():
     raise RuntimeError("Run Cell 14 first — shared 4K renderer is missing.")
 print("⏳ Rendering restored original matrix slides...")
 if SLIDE_SELECTION.get("02_fdr", True):
-    from vortex.day1_scene3 import market_board, market_narration, render_market_html
-    from zoneinfo import ZoneInfo
-    _scene3_stamp = datetime.fromisoformat(data_snapshot_timestamp).astimezone(
-        ZoneInfo("America/New_York")
-    ).strftime("%Y-%m-%d %H:%M %Z")
-    VX_SCENE3 = market_board(
-        int(NEXT_GW), data["fixtures"].to_dict("records"), team_meta_by_id, model_fixture_fdr_df.to_dict("records"),
-        market_odds_benchmark.to_dict("records"), _scene3_stamp,
+    from vortex.day1_transfer_outlook import build_outlook, narration as transfer_narration, render as render_transfers
+
+    VX_TRANSFER_OUTLOOK = build_outlook(
+        data["bootstrap"], data["fixtures"].to_dict("records"), int(NEXT_GW),
+        datetime.fromisoformat(data_snapshot_timestamp),
     )
-    VX_SCENE3_BEATS = market_narration(VX_SCENE3, team_name=lambda tid: vx_narration_team(tid))
-    FDR_HTML_PATH.write_text(render_market_html(
-        VX_SCENE3, [{"key":"transition","at":-4}], [], vortex_logo_html,
+    VX_TRANSFER_ASSETS = {
+        row["id"]: (resolve_player_photo(row["element"]), team_meta_by_id[row["team"]]["badge"])
+        for side in ("in", "out") for row in VX_TRANSFER_OUTLOOK[side]
+    }
+
+    def _vx_transfer_spoken_name(row):
+        return vx_narration_player({"id": row["id"], "name": row["name"]})
+
+    VX_TRANSFER_SCRIPT, VX_TRANSFER_BEATS = transfer_narration(VX_TRANSFER_OUTLOOK, _vx_transfer_spoken_name)
+    FDR_HTML_PATH.write_text(render_transfers(
+        VX_TRANSFER_OUTLOOK, [], VX_TRANSFER_ASSETS, [], vortex_logo_html,
     ), encoding="utf-8")
     await export_4k_png(FDR_HTML_PATH, FDR_PNG_PATH)
 if SLIDE_SELECTION.get("03_projected_goals", True):
@@ -23694,7 +23699,7 @@ _preview_specs = [
     ("00_intro", "INTRO", "intro_scene_4k.html"),
     ("gw_review", "GW REVIEW", "gw_review_scene_4k.html"),
     ("03_projected_goals", "THE NUMBERS BEHIND THE POINTS", "projected_goals_scene_4k.html"),
-    ("02_fdr", "PLAYERS & FIXTURES", "fdr_scene_4k.html"),
+    ("02_fdr", "MARKET OUTLOOK", "fdr_scene_4k.html"),
     ("04_clean_sheets", "CLEAN SHEET ODDS", "clean_sheet_scene_4k.html"),
     ("05_outro", "OUTRO", "outro_scene_4k.html"),
 ]
@@ -24936,7 +24941,7 @@ Let's review the result.
 """.strip(),
 
 
-"02_fdr": "\n\n".join(line for _, line in globals().get("VX_SCENE3_BEATS", [])),
+"02_fdr": globals().get("VX_TRANSFER_SCRIPT", ""),
 
 
 "03_projected_goals": globals().get("VX_PLAYER_HERO_SCRIPT", ""),
@@ -24981,7 +24986,7 @@ Subscribe if that helps you make clearer decisions. And remember, one Gameweek n
 
 # The Scene 3 time target is editorial. The recorded audio is authoritative.
 if "02_fdr" in SELECTED_SCENES:
-    print(f"Players and Fixtures narration: {len(scripts['02_fdr'].split())} words • editorial target 295 seconds")
+    print(f"Market Outlook narration: {len(scripts['02_fdr'].split())} words")
 
 if "03_projected_goals" in SELECTED_SCENES:
     print(f"Player Hero narration: {len(scripts['03_projected_goals'].split())} words")
@@ -25107,6 +25112,14 @@ manifest={}
 
 for key,text in scripts.items():
     manifest[key]=await make_audio(key,text)
+    if key == "02_fdr":
+        from vortex.day1_transfer_outlook import NARRATION_LIMIT as TRANSFER_NARRATION_LIMIT
+        if manifest[key]["duration"] >= TRANSFER_NARRATION_LIMIT:
+            text, _ = transfer_narration(VX_TRANSFER_OUTLOOK, _vx_transfer_spoken_name, compact=True)
+            manifest[key] = await make_audio(key, text)
+        if manifest[key]["duration"] >= TRANSFER_NARRATION_LIMIT:
+            raise RuntimeError("Market Outlook narration exceeds the under-two-minute export budget")
+        manifest[key]["transfer_beats"] = VX_TRANSFER_BEATS
     if key == "03_projected_goals":
         from vortex.day1_player_hero import NARRATION_LIMIT
         if manifest[key]["duration"] >= NARRATION_LIMIT:
@@ -25912,15 +25925,22 @@ for key,(src_name,out_name) in SCENES.items():
     duration=float(info["duration"])
 
     if key == "02_fdr":
-        from vortex.day1_scene3 import timing as scene3_timing
-        from vortex.day1_brief import caption_cues as scene3_caption_cues
+        from vortex.day1_brief import caption_cues
 
-        cues = scene3_timing(VX_SCENE3_BEATS, words, vx_phrase_span, vx_full_word_narration)
-        captions = scene3_caption_cues(words)
-        out.write_text(render_market_html(VX_SCENE3, cues, captions, vortex_logo_html), encoding="utf-8")
-        events = [{"sel":".vx-s3-market-table", "at":cue["at"], "dur":.55} for cue in cues]
-        manifest[key] = {"html":str(out),"audio":info["audio"],"duration":duration,
-                         "canvas":[3840,2160],"events":events,"caption_cues":captions}
+        beats = info["transfer_beats"]
+        starts = [vx_phrase_span(words, beat["anchor"], required=True, context="Market Outlook")[0]
+                  for beat in beats]
+        if starts != sorted(set(starts)):
+            raise RuntimeError("Market Outlook row cues are out of order")
+        cues = [{"row": beat["row"], "start": start, "end": end}
+                for beat, start, end in zip(beats, starts, (starts + [duration])[1:])]
+        captions = caption_cues(words)
+        out.write_text(render_transfers(
+            VX_TRANSFER_OUTLOOK, cues, VX_TRANSFER_ASSETS, captions, vortex_logo_html), encoding="utf-8")
+        manifest[key] = {"html": str(out), "audio": info["audio"], "duration": duration,
+                         "canvas": [3840, 2160],
+                         "events": [{"sel": f"#{cue['row']}", "at": cue["start"], "dur": .3} for cue in cues],
+                         "caption_cues": captions}
         continue
 
     if key == "03_projected_goals":
@@ -26843,7 +26863,7 @@ ALL_ORDER = [
     ("00_intro",           "INTRO",            VIDEO / "00_intro.mp4"),
     ("gw_review",          "GW REVIEW",        VIDEO / "gw_review.mp4"),
     ("03_projected_goals", "THE NUMBERS BEHIND THE POINTS", VIDEO / "03_projected_goals.mp4"),
-    ("02_fdr",             "PLAYERS & FIXTURES", VIDEO / "02_fdr.mp4"),
+    ("02_fdr",             "MARKET OUTLOOK", VIDEO / "02_fdr.mp4"),
     ("04_clean_sheets",    "CLEAN SHEET ODDS", VIDEO / "04_clean_sheets.mp4"),
     ("05_outro",           "OUTRO",            VIDEO / "05_outro.mp4"),
 ]
