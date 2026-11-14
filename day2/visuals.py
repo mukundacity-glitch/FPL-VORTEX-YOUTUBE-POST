@@ -19,26 +19,53 @@ html body .vx-brandLock{{width:1160px!important;max-width:1160px!important;heigh
 html body .vx-logoBox{{width:180px!important;flex:0 0 180px!important;height:154px!important}}
 html body .vx-logoBox .vortex-logo{{max-width:174px!important;max-height:150px!important;object-fit:contain!important}}
 html body .vx-brandWords{{min-width:0!important;width:956px!important;max-width:956px!important}}
-html body .vx-channelName{{font-family:VortexDisplay!important;font-size:100px!important;line-height:1.08!important;font-weight:600!important;letter-spacing:1px!important;text-shadow:none!important}}
-html body .vx-channelSub{{font-family:VortexBody!important;font-size:27px!important;line-height:1.2!important;font-weight:700!important;font-style:normal!important;letter-spacing:.4px!important;white-space:normal!important;overflow-wrap:normal!important;margin-top:8px!important}}
+html body .vx-channelName{{font-family:VortexDisplay!important;font-size:100px!important;line-height:1.04!important;font-weight:600!important;letter-spacing:.25px!important;color:#F9F8F2!important;text-shadow:none!important}}
+html body .vx-channelSub{{font-family:VortexBody!important;font-size:30px!important;line-height:1.2!important;font-weight:650!important;font-style:normal!important;letter-spacing:.2px!important;color:#A8CED3!important;white-space:normal!important;overflow-wrap:break-word!important;margin-top:8px!important}}
 html body .vx-channelName *,html body .vx-channelSub *{{font-family:inherit!important}}
-html body .vx-gwPill{{font-family:VortexDisplay!important;font-weight:600!important;line-height:1.1!important}}
-html body .sceneTitle h1{{font-size:104px!important;line-height:1.06!important}}
-html body .sceneSub{{font-size:32px!important;line-height:1.1!important;max-width:100%!important;white-space:normal!important}}
 html body .rankName,html body .idText strong,html body .name,html body .rankMetric strong,html body .metricValue{{line-height:1.08!important}}
 
-/* FPL VORTEX premium Day 2 broadcast system: editorial canvas only.
-   Character: midnight scoreboard ink, champagne-white type,
-   aged-gold keylines and subdued cyan data accents.
-   DO NOT target player-card figures, fixtures, images, or timed animation. */
-html body .vx-topHeader{{border-bottom:2px solid rgba(126,198,207,.24)!important}}
-html body .vx-channelName{{color:#F6F5F1!important;letter-spacing:.25px!important;text-shadow:none!important}}
-html body .vx-channelSub{{color:#A8CED3!important;font-weight:640!important;letter-spacing:.2px!important}}
-html body .sceneTitle h1{{font-family:VortexDisplay!important;letter-spacing:.2px!important;font-weight:700!important;color:#F9F8F2!important;text-shadow:0 3px 16px rgba(0,5,13,.35)!important}}
-html body .sceneSub{{font-family:VortexBody!important;color:#C1D5D8!important;font-weight:620!important;letter-spacing:.2px!important}}
-html body .vx-gwPill{{font-family:VortexDisplay!important;background:linear-gradient(110deg,#F8E7B7,#D2AD62)!important;border:1px solid #F5E9CA!important;color:#102233!important;box-shadow:0 6px 18px rgba(0,0,0,.19)!important}}
+html body .vx-topHeader{{
+    border-bottom:2px solid rgba(168,206,211,.24)!important;
+    border-image:linear-gradient(90deg,#D2AD62 0%,rgba(210,173,98,.42) 24%,rgba(168,206,211,.24) 64%,transparent) 1!important;
+}}
+html body .sceneTitle h1{{
+    font-family:VortexDisplay!important;
+    font-size:108px!important;
+    font-weight:600!important;
+    line-height:1.06!important;
+    letter-spacing:.2px!important;
+    color:#F9F8F2!important;
+    text-shadow:0 3px 16px rgba(0,5,13,.35)!important;
+}}
+html body .sceneSub{{
+    font-family:VortexBody!important;
+    font-size:34px!important;
+    font-weight:620!important;
+    line-height:1.22!important;
+    color:#C1D5D8!important;
+    max-width:100%!important;
+    white-space:normal!important;
+    text-wrap:pretty;
+}}
+html body .vx-gwPill{{
+    font-family:VortexDisplay!important;
+    font-weight:600!important;
+    line-height:1.1!important;
+    white-space:nowrap!important;
+    background:linear-gradient(110deg,#F8E7B7,#D2AD62)!important;
+    border:1px solid #F5E9CA!important;
+    color:#102233!important;
+    box-shadow:0 6px 18px rgba(0,0,0,.19)!important;
+}}
 html body .sceneTitle h1 .accentGold,html body .sceneTitle h1 .goldAccent{{color:#E9C985!important}}
 
+/* Refine existing text reveals, including the exposure slide's inline animations.
+   The notebook still owns the keyframes, durations and narration cue delays. */
+html body .sceneTitle h1,
+html body .sceneSub,
+html body [style*="vxFadeUp"]{{
+    animation-timing-function:cubic-bezier(.22,.61,.36,1)!important;
+}}
 """
 
 
