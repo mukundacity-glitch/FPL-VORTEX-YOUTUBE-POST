@@ -23640,25 +23640,28 @@ if SLIDE_SELECTION.get("03_projected_goals", True):
     _hero_session = _fpl_module._vx_http_session()
     _hero_fixtures = _fpl_module._vx_get_json(_hero_session, "/fixtures/")
     VX_PLAYER_HERO = analyze(boot, _hero_fixtures, live, int(REVIEW_GW))
-    _hero_id = VX_PLAYER_HERO["player_id"]
-    try:
-        _hero_history = _fpl_module._vx_get_json(_hero_session, f"/element-summary/{_hero_id}/")
-    except (RuntimeError, OSError, ValueError) as exc:
-        print(f"Official player history unavailable for Player Hero: {exc}")
-    else:
-        add_recent_context(VX_PLAYER_HERO, _hero_history.get("history", []))
+    for _hero_profile in VX_PLAYER_HERO["players"]:
+        _hero_id = _hero_profile["player_id"]
+        try:
+            _hero_history = _fpl_module._vx_get_json(_hero_session, f"/element-summary/{_hero_id}/")
+        except (RuntimeError, OSError, ValueError) as exc:
+            print(f"Official player history unavailable for Player Hero {_hero_id}: {exc}")
+        else:
+            add_recent_context(_hero_profile, _hero_history.get("history", []), VX_PLAYER_HERO["gameweek"])
     (Path(DATA_DIR) / "player_hero_analysis.json").write_text(
         json.dumps(VX_PLAYER_HERO, ensure_ascii=False, indent=2), encoding="utf-8")
-    _hero_player = VX_PLAYER_HERO["player"]
-    VX_PLAYER_HERO_ASSETS = (
-        resolve_player_photo(_hero_player),
-        team_meta_by_id[_hero_player["team"]]["badge"],
-        vortex_logo_html,
-    )
-    VX_PLAYER_HERO_SCRIPT = hero_narration(
-        VX_PLAYER_HERO, vx_narration_player({"id": _hero_player["id"], "name": _hero_player["web_name"]}),
-    )
-    XG_HTML_PATH.write_text(render_hero(VX_PLAYER_HERO, {}, *VX_PLAYER_HERO_ASSETS), encoding="utf-8")
+    VX_PLAYER_HERO_ASSETS = {
+        profile["player_id"]: (resolve_player_photo(profile["player"]),
+                               team_meta_by_id[profile["player"]["team"]]["badge"])
+        for profile in VX_PLAYER_HERO["players"]
+    }
+    VX_PLAYER_HERO_NAMES = [
+        vx_narration_player({"id": profile["player_id"], "name": profile["name"]})
+        for profile in VX_PLAYER_HERO["players"]
+    ]
+    VX_PLAYER_HERO_SCRIPT = hero_narration(VX_PLAYER_HERO, VX_PLAYER_HERO_NAMES)
+    XG_HTML_PATH.write_text(render_hero(
+        VX_PLAYER_HERO, [], VX_PLAYER_HERO_ASSETS, vortex_logo_html), encoding="utf-8")
     await export_4k_png(XG_HTML_PATH, XG_PNG_PATH)
 if SLIDE_SELECTION.get("04_clean_sheets", True):
     await export_4k_png(CS_HTML_PATH, CS_PNG_PATH)
@@ -25104,6 +25107,13 @@ manifest={}
 
 for key,text in scripts.items():
     manifest[key]=await make_audio(key,text)
+    if key == "03_projected_goals":
+        from vortex.day1_player_hero import NARRATION_LIMIT
+        if manifest[key]["duration"] >= NARRATION_LIMIT:
+            text = hero_narration(VX_PLAYER_HERO, VX_PLAYER_HERO_NAMES, compact=True)
+            manifest[key] = await make_audio(key, text)
+        if manifest[key]["duration"] >= NARRATION_LIMIT:
+            raise RuntimeError("Player Hero narration exceeds the under-two-minute export budget")
     if key == "00_intro":
         from vortex.day1_editorial import word_timed_vtt
         _intro_info = manifest[key]
@@ -25914,18 +25924,20 @@ for key,(src_name,out_name) in SCENES.items():
         continue
 
     if key == "03_projected_goals":
-        from vortex.day1_player_hero import SECTIONS
+        from vortex.day1_player_hero import PLAYER_CUES
         from vortex.day1_brief import caption_cues
 
         if duration >= 120:
             raise RuntimeError(f"Player Hero segment must be under two minutes, got {duration:.2f}s")
-        cues = {topic: vx_phrase_span(words, anchor, required=True, context="Player Hero")[0]
-                for topic, anchor in SECTIONS.items()}
-        out.write_text(render_hero(VX_PLAYER_HERO, cues, *VX_PLAYER_HERO_ASSETS), encoding="utf-8")
+        cues = [vx_phrase_span(words, anchor, required=True, context="Player Hero")[0]
+                for anchor in PLAYER_CUES]
+        if cues != sorted(set(cues)):
+            raise RuntimeError("Player Hero cues must follow narration order")
+        out.write_text(render_hero(VX_PLAYER_HERO, cues, VX_PLAYER_HERO_ASSETS, vortex_logo_html),
+                       encoding="utf-8")
         manifest[key] = {"html": str(out), "audio": info["audio"], "duration": duration,
                          "canvas": [3840, 2160],
-                         "events": [{"sel": f"#{topic}", "at": at, "dur": .32}
-                                    for topic, at in cues.items()],
+                         "events": [{"sel": ".profile", "at": at, "dur": .38} for at in cues],
                          "caption_cues": caption_cues(words)}
         continue
 

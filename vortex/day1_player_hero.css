@@ -19,3 +19,15 @@ footer{display:flex;justify-content:space-between;border-top:2px solid #6e5485;a
 
 .without-portrait .identity{inset:0;display:flex;flex-direction:column;justify-content:center;background:none;padding:100px 68px}
 .without-portrait .crest{opacity:.8}
+.profiles{min-height:0}
+.profile{height:100%}
+.profile[hidden]{display:none}
+.category{display:block;color:#d3f991!important;font-size:40px!important;letter-spacing:.07em;text-transform:uppercase}
+.identity h1{margin-bottom:14px}
+.returns{margin-top:31px}
+aside h2{font-size:73px;margin:0 0 23px}
+aside h2:not(:first-child){margin-top:36px}
+.rows div{padding:12px 6px;font-size:37px}
+.rows{gap:6px 28px}
+.fixture,.takeaway{font-size:40px;line-height:1.22;margin:26px 0 0;color:#e1d6ee}
+.takeaway{padding:21px 25px;border-left:5px solid #d3f991;background:#261a37}
