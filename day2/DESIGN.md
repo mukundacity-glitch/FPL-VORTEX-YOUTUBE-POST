@@ -15,11 +15,11 @@ Use an editorial broadcast aesthetic: midnight scoreboard ink, champagne-white h
 | Aged gold | `#D2AD62` | GW labels and decision moments |
 | Gold-light | `#F8E7B7` | restrained highlight |
 
-Display type is existing **Barlow Condensed Semibold**; smaller factual labels and narration copy use existing **Inter**. Type size and wrapping should be legible in the native 3840×2160 frame and scaled mobile previews.
+Display type is existing **Barlow Condensed Semibold**. Supporting copy uses existing **Inter**. The header rule leads with aged gold under the channel name and fades across the scoreboard. Type size and wrapping should be legible in the native 3840×2160 frame and scaled mobile previews.
 
 ## What must not be redesigned
 
-The original Day 2 player cards, official club badges, portraits, fixtures, model values, animation keyframes, reveal timing, TTS voice and shared intro/outro media are owned by their existing notebook scenes. Styling here only targets page/brand header classes, subtitles and Gameweek indicators in `day2/visuals.py`. Avoid content-agnostic card overrides.
+The existing notebook scenes own player cards, official club badges, portraits, fixtures, model values, animation keyframes, reveal timing, TTS voice and shared intro/outro media. The stylesheet in `day2/visuals.py` owns the broadcast header, scene titles, subtitles and Gameweek indicator. It applies ease-out to existing editorial text reveals, with their original durations and narration cue delays.
 
 ## Data and editorial behavior
 
