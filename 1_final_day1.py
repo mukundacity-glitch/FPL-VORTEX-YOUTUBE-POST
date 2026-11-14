@@ -23640,10 +23640,10 @@ if SLIDE_SELECTION.get("02_fdr", True):
     ), encoding="utf-8")
     await export_4k_png(FDR_HTML_PATH, FDR_PNG_PATH)
 if SLIDE_SELECTION.get("03_projected_goals", True):
-    from vortex.day1_player_hero import add_recent_context, analyze, narration as hero_narration, render as render_hero
+    from vortex import day1_player_hero
 
     _hero_session = _fpl_module._vx_http_session()
-    VX_PLAYER_HERO = analyze(
+    VX_PLAYER_HERO = day1_player_hero.analyze(
         boot, _fpl_module._vx_get_json(_hero_session, "/fixtures/"), live, int(REVIEW_GW),
     )
     for _hero_profile in VX_PLAYER_HERO["players"]:
@@ -23653,7 +23653,7 @@ if SLIDE_SELECTION.get("03_projected_goals", True):
         except (RuntimeError, OSError, ValueError) as exc:
             print(f"Official player history unavailable for Player Hero {_hero_id}: {exc}")
         else:
-            add_recent_context(_hero_profile, _hero_history.get("history", []), VX_PLAYER_HERO["gameweek"])
+            day1_player_hero.add_recent_context(_hero_profile, _hero_history.get("history", []), VX_PLAYER_HERO["gameweek"])
     (Path(DATA_DIR) / "player_hero_analysis.json").write_text(
         json.dumps(VX_PLAYER_HERO, ensure_ascii=False, indent=2), encoding="utf-8")
     VX_PLAYER_HERO_ASSETS = {
@@ -23665,8 +23665,8 @@ if SLIDE_SELECTION.get("03_projected_goals", True):
         vx_narration_player({"id": profile["player_id"], "name": profile["name"]})
         for profile in VX_PLAYER_HERO["players"]
     ]
-    VX_PLAYER_HERO_SCRIPT = hero_narration(VX_PLAYER_HERO, VX_PLAYER_HERO_NAMES)
-    XG_HTML_PATH.write_text(render_hero(
+    VX_PLAYER_HERO_SCRIPT = day1_player_hero.narration(VX_PLAYER_HERO, VX_PLAYER_HERO_NAMES)
+    XG_HTML_PATH.write_text(day1_player_hero.render(
         VX_PLAYER_HERO, [], VX_PLAYER_HERO_ASSETS, vortex_logo_html), encoding="utf-8")
     await export_4k_png(XG_HTML_PATH, XG_PNG_PATH)
 if SLIDE_SELECTION.get("04_clean_sheets", True):
@@ -25124,7 +25124,7 @@ for key,text in scripts.items():
     if key == "03_projected_goals":
         from vortex.day1_player_hero import NARRATION_LIMIT
         if manifest[key]["duration"] >= NARRATION_LIMIT:
-            text = hero_narration(VX_PLAYER_HERO, VX_PLAYER_HERO_NAMES, compact=True)
+            text = day1_player_hero.narration(VX_PLAYER_HERO, VX_PLAYER_HERO_NAMES, compact=True)
             manifest[key] = await make_audio(key, text)
         if manifest[key]["duration"] >= NARRATION_LIMIT:
             raise RuntimeError("Player Hero narration exceeds the under-two-minute export budget")
@@ -25954,7 +25954,7 @@ for key,(src_name,out_name) in SCENES.items():
                 for anchor in PLAYER_CUES]
         if cues != sorted(set(cues)):
             raise RuntimeError("Player Hero cues must follow narration order")
-        out.write_text(render_hero(VX_PLAYER_HERO, cues, VX_PLAYER_HERO_ASSETS, vortex_logo_html),
+        out.write_text(day1_player_hero.render(VX_PLAYER_HERO, cues, VX_PLAYER_HERO_ASSETS, vortex_logo_html),
                        encoding="utf-8")
         manifest[key] = {"html": str(out), "audio": info["audio"], "duration": duration,
                          "canvas": [3840, 2160],
