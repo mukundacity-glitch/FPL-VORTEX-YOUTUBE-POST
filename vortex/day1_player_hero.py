@@ -5,6 +5,7 @@ from html import escape
 import json
 from math import isfinite
 from pathlib import Path
+import re
 
 from .football_identity import full_club_name
 
@@ -253,6 +254,7 @@ def add_recent_context(profile, history, gameweek):
 
 def narration(analysis, spoken_names, *, compact=False):
     lines = [f"Three players from Gameweek {analysis['gameweek']} show how different performances earn Fantasy Premier League points."]
+    seen_sentences = set()
     for cue, profile, name in zip(PLAYER_CUES, analysis["players"], spoken_names, strict=True):
         breakdown = sorted(((key, value) for key, value in profile["breakdown"].items() if value),
                            key=lambda item: (-abs(item[1]), item[0]))
@@ -295,7 +297,16 @@ def narration(analysis, spoken_names, *, compact=False):
         history = profile.get("recent_context")
         if history and not compact:
             evidence += f" Recent playing time was {history['minutes']} minutes across {len(history['gameweeks'])} gameweeks."
-        lines.append(" ".join(part for part in (opening, returns, evidence, context, profile["takeaway"]) if part))
+        script = " ".join(part for part in (opening, returns, evidence, context, profile["takeaway"]) if part)
+        # Players can share the same match, point sources or takeaway. Keep
+        # each complete sentence once so the production narration check passes.
+        sentences = []
+        for sentence in re.split(r"(?<=[.!?])\s+", script):
+            normalized = " ".join(sentence.lower().split())
+            if normalized not in seen_sentences:
+                seen_sentences.add(normalized)
+                sentences.append(sentence)
+        lines.append(" ".join(sentences))
     return "\n\n".join(lines)
 
 
