@@ -108,7 +108,7 @@ def _replace(source, old, new):
 
 
 def patch_transfer_desk_source(source):
-    """Replace just desk selection/copy; preserve the existing animation contract."""
+    """Apply Day 3 desk selection, copy, and presentation to the source notebook."""
     for anchor in ("# Current squad is used for HOLD/SELL",
                    "def _d3_desk_record(action, row, index):",
                    "def _d3_desk_recent_performance(player_id):"):
@@ -153,6 +153,23 @@ if len({r["player_id"] for g in DAY3_TRANSFER_DESK.values() for r in g}) != DAY3
     source = _replace(source, '''or not 0 <= index < 5:''', '''or not 0 <= index < len(DAY3_TRANSFER_DESK[role]):''')
     source = patch_transfer_desk_narration_source(source)
     source = _replace(source, ''''<div class="d3DeskOpen"><strong>FIFTEEN PLAYERS</strong>'\n''', '''f'<div class="d3DeskOpen"><strong>{DAY3_TRANSFER_DESK_COUNT} PLAYERS</strong>'\n''')
+    source = _replace(source, "THREE CLEAR ACTIONS • LIVE VORTEX DATA",
+                      "TRANSFER ACTIVITY AND RECENT FORM")
+    source = _replace(source, "<strong>YOUR MOVE.</strong><span>MAKE IT COUNT.</span>",
+                      "<strong>CHECK YOUR SQUAD</strong><span>BEFORE YOU COMMIT</span>")
+    source = _replace(source, '''body.vxPremium .d3DeskOpen{left:44px!important;top:28px!important}
+body.vxPremium .d3DeskOpen strong{font-size:44px!important;letter-spacing:2px!important}
+body.vxPremium .d3DeskOpen span{font-size:31px!important;letter-spacing:.4px!important}''',
+                      '''body.vxPremium .d3DeskOpen{left:44px!important;top:18px!important}
+body.vxPremium .d3DeskOpen strong{font-size:48px!important;line-height:1!important;letter-spacing:1px!important;color:#F9F8F2!important}
+body.vxPremium .d3DeskOpen span{font-size:32px!important;line-height:1.15!important;letter-spacing:.4px!important;color:#C7EADD!important}''')
+    source = _replace(source, '''body.vxPremium .d3DeskClose{bottom:36px!important}
+body.vxPremium .d3DeskClose strong{font-size:82px!important;letter-spacing:3px!important}
+body.vxPremium .d3DeskClose span{font-size:42px!important;letter-spacing:5px!important}''',
+                      '''/* Keep centring independent of the frame seek's inline transform. */
+body.vxPremium .d3DeskClose{bottom:36px!important;width:max-content;max-width:calc(100% - 88px);translate:-50% 0;transform:none}
+body.vxPremium .d3DeskClose strong{font-size:78px!important;line-height:1!important;letter-spacing:1px!important;color:#F9F8F2!important}
+body.vxPremium .d3DeskClose span{font-size:36px!important;line-height:1.15!important;letter-spacing:2px!important;color:#C7EADD!important}''')
     source = _replace(source, '''    _slots = "".join(_d3_desk_slot(r) for r in DAY3_TRANSFER_DESK[_action])''', '''    _slots = "".join(_d3_desk_slot(r) for r in DAY3_TRANSFER_DESK[_action])
     if not DAY3_TRANSFER_DESK[_action]:
         _slots = '<div style="padding:40px;font-size:38px;font-weight:700">NO QUALIFYING HOLDS THIS WEEK</div>' ''')
@@ -335,6 +352,10 @@ def patch_transfer_desk_audio_source(source):
 def patch_transfer_desk_animation_source(source):
     """Validate card identity, order and timing against the same selection."""
     source = _replace(source, "DESK_3_SPOKEN_2_SILENT_V1", "DESK_CONTINUOUS_SPEECH_V3")
+    # Use the renderer's frame-driven rise on the existing closing cue.
+    source = _replace(source,
+                      '{"sel": ".d3DeskClose", "at": close_at, "dur": .5, "stagger": 0, "fx": "zoom"}',
+                      '{"sel": ".d3DeskClose", "at": close_at, "dur": .5, "stagger": 0, "fx": "rise"}')
     source = _replace(source, '''            if len(windows) != 15 or [int(row["i"]) for row in windows] != list(range(15)):
                 raise RuntimeError("Transfer Desk timeline must contain fifteen cards in selection order")
             if [bool(row["narrated"]) for row in windows] != [True, True, True, False, False] * 3:''', '''            expected = [record for action in ("BUY", "HOLD", "SELL") for record in DAY3_TRANSFER_DESK[action]]
