@@ -624,14 +624,6 @@ jobs:
           print("Day 1 execution: PASS")
           PY
 
-      - name: Save the standalone Player Hero MP4
-        uses: actions/upload-artifact@v7
-        with:
-          name: day-1-player-hero-${{ github.run_number }}
-          path: /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/MP4/03_projected_goals.mp4
-          if-no-files-found: error
-          compression-level: 0
-
       - name: Build and verify the live Value Board
         shell: bash
         run: |
@@ -833,6 +825,9 @@ jobs:
         shell: bash
         run: python -m vortex.day1_upload_status
 
+      - name: Export and upload the standalone Player Hero privately
+        run: python -m vortex.day1_player_hero
+
       - name: Save YouTube private-upload receipt to Google Drive
         if: always()
         shell: bash
@@ -846,6 +841,17 @@ jobs:
           else
             echo "No YouTube private-upload receipt was created"
           fi
+
+      - name: Save the standalone Player Hero MP4 and receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: day-1-player-hero-${{ github.run_number }}
+          path: |
+            /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/MP4/*_PLAYER_HERO.mp4
+            /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/DATA/player_hero_private_upload.json
+          if-no-files-found: warn
+          compression-level: 0
 
       - name: Upload Day 1 output artifact
         if: always()

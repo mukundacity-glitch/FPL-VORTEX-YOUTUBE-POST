@@ -281,3 +281,59 @@ def render(hero, cue_times, portrait, crest, logo):
     window.__seek(0);
     window.__ready=true;
     </script></body></html>"""
+
+
+def upload_hero(output_root):
+    """Extract the verified, mixed Scene 3 from the final episode and upload it."""
+    import os
+    import subprocess
+
+    from .day1_media import _sha256
+    from .youtube_private_upload import _safe_child, upload_day1_package
+    from .youtube_studio_package import _vx23_probe_video
+
+    data = output_root / "DATA"
+    qa_path = data / "final_video_qa.json"
+    qa = json.loads(qa_path.read_text())
+    review = json.loads((data / "player_hero_analysis.json").read_text())
+    scene = next(s for s in qa["verified_final_scenes"] if s["key"] == "03_projected_goals")
+    if not 0 < scene["duration"] < 120:
+        raise RuntimeError("Player Hero clip must be under two minutes")
+    video_dir = output_root / "MP4"
+    source = _safe_child(qa["final_file"], video_dir, "Verified Day 1 MP4")
+    if not qa.get("passed") or _sha256(source) != qa["external_media_integration"]["final_sha256"]:
+        raise RuntimeError("Player Hero upload requires the verified Day 1 master")
+    gameweek, name = review["gameweek"], review["name"]
+    clip = video_dir / f"FPL_VORTEX_GW{gameweek}_PLAYER_HERO.mp4"
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-y", "-ss", str(scene["start_seconds"]),
+        "-i", str(source), "-t", str(scene["duration"]), "-map", "0:v:0", "-map", "0:a:0",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(clip),
+    ], check=True)
+    probe = _vx23_probe_video(clip)
+    if (probe["width"], probe["height"]) != (3840, 2160) or not 0 < probe["duration"] < 120:
+        raise RuntimeError("Player Hero encode failed its 4K or runtime check")
+    package = {
+        "package_path": qa_path,
+        "render_revision": os.environ.get("GITHUB_SHA"),
+        "video_path": clip,
+        "upload_tags": ["Fantasy Premier League", "FPL VORTEX", f"FPL GW{gameweek}", "FPL Player Hero Card"],
+        "metadata": {
+            "preview_gw": gameweek, "title": f"{name} | The Numbers Behind the Points | FPL GW{gameweek}",
+            "description": f"How {name} earned {_fmt(review['points'])} FPL points in Gameweek {gameweek}. "
+                           "Scoring and underlying numbers come from official Fantasy Premier League data.",
+            "category_id": "17", "language": "en-GB",
+        },
+    }
+    result = upload_day1_package(package, data / "player_hero_private_upload.json", hero=True)
+    if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with Path(summary).open("a", encoding="utf-8") as stream:
+            stream.write(f"\n## Player Hero private draft\n\n{result['youtube']['studio_url']}\n")
+    return result
+
+
+if __name__ == "__main__":
+    from .youtube_private_upload import DEFAULT_OUTPUT_ROOT
+
+    upload_hero(DEFAULT_OUTPUT_ROOT)
