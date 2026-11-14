@@ -23643,8 +23643,9 @@ if SLIDE_SELECTION.get("03_projected_goals", True):
     from vortex.day1_player_hero import add_recent_context, analyze, narration as hero_narration, render as render_hero
 
     _hero_session = _fpl_module._vx_http_session()
-    _hero_fixtures = _fpl_module._vx_get_json(_hero_session, "/fixtures/")
-    VX_PLAYER_HERO = analyze(boot, _hero_fixtures, live, int(REVIEW_GW))
+    VX_PLAYER_HERO = analyze(
+        boot, _fpl_module._vx_get_json(_hero_session, "/fixtures/"), live, int(REVIEW_GW),
+    )
     for _hero_profile in VX_PLAYER_HERO["players"]:
         _hero_id = _hero_profile["player_id"]
         try:
