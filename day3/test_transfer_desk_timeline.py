@@ -89,7 +89,14 @@ class TransferDeskTimelineTests(unittest.TestCase):
                 self.assertEqual(len(cues["windows"]), 10 + hold_count)
                 self.assertEqual(sum(not row["narrated"] for row in cues["windows"]),
                                  0)
-                ns["validate_animation"]("05_transfer_decision_desk", info)
+                beats = ns["validate_animation"]("05_transfer_decision_desk", info)
+                self.assertEqual(beats[-1], {
+                    "sel": ".d3DeskClose",
+                    "at": cues["closing_at"],
+                    "dur": .5,
+                    "stagger": 0,
+                    "fx": "rise",
+                })
                 payload = {}
                 ns["validate_payload"]("05_transfer_decision_desk", payload)
                 self.assertEqual(len(payload["transfer_desk_windows"]), 10 + hold_count)
