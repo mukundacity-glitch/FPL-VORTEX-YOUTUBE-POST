@@ -645,6 +645,7 @@ jobs:
         run: python -m vortex.youtube_studio_package
 
       - name: Validate Day 1 output
+        id: validate_day1_output
         shell: bash
         env:
           VORTEX_DAY1_COMPACT: "1"
@@ -799,7 +800,9 @@ jobs:
           first_video_local="/content/drive/MyDrive/${first_video_path}"
           if [[ -d "${first_video_local}" ]]; then
             rclone sync "${first_video_local}" "vortex-drive:${first_video_path}" \
-              --create-empty-src-dirs --transfers 4 --checkers 8
+              --create-empty-src-dirs --transfers 4 --checkers 8 \
+              --filter '+ /MP4/*COMBINED*.mp4' \
+              --filter '- /MP4/**.mp4'
             echo "Replaced My Drive/${first_video_path} with the current output set"
           fi
 
@@ -829,9 +832,6 @@ jobs:
         shell: bash
         run: python -m vortex.day1_upload_status
 
-      - name: Export and upload the standalone Player Hero privately
-        run: python -m vortex.day1_player_hero
-
       - name: Save YouTube private-upload receipt to Google Drive
         if: always()
         shell: bash
@@ -846,25 +846,13 @@ jobs:
             echo "No YouTube private-upload receipt was created"
           fi
 
-      - name: Save the standalone Player Hero MP4 and receipt
-        if: always()
+      - name: Save the complete five-scene Day 1 MP4
+        if: ${{ !cancelled() && steps.validate_day1_output.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
-          name: day-1-player-hero-${{ github.run_number }}
-          path: |
-            /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/MP4/*_PLAYER_HERO.mp4
-            /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/DATA/player_hero_private_upload.json
-          if-no-files-found: warn
-          compression-level: 0
-
-      - name: Upload Day 1 output artifact
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: day-1-output-${{ github.run_number }}
-          path: /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO
-          if-no-files-found: warn
-          compression-level: 0
+          path: /content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO/MP4/*COMBINED*.mp4
+          if-no-files-found: error
+          archive: false
           retention-days: 14
 
       - name: Upload Day 1 execution log
