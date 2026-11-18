@@ -12,8 +12,53 @@ from unittest.mock import patch
 
 from day3 import live_evidence
 from day3 import run_notebook as runner
+from day3.evidence_pipeline import patch_phase1_archive_refresh
 from day3.chip_plan import DAY3_CHIP_PLAN_SCENE, DAY3_PLANNED_CHIP_OPTIONS, chip_plan_copy
 from day3.publish_private import _one_final_video
+
+
+class Phase1HistoricalArchiveTests(unittest.TestCase):
+    def _execute_refresh(self, *, fail: bool = False):
+        refreshes = []
+        missing = []
+        def refresh(url, dest, **kwargs):
+            refreshes.append((url, str(dest)))
+            if fail and url.endswith("/matches.csv"):
+                missing.append(str(dest))
+        namespace = {
+            "EPL_SEASON": 2026,
+            "GAMEWEEKS": [1, 2],
+            "DRIVE_ROOT": Path("/tmp/FPL_CORE/data/2026-2027"),
+            "GITHUB_OWNER": "olbauday",
+            "GITHUB_REPO": "FPL-Core-Insights",
+            "GITHUB_BRANCH": "main",
+            "failed_missing": missing,
+            "failed_retained": [],
+            "_refresh_one": refresh,
+        }
+        source = patch_phase1_archive_refresh('print("FPL_CORE REFRESH COMPLETE")')
+        if fail:
+            with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                exec(source, namespace)
+        else:
+            exec(source, namespace)
+        return refreshes, namespace
+
+    def test_archives_previous_season_and_current_completed_gameweeks(self):
+        refreshes, namespace = self._execute_refresh()
+        previous = [path for _, path in refreshes if "/2025-2026/" in path]
+        current = [path for _, path in refreshes if "/2026-2027/" in path]
+        self.assertEqual(len(previous), 1 + 38 + 38)
+        self.assertEqual(len(current), 1 + 2)
+        self.assertIn("/2025-2026/By Tournament/Premier League/GW38/matches.csv", previous)
+        self.assertIn("/2025-2026/By Tournament/Premier League/GW38/incidents.csv", previous)
+        self.assertIn("/2026-2027/By Tournament/Premier League/GW2/matches.csv", current)
+        self.assertEqual(str(namespace["DRIVE_ROOT"]), "/tmp/FPL_CORE/data/2026-2027")
+
+    def test_missing_historical_matches_fails_closed(self):
+        refreshes, namespace = self._execute_refresh(fail=True)
+        self.assertTrue(any(url.endswith("/matches.csv") for url, _ in refreshes))
+        self.assertEqual(str(namespace["DRIVE_ROOT"]), "/tmp/FPL_CORE/data/2026-2027")
 
 
 class LiveEvidencePollingTests(unittest.TestCase):
