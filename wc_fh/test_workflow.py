@@ -7,6 +7,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from wc_fh.catalog import build_catalog, player_label
@@ -180,28 +181,55 @@ class NotebookTests(IsolatedTestCase):
             "for _vx_voice_key, _vx_voice_scenes in VX_SCENE_MANIFESTS.items():\n"
             "    _vx_voice_path = Path(VX_NARRATION_PATHS[_vx_voice_key])\n"
         )
-        preflight_source = (
-            "for _vx_target_key, _vx_scripts in VX_NARRATION.items():\n"
-            "    if True:\n"
-            "        _vx_scenes={scene['scene_id']:scene for scene in VX_SCENE_MANIFESTS[_vx_target_key]}\n"
-        )
+        preflight_source = """def render(key):
+    contract_path=VX_ANALYSIS_ROOT/('wildcard_data.json' if key.startswith('wildcard') else 'freehit_data.json')
+    contract=json.loads(contract_path.read_text());vx_validate_contract(contract)
+    if contract['chip']=='freehit':vx_validate_freehit(contract)
+    vx_assert_current_snapshot(contract)
+    script=decode_script(vx_assert_script_contract(VX_NARRATION_PATHS[key],contract))
+    manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')
+    # Rebuild visuals from persisted data, then apply only explicit saved narration edits.
+    scenes=vx_build_manifest(contract)
+    return contract, script, scenes
+if True:
+    for _vx_target_key, _vx_plan, _vx_label in _render_targets:
+        _vx_scripts=decode_script(VX_NARRATION_PATHS[_vx_target_key].read_text(encoding='utf-8'))
+        _vx_scenes={scene['scene_id']:scene for scene in VX_SCENE_MANIFESTS[_vx_target_key]}
+"""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "freehit_data.json").write_text(json.dumps({"points": 5.2}))
             segment = {"id": "fh_scene_3", "text": "An older estimate of 4.9 points."}
+            validations = []
             namespace = {
                 "json": json, "Path": Path, "VX_ANALYSIS_ROOT": root,
                 "VX_SCENE_MANIFESTS": {"free_hit_auto": []},
                 "VX_DATA_CONTRACTS": {"free_hit_auto": {"chip": "freehit", "points": 4.9}},
                 "VX_NARRATION_PATHS": {"free_hit_auto": root / "script.txt"},
                 "VX_NARRATION": {"free_hit_auto": [segment]},
+                "_render_targets": [("free_hit_auto", None, "Free Hit / Model")],
+                "decode_script": lambda _: [segment.copy()],
+                "vx_assert_script_contract": lambda path, data: validations.append(("script", data["points"])),
+                "vx_assert_current_snapshot": lambda data: validations.append(("snapshot", data["points"])),
+                "vx_validate_contract": lambda data: validations.append(("data", data["points"])),
+                "VX_FREEHIT_SUITE": SimpleNamespace(build_squad_data=lambda scene, data:
+                    validations.append(("pitch", scene["narration_timeline"][0]["hero_player_id"]))),
                 "vx_build_manifest": lambda contract: [{"scene_id": "fh_scene_3",
-                    "narration_timeline": [{"narration_text": f"Expected points are {contract['points']}."}]}],
+                    "visual_type": "fh_squad_plan", "narration_timeline": [
+                        {"type": "bench", "hero_player_id": 42,
+                         "narration_text": f"Expected points are {contract['points']}."
+                         " This is substitute cover; his points are separate from the starting-eleven total."}]}],
             }
             exec(patch_free_hit_narration(editorial_source), namespace)
             self.assertEqual(segment["text"], "Expected points are 5.2.")
             exec(patch_free_hit_preflight(preflight_source), namespace)
+            self.assertEqual(validations, [("data", 5.2), ("snapshot", 5.2), ("script", 5.2), ("pitch", 42)])
             segment["text"] = "A stale edit."
+            data, scripts, scenes = namespace["render"]("free_hit_auto")
+            self.assertEqual(data["points"], 5.2)
+            self.assertEqual(scripts[0]["text"], "Expected points are 5.2.")
+            self.assertIs(scenes[0], namespace["_vx_scenes"]["fh_scene_3"])
+            self.assertEqual(scenes[0]["narration_timeline"][0]["hero_player_id"], 42)
             with self.assertRaisesRegex(ValueError, "fh_scene_3.*timed cues differ"):
                 exec(patch_free_hit_preflight(preflight_source), namespace)
 

@@ -70,11 +70,16 @@ class OfficialWebNameCompatibilityTests(unittest.TestCase):
         speech.prepare_tts = self.original
         speech.PROFILE = {}
         speech.VERSION = "test"
+        speech.CLUBS = {"BHA": "Brighton and Hove Albion"}
         with patch.dict("sys.modules", {"tts_narration": speech}):
-            scope = {}
+            scope = {"_bootstrap": {"teams": [
+                {"short_name": "HUL", "name": "Hull City"},
+                {"short_name": "BHA", "name": "Brighton"},
+            ]}}
             exec(patch_narration_loader(source), scope)
         self.assertTrue(scope["result"]["validation_passed"])
         self.assertIs(scope["prepare_tts"], speech.prepare_tts)
+        self.assertEqual(speech.CLUBS, {"BHA": "Brighton and Hove Albion", "HUL": "Hull City"})
 
 
 if __name__ == "__main__":

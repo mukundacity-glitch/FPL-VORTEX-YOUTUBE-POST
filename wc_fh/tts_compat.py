@@ -77,6 +77,9 @@ def patch_narration_loader(source: str) -> str:
     position = matches[0].end_lineno
     lines[position:position] = [
         "\nfrom wc_fh.tts_compat import install_official_web_name_compat as _wc_fh_install_official_web_name_compat\n"
+        "# The Cell 14 reload replaces CLUBS, including the official aliases from Cell 13.\n"
+        "for _wc_fh_team in _bootstrap['teams']:\n"
+        "    _vx_tts_module.CLUBS.setdefault(_wc_fh_team['short_name'], _wc_fh_team['name'])\n"
         "prepare_tts = _wc_fh_install_official_web_name_compat(prepare_tts)\n"
         "_vx_tts_module.prepare_tts = prepare_tts\n"
     ]

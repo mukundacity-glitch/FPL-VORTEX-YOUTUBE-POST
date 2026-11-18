@@ -10,7 +10,7 @@ import sys
 import traceback
 import types
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .catalog import build_catalog, save_catalog
 from .controls import (CHIPS, POSITIONS, TASKS, chip_slug, controls_for_chip,
@@ -74,18 +74,34 @@ def free_hit_cue_text(scenes: list[dict[str, Any]]) -> dict[str, str]:
     return texts
 
 
+def build_free_hit_scenes(
+    build_manifest: Callable[[dict[str, Any]], list[dict[str, Any]]],
+    contract: dict[str, Any],
+) -> list[dict[str, Any]]:
+    scenes = build_manifest(contract)
+    for scene in scenes:
+        if scene["visual_type"] == "fh_squad_plan":
+            for cue in scene["narration_timeline"]:
+                if cue["type"] == "bench":
+                    cue["narration_text"] = cue["narration_text"].removesuffix(
+                        " This is substitute cover; his points are separate from the starting-eleven total."
+                    )
+    texts = free_hit_cue_text(scenes)
+    for scene in scenes:
+        scene["narration_text"] = texts[scene["scene_id"]]
+    return scenes
+
+
 def patch_free_hit_narration(source: str) -> str:
     anchor = "    _vx_voice_path = Path(VX_NARRATION_PATHS[_vx_voice_key])"
     if source.count(anchor) != 1:
         raise ValueError("Notebook narration export contract changed")
     sync = """    if VX_DATA_CONTRACTS[_vx_voice_key]['chip'] == 'freehit':
-        from wc_fh.run_notebook import free_hit_cue_text
+        from wc_fh.run_notebook import build_free_hit_scenes
         # Use the persisted contract that the renderer reads after preparation.
         _fh_contract = json.loads((VX_ANALYSIS_ROOT / 'freehit_data.json').read_text(encoding='utf-8'))
-        _vx_voice_scenes = vx_build_manifest(_fh_contract)
-        _fh_text = free_hit_cue_text(_vx_voice_scenes)
-        for _fh_scene in _vx_voice_scenes:
-            _fh_scene['narration_text'] = _fh_text[_fh_scene['scene_id']]
+        _vx_voice_scenes = build_free_hit_scenes(vx_build_manifest, _fh_contract)
+        _fh_text = {_fh_scene['scene_id']: _fh_scene['narration_text'] for _fh_scene in _vx_voice_scenes}
         for _fh_segment in VX_NARRATION[_vx_voice_key]:
             _fh_segment['text'] = _fh_text[_fh_segment['id']]
         VX_SCENE_MANIFESTS[_vx_voice_key] = _vx_voice_scenes
@@ -94,19 +110,46 @@ def patch_free_hit_narration(source: str) -> str:
 
 
 def patch_free_hit_preflight(source: str) -> str:
-    anchor = "        _vx_scenes={scene['scene_id']:scene for scene in VX_SCENE_MANIFESTS[_vx_target_key]}"
-    if source.count(anchor) != 1:
-        raise ValueError("Notebook narration preflight contract changed")
-    preflight = """
+    anchor = """    for _vx_target_key, _vx_plan, _vx_label in _render_targets:
+        _vx_scripts=decode_script(VX_NARRATION_PATHS[_vx_target_key].read_text(encoding='utf-8'))
+        _vx_scenes={scene['scene_id']:scene for scene in VX_SCENE_MANIFESTS[_vx_target_key]}"""
+    render_inputs = """    contract_path=VX_ANALYSIS_ROOT/('wildcard_data.json' if key.startswith('wildcard') else 'freehit_data.json')
+    contract=json.loads(contract_path.read_text());vx_validate_contract(contract)
+    if contract['chip']=='freehit':vx_validate_freehit(contract)
+    vx_assert_current_snapshot(contract)
+    script=decode_script(vx_assert_script_contract(VX_NARRATION_PATHS[key],contract))
+    manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')
+    # Rebuild visuals from persisted data, then apply only explicit saved narration edits.
+    scenes=vx_build_manifest(contract)"""
+    if source.count(anchor) != 1 or source.count(render_inputs) != 1:
+        raise ValueError("Notebook Free Hit render input contract changed")
+    preflight = """    from wc_fh.run_notebook import build_free_hit_scenes
+    _wc_fh_free_hit_render_inputs = {}
+    for _vx_target_key, _vx_plan, _vx_label in _render_targets:
         if _vx_target_key.startswith('free_hit'):
-            from wc_fh.run_notebook import free_hit_cue_text
             _fh_contract = json.loads((VX_ANALYSIS_ROOT / 'freehit_data.json').read_text(encoding='utf-8'))
-            _fh_text = free_hit_cue_text(vx_build_manifest(_fh_contract))
-            for _script in _vx_scripts:
-                if _script['text'].split() != _fh_text[_script['id']].split():
+            vx_validate_contract(_fh_contract)
+            vx_assert_current_snapshot(_fh_contract)
+            _vx_scripts = decode_script(vx_assert_script_contract(VX_NARRATION_PATHS[_vx_target_key], _fh_contract))
+            _target_scenes = build_free_hit_scenes(vx_build_manifest, _fh_contract)
+            if [script['id'] for script in _vx_scripts] != [scene['scene_id'] for scene in _target_scenes]:
+                raise ValueError(f"{_vx_target_key}: Free Hit script headers differ from the current ordered scenes")
+            for _script, _scene in zip(_vx_scripts, _target_scenes):
+                if _script['text'].split() != _scene['narration_text'].split():
                     raise ValueError(f"{_script['id']}: Free Hit script and timed cues differ before rendering")
-"""
-    return source.replace(anchor, anchor + preflight, 1)
+                if _scene['visual_type'] == 'fh_squad_plan':
+                    VX_FREEHIT_SUITE.build_squad_data(_scene, _fh_contract)
+            _wc_fh_free_hit_render_inputs[_vx_target_key] = (_fh_contract, _vx_scripts, _target_scenes)
+        else:
+            _vx_scripts = decode_script(VX_NARRATION_PATHS[_vx_target_key].read_text(encoding='utf-8'))
+            _target_scenes = VX_SCENE_MANIFESTS[_vx_target_key]
+        _vx_scenes = {scene['scene_id']: scene for scene in _target_scenes}"""
+    return source.replace(anchor, preflight, 1).replace(
+        render_inputs,
+        "    contract, script, scenes = _wc_fh_free_hit_render_inputs[key]\n"
+        "    manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')",
+        1,
+    )
 
 
 def patch_render(source: str) -> str:
