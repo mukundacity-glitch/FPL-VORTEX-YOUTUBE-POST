@@ -4,11 +4,19 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
+from html import escape
 from pathlib import Path
 
+import pandas as pd
 from playwright.sync_api import sync_playwright
 
-from day3.run_notebook import SCENE_DESIGN_CELL_INDEX, _patch_defcon_team_numeric_fit
+from day3.run_notebook import (
+    SCENE_DESIGN_CELL_INDEX,
+    TTS_PROFILE_CELL_INDEX,
+    _patch_defcon_fixture_fit,
+    _patch_defcon_team_numeric_fit,
+)
 
 
 def _assigned_literal(source: str, name: str) -> str:
@@ -33,9 +41,25 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
     cell = cells[SCENE_DESIGN_CELL_INDEX]
     raw_source = cell["source"]
     source = "".join(raw_source) if isinstance(raw_source, list) else str(raw_source)
-    patched = _patch_defcon_team_numeric_fit(source)
+    patched = _patch_defcon_fixture_fit(_patch_defcon_team_numeric_fit(source))
     stylesheet = _assigned_literal(patched, "_D3_DEFCON_PRODUCTION_CSS")
     runtime_script = _assigned_literal(patched, "_D3_DEFCON_CARD_RUNTIME")
+    premium_script = _assigned_literal(
+        "".join(cells[TTS_PROFILE_CELL_INDEX]["source"]), "VX_PREMIUM_JS"
+    )
+    fit_start = premium_script.index("function fitSecondary(root){")
+    fit_end = premium_script.index("\nfunction ", fit_start + 1)
+    fit_secondary = premium_script[fit_start:fit_end]
+    fixture_function = next(
+        node for node in ast.parse(patched).body
+        if isinstance(node, ast.FunctionDef) and node.name == "_d3_def20_fdr_strip"
+    )
+    scope = {"re": re, "pd": pd, "_d3_escape": escape, "vx_phase4_fdr_class": lambda _: "fdr-4"}
+    exec(compile(ast.Module(body=[fixture_function], type_ignores=[]), "<defcon-fixtures>", "exec"), scope)
+    fixture_labels = ["Crystal Palace A", "Brighton and Hove Albion H", "Arsenal H"]
+    fixture_chips = scope["_d3_def20_fdr_strip"](
+        [{"fixture": label, "fdr_value": 4.2} for label in fixture_labels]
+    )
 
     start = runtime_script.find("  const fitDefconTeamForecasts=()=>{")
     end = runtime_script.find("  const assertDefconBoardFit=()=>{", start)
@@ -57,12 +81,16 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
     )
     page_html = (
         "<!doctype html><html><head><style>:root{--vx-dense:Arial,sans-serif}"
-        ".d3DefTeamRow{width:850px;height:130px}</style>"
+        ".d3DefTeamRow{width:850px;height:130px}.d3Def20FdrStrip{width:675px}</style>"
         + stylesheet
         + "</head><body class=\"vxPremium\">"
-        + rows
+        + rows + fixture_chips
         + "<script>(()=>{" + fitter
-        + "window.testDefconNumericFit=fitDefconTeamForecasts;})();</script>"
+        + "window.testDefconNumericFit=fitDefconTeamForecasts;"
+        + "const cfg={key:'03_defcon'},fitCache=new WeakMap(),normalize=s=>s.trim(),"
+        + "visible=el=>el.checkVisibility(),set=(el,k,v)=>el.style.setProperty(k,v,'important');"
+        + fit_secondary
+        + "window.testFixtureFit=()=>fitSecondary(document.body);})();</script>"
         + "</body></html>"
     )
 
@@ -96,7 +124,24 @@ def check_defcon_forecasts(notebook_path: Path) -> None:
                 raise AssertionError("DEFCON fitter used unreadable type below 32px")
             if result[0]["fontSize"] >= 61:
                 raise AssertionError("104.4 regression value was not resized to fit")
-            print("✅ DEFCON 20-team live forecast browser test passed, including 104.4 and 9999.9")
+            fixtures = page.evaluate("""async()=>{
+                await document.fonts.ready;
+                window.testFixtureFit();
+                return [...document.querySelectorAll('.d3Def20FdrFixture')].map(el=>{
+                  const chip=el.parentElement.getBoundingClientRect();
+                  const score=el.nextElementSibling.getBoundingClientRect();
+                  const range=document.createRange();
+                  range.selectNodeContents(el);
+                  return {text:el.textContent,size:parseFloat(getComputedStyle(el).fontSize),
+                    fits:el.scrollWidth<=el.clientWidth+1 && [...range.getClientRects()].every(
+                      rect=>rect.right<=score.left-2 && rect.top>=chip.top && rect.bottom<=chip.bottom)};
+                });
+            }""")
+            if [item["text"] for item in fixtures] != fixture_labels or not all(
+                item["fits"] and item["size"] >= 20 for item in fixtures
+            ):
+                raise AssertionError(f"DEFCON fixture labels clip or overlap their scores: {fixtures}")
+            print("✅ DEFCON forecast widths and long fixture labels passed Chromium layout QA")
         finally:
             browser.close()
 

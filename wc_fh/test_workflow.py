@@ -15,7 +15,10 @@ from wc_fh.controls import (AUTO, CHIPS, CHIP_OPTIONS, POSITIONS, SLOTS, chip_sl
 from PIL import Image
 
 from wc_fh.publish_private import build_package, build_packages, metadata, publish
-from wc_fh.run_notebook import install_colab_compatibility, patch_setup, select_chip, validate_delivery
+from wc_fh.run_notebook import (
+    free_hit_cue_text, install_colab_compatibility, patch_free_hit_narration,
+    patch_free_hit_preflight, patch_setup, select_chip, validate_delivery,
+)
 from wc_fh.manual_plans import choose_lineup
 
 
@@ -157,6 +160,51 @@ class SquadControlTests(IsolatedTestCase):
 
 
 class NotebookTests(IsolatedTestCase):
+    def test_free_hit_narration_uses_the_complete_timed_script(self):
+        opening = {"scene_id": "fh_scene_1", "narration_timeline": [
+            {"narration_text": "This is my Free Hit."},
+        ]}
+        squad = {"scene_id": "fh_scene_3", "narration_timeline": [
+            {"narration_text": "This is my Gameweek 11 lineup."},
+            {"narration_text": "The model gives him 5.2 points."},
+        ]}
+        self.assertEqual(free_hit_cue_text([opening, squad]), {
+            "fh_scene_1": "This is my Free Hit.",
+            "fh_scene_3": "This is my Gameweek 11 lineup. The model gives him 5.2 points.",
+        })
+        with self.assertRaisesRegex(ValueError, "fh_scene_3.*empty"):
+            free_hit_cue_text([dict(squad, narration_timeline=[{"narration_text": "  "}])])
+
+    def test_free_hit_exports_cues_from_the_render_contract_and_rejects_late_drift(self):
+        editorial_source = (
+            "for _vx_voice_key, _vx_voice_scenes in VX_SCENE_MANIFESTS.items():\n"
+            "    _vx_voice_path = Path(VX_NARRATION_PATHS[_vx_voice_key])\n"
+        )
+        preflight_source = (
+            "for _vx_target_key, _vx_scripts in VX_NARRATION.items():\n"
+            "    if True:\n"
+            "        _vx_scenes={scene['scene_id']:scene for scene in VX_SCENE_MANIFESTS[_vx_target_key]}\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "freehit_data.json").write_text(json.dumps({"points": 5.2}))
+            segment = {"id": "fh_scene_3", "text": "An older estimate of 4.9 points."}
+            namespace = {
+                "json": json, "Path": Path, "VX_ANALYSIS_ROOT": root,
+                "VX_SCENE_MANIFESTS": {"free_hit_auto": []},
+                "VX_DATA_CONTRACTS": {"free_hit_auto": {"chip": "freehit", "points": 4.9}},
+                "VX_NARRATION_PATHS": {"free_hit_auto": root / "script.txt"},
+                "VX_NARRATION": {"free_hit_auto": [segment]},
+                "vx_build_manifest": lambda contract: [{"scene_id": "fh_scene_3",
+                    "narration_timeline": [{"narration_text": f"Expected points are {contract['points']}."}]}],
+            }
+            exec(patch_free_hit_narration(editorial_source), namespace)
+            self.assertEqual(segment["text"], "Expected points are 5.2.")
+            exec(patch_free_hit_preflight(preflight_source), namespace)
+            segment["text"] = "A stale edit."
+            with self.assertRaisesRegex(ValueError, "fh_scene_3.*timed cues differ"):
+                exec(patch_free_hit_preflight(preflight_source), namespace)
+
     def test_both_delivery_requires_two_matching_final_videos(self):
         for selection in ("Auto", "Manual"):
             controls = request_controls(dict(WC_FH_CHIP="Both", WC_FH_SELECTION=selection))

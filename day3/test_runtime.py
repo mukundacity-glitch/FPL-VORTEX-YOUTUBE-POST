@@ -619,6 +619,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "_patch_pitch_player_names",
             "_patch_shared_card_scene_checks",
             "_patch_defcon_team_numeric_fit",
+            "_patch_defcon_fixture_fit",
             "_patch_defcon_render_preflight",
             "_patch_defcon_gameweek_contract",
             "_patch_defcon_card_motion",

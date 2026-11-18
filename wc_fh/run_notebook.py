@@ -63,6 +63,52 @@ def patch_setup(source: str, controls: dict[str, Any]) -> str:
     return "".join(lines)
 
 
+def free_hit_cue_text(scenes: list[dict[str, Any]]) -> dict[str, str]:
+    """Use the same text for the saved script and for every timed audio cue."""
+    texts = {}
+    for scene in scenes:
+        parts = [cue["narration_text"].strip() for cue in scene["narration_timeline"]]
+        if not parts or not all(parts):
+            raise ValueError(f"{scene['scene_id']}: Free Hit narration has empty cues")
+        texts[scene["scene_id"]] = " ".join(parts)
+    return texts
+
+
+def patch_free_hit_narration(source: str) -> str:
+    anchor = "    _vx_voice_path = Path(VX_NARRATION_PATHS[_vx_voice_key])"
+    if source.count(anchor) != 1:
+        raise ValueError("Notebook narration export contract changed")
+    sync = """    if VX_DATA_CONTRACTS[_vx_voice_key]['chip'] == 'freehit':
+        from wc_fh.run_notebook import free_hit_cue_text
+        # Use the persisted contract that the renderer reads after preparation.
+        _fh_contract = json.loads((VX_ANALYSIS_ROOT / 'freehit_data.json').read_text(encoding='utf-8'))
+        _vx_voice_scenes = vx_build_manifest(_fh_contract)
+        _fh_text = free_hit_cue_text(_vx_voice_scenes)
+        for _fh_scene in _vx_voice_scenes:
+            _fh_scene['narration_text'] = _fh_text[_fh_scene['scene_id']]
+        for _fh_segment in VX_NARRATION[_vx_voice_key]:
+            _fh_segment['text'] = _fh_text[_fh_segment['id']]
+        VX_SCENE_MANIFESTS[_vx_voice_key] = _vx_voice_scenes
+"""
+    return source.replace(anchor, sync + anchor, 1)
+
+
+def patch_free_hit_preflight(source: str) -> str:
+    anchor = "        _vx_scenes={scene['scene_id']:scene for scene in VX_SCENE_MANIFESTS[_vx_target_key]}"
+    if source.count(anchor) != 1:
+        raise ValueError("Notebook narration preflight contract changed")
+    preflight = """
+        if _vx_target_key.startswith('free_hit'):
+            from wc_fh.run_notebook import free_hit_cue_text
+            _fh_contract = json.loads((VX_ANALYSIS_ROOT / 'freehit_data.json').read_text(encoding='utf-8'))
+            _fh_text = free_hit_cue_text(vx_build_manifest(_fh_contract))
+            for _script in _vx_scripts:
+                if _script['text'].split() != _fh_text[_script['id']].split():
+                    raise ValueError(f"{_script['id']}: Free Hit script and timed cues differ before rendering")
+"""
+    return source.replace(anchor, anchor + preflight, 1)
+
+
 def patch_render(source: str) -> str:
     tree = ast.parse(source)
     lines = source.splitlines(keepends=True)
@@ -152,8 +198,11 @@ def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tu
             if source.count(marker) != 1:
                 raise ValueError("The scene-preparation reload contract changed.")
             source = source.replace(marker, "\nfrom wc_fh.manual_plans import install_manual_narration\ninstall_manual_narration()\n" + marker, 1)
+        if label == "13":
+            source = patch_free_hit_narration(source)
         if label == "14":
             source = patch_render(source)
+            source = patch_free_hit_preflight(source)
             source = patch_narration_loader(source)
             source = patch_masterplan_capture(source)
             # Colab's extra viewer calls .draw() on a Remotion renderer; delivery QA already verifies the 4K exports.

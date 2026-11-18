@@ -431,6 +431,19 @@ print(f"✅ DEFCON history through completed GW{_d3_prev_gw}; forecast GW{int(NE
 
 
 
+def _patch_defcon_fixture_fit(source: str) -> str:
+    """Opt the DEFCON fixture labels into the shared text fitter."""
+    fixture_anchor = '<span class="d3Def20FdrFixture">'
+    if source.count(fixture_anchor) != 1:
+        raise RuntimeError("DEFCON fixture fit: expected one fixture label template")
+    return source.replace(
+        fixture_anchor,
+        '<span class="d3Def20FdrFixture" data-vx-fit="true" '
+        'data-vx-preferred="29" data-vx-min="20" data-vx-wrap="soft">',
+        1,
+    )
+
+
 def _patch_defcon_team_numeric_fit(source: str) -> str:
     """Fit changing DEFCON xGW figures into their fixed-width team table cells."""
     function_anchor = "  const assertDefconBoardFit=()=>{"
@@ -1121,6 +1134,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
             source = _patch_defcon_gameweek_contract(source)
             source = _patch_shared_card_scene_checks(source)
             source = _patch_defcon_team_numeric_fit(source)
+            source = _patch_defcon_fixture_fit(source)
             source = patch_transfer_desk_source(source)
         if cell_index == SCENE_ANIMATION_CELL_INDEX:
             source = _patch_defcon_card_motion(source)
