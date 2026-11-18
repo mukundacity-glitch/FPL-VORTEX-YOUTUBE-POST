@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 API_ROOT = "https://fantasy.premierleague.com/api"
 VERSION = "DAY3-LIVE-EVIDENCE-V2-VERIFIED-RETRY"
+OFFICIAL_DIFFICULTY_FIELDS = {"team_h_difficulty", "team_a_difficulty"}
 RULE_SOURCE = "https://www.premierleague.com/en/news/4361991/"
 DC_THRESHOLDS = {"DEF": 10, "MID": 12, "FWD": 12}
 EVIDENCE_POLL_INTERVAL_SECONDS = 60.0
@@ -206,6 +207,10 @@ def _describe_fixtures(fixtures: list[dict[str, Any]], bootstrap: dict[str, Any]
 
 def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
                    live_events: dict[int, dict[str, Any]], cutoff: str) -> dict[str, Any]:
+    # The notebook uses model-only FDR. Keep official fixture identity and
+    # results, but leave the official difficulty fields out of model state.
+    fixtures = [{key: value for key, value in row.items() if key not in OFFICIAL_DIFFICULTY_FIELDS}
+                for row in fixtures]
     target = _upcoming_event(bootstrap, cutoff)
     next_gw = int(target["id"])
     teams = {int(row["id"]): row for row in bootstrap["teams"]}

@@ -3313,6 +3313,8 @@ jobs:
       - name: Sync Day 3 output and persistent model state back to Drive
         if: ${{ always() && steps.restore_state.outcome == 'success' && steps.run_notebook.outcome != 'skipped' }}
         shell: bash
+        env:
+          DAY3_RENDER_OUTCOME: ${{ steps.run_notebook.outcome }}
         run: |
           set -euo pipefail
 
@@ -3326,7 +3328,10 @@ jobs:
             fi
           }
 
-          sync_if_present "FPL_VORTEX/Day_3_3"
+          # A partial render must never delete the last completed Drive export.
+          if [[ "$DAY3_RENDER_OUTCOME" == "success" ]]; then
+            sync_if_present "FPL_VORTEX/Day_3_3"
+          fi
           sync_if_present "FPL_VORTEX/DECISION_ENGINE"
           sync_if_present "FPL_VORTEX/RAW_DATA"
           sync_if_present "FPL_VORTEX/MODEL_HISTORY"
@@ -3335,7 +3340,8 @@ jobs:
           sync_if_present "FPL_VORTEX_DATA/07_LOGS"
 
       - name: Stage final downloadable files
-        if: always()
+        id: stage_final
+        if: ${{ !cancelled() && steps.run_notebook.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3351,7 +3357,7 @@ jobs:
           # Thumbnail/report remain in Drive and the thumbnail is applied to YouTube.
 
       - name: Upload Day 3 artifact
-        if: always()
+        if: ${{ !cancelled() && steps.stage_final.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: day-3-final-${{ github.run_number }}

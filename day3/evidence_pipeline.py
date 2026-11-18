@@ -170,7 +170,27 @@ def patch_evidence_pipeline(cell_index: int, source: str) -> str:
                                         keywords=[ast.keyword(arg="minimum", value=ast.Constant(-1000000))])
                 return node
         tree = VerifiedNarrationNumbers().visit(ast.parse(source))
+        intro_entries = [
+            (node.value, index)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict)
+            and any(isinstance(target, ast.Name) and target.id == "scripts" for target in node.targets)
+            for index, key in enumerate(node.value.keys)
+            if isinstance(key, ast.Constant) and key.value == "00_intro"
+            and isinstance(node.value.values[index], ast.IfExp)
+        ]
+        if len(intro_entries) != 1:
+            raise RuntimeError("Expected one conditional Day 3 intro script")
+        intro, index = intro_entries[0]
+        intro.values[index].body = ast.parse(
+            "preview_intro(DAY3_EVIDENCE, _d3_intro_agenda_sentence(), vx_narration_team, vx_narration_player)",
+            mode="eval",
+        ).body
         ast.fix_missing_locations(tree)
-        source = 'from day3.live_evidence import number as verified_narration_number\n' + ast.unparse(tree) + '\n'
+        source = (
+            'from day3.live_evidence import number as verified_narration_number\n'
+            'from day3.preview_editorial import preview_intro\n'
+            + ast.unparse(tree) + '\n'
+        )
         source += '\nfrom day3.evidence_narration import write_script_manifest\nwrite_script_manifest(globals())\n'
     return source

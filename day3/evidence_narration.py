@@ -15,13 +15,14 @@ def forecast_text(value: Any) -> str:
         return "—"
 
 
-def fixture_phrase(snapshot: dict[str, Any], team_id: int) -> str:
+def fixture_phrase(snapshot: dict[str, Any], team_id: int, team_name=None) -> str:
     fixtures = [row for row in snapshot["fixtures"] if row.get("event") == snapshot["next_gw"]
                 and team_id in (row["team_h"], row["team_a"]) and not row.get("finished")]
     phrases = []
     for row in sorted(fixtures, key=lambda row: str(row.get("kickoff_time") or "")):
         home = row["team_h"] == team_id
-        opponent = snapshot["teams"][int(row["team_a"] if home else row["team_h"])]["name"]
+        opponent_id = int(row["team_a"] if home else row["team_h"])
+        opponent = team_name(opponent_id) if team_name else snapshot["teams"][opponent_id]["name"]
         phrases.append(("at home to " if home else "away to ") + opponent)
     return " and ".join(phrases) if phrases else "with no fixture currently assigned to this Gameweek"
 
