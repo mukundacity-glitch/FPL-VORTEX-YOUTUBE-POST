@@ -178,6 +178,32 @@ body.vxPremium .d3DeskClose span{font-size:36px!important;line-height:1.15!impor
         source = _replace(source, f'''if _d3_desk_html.count('class="{cls} ') != 15:
     print("Transfer Desk {kind}-card count is not fifteen")''', f'''if _d3_desk_html.count('class="{cls} ') != DAY3_TRANSFER_DESK_COUNT:
     raise RuntimeError("Transfer Desk {kind}-card count does not match qualified selection")''')
+    source = _replace(source, '<style id="vx-d3-desk-fullpage">', '''<style id="vx-d3-desk-fullpage">
+body.vxPremium .d3DeskPitch{
+  background:radial-gradient(ellipse at 15% 0%,#232849 0%,transparent 65%),#101528!important;
+  border:2px solid #383e65!important;
+}
+body.vxPremium .d3DeskPitch:after{border-color:#94adf018}
+body.vxPremium .d3DeskLeft:before{
+  content:"";position:absolute;inset:10%;border-radius:16px;pointer-events:none;
+  background:radial-gradient(circle at center,transparent 20%,#94adf024 20.15%,#94adf024 20.35%,transparent 20.5%),
+    linear-gradient(90deg,transparent 49.9%,#94adf024 50%,#94adf024 50.1%,transparent 50.2%);
+}
+body.vxPremium .d3DeskZone{
+  background:linear-gradient(135deg,#1b223c,#101629)!important;
+  border-color:#394364!important;
+  box-shadow:inset 5px 0 0 var(--desk-category)!important;
+}
+body.vxPremium .d3DeskZone.buy{--desk-category:#49efae}
+body.vxPremium .d3DeskZone.hold{--desk-category:#f5d455}
+body.vxPremium .d3DeskZone.sell{--desk-category:#ff8196}
+body.vxPremium .d3DeskZone[data-speaking="true"]{
+  border-color:var(--desk-category)!important;
+  box-shadow:inset 7px 0 0 var(--desk-category),0 16px 38px #050816b3!important;
+}
+body.vxPremium .d3DeskSlot{background:linear-gradient(155deg,#263050,#151c32)!important;border-color:#435175!important}
+body.vxPremium .d3DeskSlotCopy small{color:#b9c6e2!important}
+''')
     # Injured and blank-GW players must still appear among heavily sold assets.
     source = _replace(source, '''_d3_desk_model = _d3_desk_model.merge(
     _d3_market,
@@ -226,34 +252,31 @@ body.vxPremium .d3DeskClose span{font-size:36px!important;line-height:1.15!impor
 
 ''' + source[reason_end:]
     source = _replace(source, '    if index >= 3:\n        return ""\n', "")
-    source = _replace(source, '    identity = f"{name} from {club}"', '''    identity = f"{name} from {club}"
-    if index >= 3:
-        prefix = f"Also in the {role.lower()} list, " if index == 3 else "And "
-        text = prefix + identity + "."
-        return text''')
-    source = _replace(source, '    if role == "BUY":\n        horizon =',
-                      '    if not record["has_projection"]:\n        outlook = f"The next fixture for {name} is {fixture}; a fresh points projection is unavailable."\n    if role == "BUY":\n        horizon =')
-    source = _replace(source, 'if pd.notna(horizon) and np.isfinite(horizon):',
-                      'if record["has_horizon"] and pd.notna(horizon) and np.isfinite(horizon):')
-    decision_start = source.index('    elif role == "HOLD":', source.index("def _d3_desk_narr"))
-    decision_end = source.index('    return f"{leads[role][index]}', decision_start)
-    source = source[:decision_start] + '''    elif role == "HOLD":
-        decision = ("Recent returns have been quiet. I would give him another Gameweek before using a transfer.",
-                    "The points have disappointed, but I would avoid a rushed move. Check the fixture and latest team news first.",
-                    "I would reassess after the next fixture rather than chase last week's points.")[index]
-    else:
-        decision = ("I would check his availability and the replacement's fixtures before making the switch.",
-                    "Consider the alternatives, but make sure the move suits your squad and budget.",
-                    "Before selling, check the latest team news and the upside of your replacement.")[index]
+    source = _replace(source, "Narrate only the three leading cards; the remaining two are visual-only.",
+                      "Narrate each selected player using the evidence shown on the card.")
+    decision_start = source.index('    identity = f"{name} from {club}"', source.index("def _d3_desk_narr"))
+    decision_end = source.index("\n\ndef _d3_transfer_full_narration", decision_start)
+    source = source[:decision_start] + '''    from day3.evidence_narration import fixture_phrase
+    from day3.preview_editorial import transfer_player_line
+    fixture = fixture_phrase(DAY3_EVIDENCE, int(record["team_id"]), team_name=vx_narration_team)
+    return transfer_player_line(record, name, club, fixture, DAY3_EVIDENCE["players"][record["player_id"]])
 ''' + source[decision_end:]
     source = _replace(source, '"This is driven by the numbers and projections, with the eye test as the final check. Starting with the buys."',
-                      '"Here are the players to consider for your next move. Starting with the buys."')
+                      '"Here is where the market is moving and what I would check before following it. Starting with the buys."')
     source = _replace(source, 'subtitle=f"GW{int(NEXT_GW)} • FIFTEEN PLAYERS • SECURE MINUTES • NEXT FDR"',
                       'subtitle=f"GW{int(NEXT_GW)} • BUY TARGETS • PATIENT HOLDS • SELL CANDIDATES"')
     source = _replace(source, '''["O","OWNERSHIP",f'{r["ownership"]:.1f}%',""],["M","EXPECTED MINUTES",f'{r["xmins"]:.0f}',""],''',
                       '''["O", "TOP 10K EO" if r["action"] == "HOLD" and r["ownership_source"] == "TOP_10K_EO" else "OWNERSHIP",
                       f'{r["ownership_score"] if r["action"] == "HOLD" else r["ownership"]:.1f}%',""],
                      ["M","EXPECTED MINUTES",f'{r["xmins"]:.0f}' if r["has_minutes"] else "—",""],''')
+    source = _replace(source, '''    return (
+        f'<div class="d3DeskSlot {r["action"].lower()}"''', '''    points = f'{r["xpts"]:.1f}' if r["has_projection"] else "—"
+    minutes = f'{r["xmins"]:.0f}' if r["has_minutes"] else "—"
+    return (
+        f'<div class="d3DeskSlot {r["action"].lower()}"''')
+    source = _replace(source, '''{r["xpts"]:.1f} xPTS • {r["xmins"]:.0f} xMINS''',
+                      '''{points} xPTS • {minutes} xMINS''')
+    source = _replace(source, '["D","TRANSFER CALL",r["action"],""]', '["D","MARKET GROUP",r["action"],""]')
     for key, flag, format_spec in (("xpts", "has_projection", ".1f"), ("next_5_xpts", "has_horizon", ".1f"), ("start_probability", "has_start_probability", ".0f")):
         old = f'''"value":f'{{r["{key}"]:{format_spec}}}''' + ("%'" if key == "start_probability" else "'")
         source = _replace(source, old, old + f''' if r["{flag}"] else "—"''')
@@ -261,6 +284,21 @@ body.vxPremium .d3DeskClose span{font-size:36px!important;line-height:1.15!impor
                       '''{"icon":"boot","label":"TRANSFERS IN" if r["action"] == "BUY" else "TRANSFERS OUT" if r["action"] == "SELL" else "RECENT AVG PTS",
                           "value":f'{r["transfers_in"]:,.0f}' if r["action"] == "BUY" else f'{r["transfers_out"]:,.0f}' if r["action"] == "SELL" else f'{r["recent_average_points"]:.1f}'}''')
     return source
+
+
+def patch_transfer_desk_frame_source(source):
+    """Give the speaking lane focus without resizing settled cards."""
+    start = source.index("            // (2) Active-zone spotlight:")
+    end = source.index("\n        }", start)
+    source = source[:start] + '''            const closeAt=Number(VX.transfer_desk_closing_at ?? Infinity);
+            const zones=Object.entries(VX.transfer_desk_zone_times || {});
+            const active=zones.filter(([,at])=>t>=Number(at)).at(-1)?.[0];
+            for(const [action] of zones){
+                const lane=document.querySelector(".d3DeskZone."+action.toLowerCase());
+                if(lane) lane.dataset.speaking=String(t<closeAt && action===active);
+            }''' + source[end:]
+    return _replace(source, 'const ein=w.start===0 ? 1 : ease((t-w.start)/.20);',
+                    'const ein=w.start===0 ? 1 : ease((t-w.start)/.26);')
 
 
 def patch_transfer_desk_narration_source(source):

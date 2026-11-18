@@ -15,7 +15,7 @@ import pandas as pd
 from day3.evidence_narration import next_fixture_packs, player_analysis, team_analysis, validated_fixture_forecasts
 from day3.live_evidence import (
     VERSION, assert_snapshot_current, audit_fixture_rows, availability, build_evidence, dc_forecast, digest,
-    live_role, material_state, player_projection,
+    freeze_official_module, live_role, material_state, player_projection, save_snapshot,
 )
 from day3.verify_evidence import file_hash, verify_bundle
 
@@ -67,6 +67,24 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(live_role(snapshot, 22)["start"], 1)
         self.assertEqual(player_projection(snapshot, 11)["actions"], 12)
         self.assertEqual(player_projection(snapshot, 22)["actions"], 8)
+
+    def test_official_fixture_difficulty_stays_out_of_notebook_and_evidence_file(self) -> None:
+        from types import SimpleNamespace
+
+        for row in self.fixtures:
+            row.update(team_h_difficulty=2, team_a_difficulty=4)
+        snapshot = self.snapshot()
+        module = SimpleNamespace(_vx_get_json=lambda _session, _path: None)
+        freeze_official_module(module, snapshot)
+        with tempfile.TemporaryDirectory() as folder:
+            save_snapshot(snapshot, Path(folder))
+            saved = json.loads((Path(folder) / "day3_live_evidence.json").read_text())
+        expected = [{k: v for k, v in row.items() if k not in {"team_h_difficulty", "team_a_difficulty"}}
+                    for row in self.fixtures]
+        self.assertEqual(saved["fixtures"], expected)
+        self.assertEqual(module._vx_get_json(None, "/fixtures/"), expected)
+        self.assertEqual(self.fixtures[0]["team_h_difficulty"], 2)
+        self.assertEqual(snapshot["source_hash"], digest(material_state(self.bootstrap, self.fixtures)))
 
     def test_missing_forecast_is_not_a_blank_or_zero(self) -> None:
         snapshot = self.snapshot()

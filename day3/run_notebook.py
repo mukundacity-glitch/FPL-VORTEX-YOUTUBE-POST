@@ -20,6 +20,7 @@ from day3.transfer_desk import (
     patch_transfer_desk_source,
     patch_transfer_desk_audio_source,
     patch_transfer_desk_animation_source,
+    patch_transfer_desk_frame_source,
 )
 from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_cell
 from day3.narration_pacing import patch_narration_pacing_source
@@ -626,22 +627,21 @@ MOODS = {
     "warning":  dict(RYAN_BASE_PROFILE),
     "outro":    dict(RYAN_BASE_PROFILE),
 }'''
-    new = '''# Match Day 2's effective production profiles, including its runtime rate overrides.
-# Keep volume flat; synthesis still supplies the timing used by every scene.
-RYAN_BASE_PROFILE = {"rate": "+17%", "pitch": "-4Hz", "volume": "+0%"}
+    new = '''# Keep room for pauses and let measured word boundaries drive the scenes.
+RYAN_BASE_PROFILE = {"rate": "+6%", "pitch": "-2Hz", "volume": "+0%"}
 
 MOODS = {
-    "intro":    dict(RYAN_BASE_PROFILE, rate="+13%"),
+    "intro":    dict(RYAN_BASE_PROFILE, rate="+8%"),
     "analysis": dict(RYAN_BASE_PROFILE),
-    "key_stat": dict(RYAN_BASE_PROFILE, rate="+18%", pitch="+0Hz"),
-    "warning":  dict(RYAN_BASE_PROFILE, rate="+11%"),
-    "outro":    dict(RYAN_BASE_PROFILE, rate="+11%"),
+    "key_stat": dict(RYAN_BASE_PROFILE, rate="+7%", pitch="+0Hz"),
+    "warning":  dict(RYAN_BASE_PROFILE, rate="+3%"),
+    "outro":    dict(RYAN_BASE_PROFILE, rate="+3%"),
 }'''
     count = source.count(old)
     if count != 1:
         raise RuntimeError(f"TTS profile: expected exactly one match, found {count}")
     source = source.replace(old, new, 1)
-    print("✅ Ryan delivery matches Day 2: varied mood rates, -4Hz analysis / +0Hz key stats")
+    print("✅ Ryan delivery uses a conversational pace and measured word boundaries")
     return source
 
 
@@ -1125,6 +1125,7 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
         if cell_index == SCENE_ANIMATION_CELL_INDEX:
             source = _patch_defcon_card_motion(source)
             source = patch_transfer_desk_animation_source(source)
+            source = patch_transfer_desk_frame_source(source)
         if cell_index == SCENE_RENDER_CELL_INDEX:
             source = _patch_defcon_render_preflight(source)
         if cell_index == ELITE_TOP10K_CELL_INDEX:

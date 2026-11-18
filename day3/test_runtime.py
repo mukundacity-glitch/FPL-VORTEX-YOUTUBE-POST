@@ -480,13 +480,13 @@ def vx_tts_profile(mood="analysis"):
         self.namespace: dict[str, Any] = {}
         exec(runner._patch_tts_profile(self.source), self.namespace)
 
-    def test_all_moods_match_day2_effective_production_profiles(self) -> None:
+    def test_all_moods_keep_ryan_and_use_scene_specific_delivery(self) -> None:
         expected = {
-            "intro": {"rate": "+13%", "pitch": "-4Hz", "volume": "+0%"},
-            "analysis": {"rate": "+17%", "pitch": "-4Hz", "volume": "+0%"},
-            "key_stat": {"rate": "+18%", "pitch": "+0Hz", "volume": "+0%"},
-            "warning": {"rate": "+11%", "pitch": "-4Hz", "volume": "+0%"},
-            "outro": {"rate": "+11%", "pitch": "-4Hz", "volume": "+0%"},
+            "intro": {"rate": "+8%", "pitch": "-2Hz", "volume": "+0%"},
+            "analysis": {"rate": "+6%", "pitch": "-2Hz", "volume": "+0%"},
+            "key_stat": {"rate": "+7%", "pitch": "+0Hz", "volume": "+0%"},
+            "warning": {"rate": "+3%", "pitch": "-2Hz", "volume": "+0%"},
+            "outro": {"rate": "+3%", "pitch": "-2Hz", "volume": "+0%"},
         }
         self.assertEqual(self.namespace["VOICE"], "en-GB-RyanNeural")
         self.assertEqual(self.namespace["MOODS"], expected)
@@ -497,10 +497,10 @@ def vx_tts_profile(mood="analysis"):
     def test_callers_cannot_mutate_shared_profiles(self) -> None:
         profile = self.namespace["vx_tts_profile"]("analysis")
         profile["rate"] = "+99%"
-        self.assertEqual(self.namespace["vx_tts_profile"]("analysis")["rate"], "+17%")
+        self.assertEqual(self.namespace["vx_tts_profile"]("analysis")["rate"], "+6%")
         self.namespace["MOODS"]["intro"]["pitch"] = "+99Hz"
-        self.assertEqual(self.namespace["MOODS"]["analysis"]["pitch"], "-4Hz")
-        self.assertEqual(self.namespace["RYAN_BASE_PROFILE"]["pitch"], "-4Hz")
+        self.assertEqual(self.namespace["MOODS"]["analysis"]["pitch"], "-2Hz")
+        self.assertEqual(self.namespace["RYAN_BASE_PROFILE"]["pitch"], "-2Hz")
 
     def test_unknown_mood_remains_an_error(self) -> None:
         with self.assertRaises(KeyError):
@@ -513,16 +513,15 @@ def vx_tts_profile(mood="analysis"):
         self.assertTrue(updated.startswith(prefix))
         self.assertTrue(updated.endswith(suffix))
         self.assertEqual(updated.replace(
-            '''# Match Day 2's effective production profiles, including its runtime rate overrides.
-# Keep volume flat; synthesis still supplies the timing used by every scene.
-RYAN_BASE_PROFILE = {"rate": "+17%", "pitch": "-4Hz", "volume": "+0%"}
+            '''# Keep room for pauses and let measured word boundaries drive the scenes.
+RYAN_BASE_PROFILE = {"rate": "+6%", "pitch": "-2Hz", "volume": "+0%"}
 
 MOODS = {
-    "intro":    dict(RYAN_BASE_PROFILE, rate="+13%"),
+    "intro":    dict(RYAN_BASE_PROFILE, rate="+8%"),
     "analysis": dict(RYAN_BASE_PROFILE),
-    "key_stat": dict(RYAN_BASE_PROFILE, rate="+18%", pitch="+0Hz"),
-    "warning":  dict(RYAN_BASE_PROFILE, rate="+11%"),
-    "outro":    dict(RYAN_BASE_PROFILE, rate="+11%"),
+    "key_stat": dict(RYAN_BASE_PROFILE, rate="+7%", pitch="+0Hz"),
+    "warning":  dict(RYAN_BASE_PROFILE, rate="+3%"),
+    "outro":    dict(RYAN_BASE_PROFILE, rate="+3%"),
 }''',
             '''# Ryan delivery — keep the project's intended/original speaking profile.
 # Mood labels remain useful for manifests and scene semantics, but they must not
@@ -582,6 +581,7 @@ class NotebookPreflightTests(unittest.TestCase):
             "patch_transfer_desk_source",
             "patch_transfer_desk_audio_source",
             "patch_transfer_desk_animation_source",
+            "patch_transfer_desk_frame_source",
             "remove_shortlist_cell",
         ):
             self.patch_stack.enter_context(patch.object(runner, function_name, side_effect=lambda *args: args[-1]))
