@@ -50,9 +50,9 @@ class Phase1HistoricalArchiveTests(unittest.TestCase):
         current = [path for _, path in refreshes if "/2026-2027/" in path]
         self.assertEqual(len(previous), 1 + 38 + 38)
         self.assertEqual(len(current), 1 + 2)
-        self.assertIn("/2025-2026/By Tournament/Premier League/GW38/matches.csv", previous)
-        self.assertIn("/2025-2026/By Tournament/Premier League/GW38/incidents.csv", previous)
-        self.assertIn("/2026-2027/By Tournament/Premier League/GW2/matches.csv", current)
+        self.assertIn("/tmp/FPL_CORE/data/2025-2026/By Tournament/Premier League/GW38/matches.csv", previous)
+        self.assertIn("/tmp/FPL_CORE/data/2025-2026/By Tournament/Premier League/GW38/incidents.csv", previous)
+        self.assertIn("/tmp/FPL_CORE/data/2026-2027/By Tournament/Premier League/GW2/matches.csv", current)
         self.assertEqual(str(namespace["DRIVE_ROOT"]), "/tmp/FPL_CORE/data/2026-2027")
 
     def test_missing_historical_matches_fails_closed(self):
