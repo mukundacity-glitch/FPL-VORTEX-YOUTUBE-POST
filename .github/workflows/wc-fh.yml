@@ -4,6 +4,10 @@ run-name: WC- FH | ${{ inputs.chip }} | ${{ inputs.selection }} | Final
 on:
   workflow_dispatch:
     inputs:
+      render_only:
+        description: Render and verify in GitHub Actions without Drive sync or YouTube upload
+        type: boolean
+        default: false
       task:
         description: Render the selected videos, or get fresh player lists and the live-cost picker
         type: choice
@@ -3131,10 +3135,10 @@ env:
   GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
   GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
   GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-  YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
-  YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
-  YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
-  YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+  YOUTUBE_OAUTH_CLIENT_ID: ${{ !inputs.render_only && secrets.YOUTUBE_OAUTH_CLIENT_ID || '' }}
+  YOUTUBE_OAUTH_CLIENT_SECRET: ${{ !inputs.render_only && secrets.YOUTUBE_OAUTH_CLIENT_SECRET || '' }}
+  YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ !inputs.render_only && secrets.YOUTUBE_OAUTH_REFRESH_TOKEN || '' }}
+  YOUTUBE_CHANNEL_ID: ${{ !inputs.render_only && secrets.YOUTUBE_CHANNEL_ID || '' }}
 
 jobs:
   wc-fh:
@@ -3195,11 +3199,11 @@ jobs:
           python -m wc_fh.run_notebook "$WC_FH_NOTEBOOK_PATH" 2>&1 | tee "$WC_FH_OUTPUT_ROOT/execution.log"
 
       - name: Save private YouTube videos with descriptions, SEO tags, hashtags and thumbnails
-        if: inputs.task == 'Render and upload'
+        if: inputs.task == 'Render and upload' && !inputs.render_only
         run: python -m wc_fh.publish_private --output-root "$WC_FH_OUTPUT_ROOT"
 
       - name: Save only WC- FH output to Drive
-        if: ${{ always() && steps.restore.outcome == 'success' }}
+        if: ${{ always() && !inputs.render_only && steps.restore.outcome == 'success' }}
         run: python -m wc_fh.drive_io publish
 
       - name: Downloadable live-cost squad picker and player list
