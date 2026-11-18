@@ -4,17 +4,19 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 NOTEBOOK_ID = "1RVyrEGhHg77h4ek7ASowfRHIeYFDl2aB"
 ASSET_FOLDER_ID = "1h3Loznr5RnsMyh-kUd-zMxEgOf98uFSt"
 REMOTE_ROOT = "FPL_VORTEX/WC_FH_GITHUB"
 LOCAL_ROOT = Path("/content/drive/MyDrive") / REMOTE_ROOT
-ASSET_NAMES = ("opening.mp4", "outro.mp4", "popup.mp4", "Background_music.mp3", "logo1.png", "logo.png", "pl.png")
+CLIP_NAMES = ("opening.mp4", "outro.mp4", "popup.mp4", "Background_music.mp3")
 
 
 def output_root() -> Path:
@@ -73,6 +75,63 @@ def copy_optional(remote: str, local: Path) -> bool:
     return True
 
 
+def _valid_png(path: Path) -> bool:
+    from PIL import Image
+
+    try:
+        with Image.open(path) as image:
+            if image.format != "PNG":
+                return False
+            image.load()
+    except OSError:
+        return False
+    return True
+
+
+def _restore_branding(assets: Path) -> None:
+    from PIL import Image, ImageDraw, ImageFont
+
+    crests = [assets / name for name in ("logo1.png", "logo.png")]
+    missing_crests = [path for path in crests if not _valid_png(path)]
+    league = assets / "pl.png"
+    if not missing_crests and _valid_png(league):
+        return
+
+    with TemporaryDirectory(prefix="wc-fh-brand-", dir=assets) as directory:
+        staging = Path(directory)
+        if missing_crests:
+            approved = next((path for path in crests if path not in missing_crests), None)
+            if approved is None:
+                approved = staging / "crest.png"
+                script = Path(__file__).resolve().parents[1] / "scripts" / "restore_day1_logo.sh"
+                result = run(
+                    "env", f"DAY1_ASSET_DIR={assets}", f"DAY1_LOGO_FILE={approved}",
+                    "bash", str(script),
+                )
+                print(result.stdout.strip())
+                if not _valid_png(approved):
+                    raise ValueError("Could not decode the FPL VORTEX crest from the approved opening.")
+            for path in missing_crests:
+                replacement = staging / path.name
+                shutil.copyfile(approved, replacement)
+                replacement.replace(path)
+
+        if not _valid_png(league):
+            # Both notebook renderers expect this image slot to exist. Use a
+            # neutral text label when the approved league badge is unavailable.
+            label = Image.new("RGBA", (370, 245))
+            draw = ImageDraw.Draw(label)
+            draw.multiline_text(
+                (185, 122), "FANTASY\nPREMIER LEAGUE",
+                font=ImageFont.load_default(size=40), fill="#F6F9FF",
+                anchor="mm", align="center", spacing=10,
+            )
+            replacement = staging / league.name
+            label.save(replacement)
+            replacement.replace(league)
+            print("WC- FH: league badge missing; using a Fantasy Premier League text label.")
+
+
 def restore() -> None:
     root = output_root()
     root.mkdir(parents=True, exist_ok=True)
@@ -89,9 +148,10 @@ def restore() -> None:
         assets = Path(os.environ["FPL_MEDIA_ASSET_DIR"])
         assets.mkdir(parents=True, exist_ok=True)
         run("rclone", "copy", "wc-fh-assets:", str(assets), "--transfers", "4")
-        missing = [name for name in ASSET_NAMES if not (assets / name).is_file() or not (assets / name).stat().st_size]
+        missing = [name for name in CLIP_NAMES if not (assets / name).is_file() or not (assets / name).stat().st_size]
         if missing:
             raise FileNotFoundError("Missing original approved media: " + ", ".join(missing))
+        _restore_branding(assets)
     print(f"WC- FH: current notebook restored by ID; output is {root}")
 
 
