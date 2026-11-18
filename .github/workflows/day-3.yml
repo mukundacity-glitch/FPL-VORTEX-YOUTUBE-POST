@@ -5,6 +5,10 @@ run-name: Day 3 • ${{ inputs.plan || 'ROLL' }}
 on:
   workflow_dispatch:
     inputs:
+      render_only:
+        description: Render and verify in GitHub Actions without Drive sync or YouTube upload
+        type: boolean
+        default: false
       plan:
         description: "My Plan"
         required: true
@@ -2937,10 +2941,10 @@ env:
   GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
   GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
   GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-  YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
-  YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
-  YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
-  YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+  YOUTUBE_OAUTH_CLIENT_ID: ${{ !inputs.render_only && secrets.YOUTUBE_OAUTH_CLIENT_ID || '' }}
+  YOUTUBE_OAUTH_CLIENT_SECRET: ${{ !inputs.render_only && secrets.YOUTUBE_OAUTH_CLIENT_SECRET || '' }}
+  YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ !inputs.render_only && secrets.YOUTUBE_OAUTH_REFRESH_TOKEN || '' }}
+  YOUTUBE_CHANNEL_ID: ${{ !inputs.render_only && secrets.YOUTUBE_CHANNEL_ID || '' }}
   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
 
 jobs:
@@ -3292,10 +3296,13 @@ jobs:
           python day3/run_notebook.py "$DAY3_NOTEBOOK_PATH" \
             2>&1 | tee "$RUNNER_TEMP/day-3.log"
 
+      - name: Verify Day 3 render evidence
+        run: python -m day3.verify_evidence --output-root "$DAY3_OUTPUT_ROOT"
+
       - name: Upload one private YouTube draft with matching thumbnail
+        if: ${{ !inputs.render_only }}
         shell: bash
         run: |
-          python -m day3.verify_evidence --output-root "$DAY3_OUTPUT_ROOT"
           python day3/publish_private.py \
             --output-root "$DAY3_OUTPUT_ROOT" \
             --plan "$DAY3_PLAN" \
@@ -3311,7 +3318,7 @@ jobs:
           retention-days: 7
 
       - name: Sync Day 3 output and persistent model state back to Drive
-        if: ${{ always() && steps.restore_state.outcome == 'success' && steps.run_notebook.outcome != 'skipped' }}
+        if: ${{ always() && !inputs.render_only && steps.restore_state.outcome == 'success' && steps.run_notebook.outcome != 'skipped' }}
         shell: bash
         env:
           DAY3_RENDER_OUTCOME: ${{ steps.run_notebook.outcome }}
