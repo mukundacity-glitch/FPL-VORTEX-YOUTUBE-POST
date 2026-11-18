@@ -22,6 +22,67 @@ def replace_function(source: str, name: str, replacement: str) -> str:
     return "".join(lines)
 
 
+
+def patch_phase1_archive_refresh(source: str) -> str:
+    """Hydrate the actual historical match evidence Phase 1 consumes.
+
+    The original refresh only populated current-season By Gameweek files, while
+    Phase 1 reads By Tournament/Premier League for both seasons. Never replace
+    missing historical evidence with synthetic ratings or an outdated archive.
+    """
+    anchor = 'print("FPL_CORE REFRESH COMPLETE")'
+    addition = r'''
+# Phase 1 requires season-local team identities and real match aggregates in
+# the provider's By Tournament/Premier League/GW* directory. The normal refresh
+# above covers only the current-season By Gameweek feed for Phase 10.
+_vx_refresh_current_root = DRIVE_ROOT
+try:
+    _vx_previous_year = int(EPL_SEASON) - 1
+    for _vx_year, _vx_gameweeks in (
+        (_vx_previous_year, range(1, 39)),
+        (int(EPL_SEASON), GAMEWEEKS),
+    ):
+        _vx_archive_season = f"{_vx_year}-{_vx_year + 1}"
+        DRIVE_ROOT = _vx_refresh_current_root.parent / _vx_archive_season
+        _vx_archive_base = (
+            f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/"
+            f"{GITHUB_BRANCH}/data/{_vx_archive_season}"
+        )
+        print(
+            f"Refreshing verified Phase 1 Premier League matches: "
+            f"{_vx_archive_season}, {len(_vx_gameweeks)} gameweeks"
+        )
+        _refresh_one(f"{_vx_archive_base}/teams.csv", DRIVE_ROOT / "teams.csv")
+        for _vx_gw in _vx_gameweeks:
+            _vx_tournament_dir = (
+                DRIVE_ROOT / "By Tournament" / "Premier League" / f"GW{_vx_gw}"
+            )
+            _vx_tournament_url = (
+                f"{_vx_archive_base}/By%20Tournament/Premier%20League/GW{_vx_gw}"
+            )
+            _refresh_one(
+                f"{_vx_tournament_url}/matches.csv",
+                _vx_tournament_dir / "matches.csv",
+            )
+            # Last season publishes exact red-card incident timestamps. The
+            # adapter omits affected fixtures if verified timings are absent.
+            # The current season does not yet publish these files.
+            if _vx_year == _vx_previous_year:
+                _refresh_one(
+                    f"{_vx_tournament_url}/incidents.csv",
+                    _vx_tournament_dir / "incidents.csv",
+                )
+finally:
+    DRIVE_ROOT = _vx_refresh_current_root
+
+if failed_missing or failed_retained:
+    raise RuntimeError(
+        "Phase 1 historical/current-season Premier League evidence is incomplete; "
+        "refusing to train from missing or stale match aggregates."
+    )
+'''
+    return replace_once(source, anchor, addition + "\n" + anchor)
+
 def patch_evidence_pipeline(cell_index: int, source: str) -> str:
     if cell_index == 5:
         source = replace_once(source, 'EXPECTED_REVIEW_GW = int(NEXT_GW) - 1 if int(NEXT_GW) > 1 else None',
@@ -37,6 +98,7 @@ def patch_evidence_pipeline(cell_index: int, source: str) -> str:
         source = replace_once(source, 'data_snapshot_timestamp = datetime.now(timezone.utc).isoformat()',
                               'data_snapshot_timestamp = DAY3_EVIDENCE["cutoff"]')
     if cell_index == 6:
+        source = patch_phase1_archive_refresh(source)
         source += '\nif failed_retained or failed_missing:\n    raise RuntimeError("Current-season source refresh failed; stale files may not feed narration")\n'
     if cell_index == 18:
         source = replace_once(source, 'PHASE10_VERSION = "VORTEX-V2.7-PLAYER-XPTS-CUMULATIVE-DEFCON-70"',
