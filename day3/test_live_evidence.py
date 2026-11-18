@@ -4,6 +4,7 @@ import copy
 import json
 import math
 import os
+import re
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -163,6 +164,17 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("3 goals", text)
         self.assertIn("10 percent", text)
         self.assertIn("does not establish a strong clean-sheet target", text)
+
+    def test_equal_defcon_probabilities_and_blank_schedules_keep_club_context(self) -> None:
+        self.fixtures[1]["event"] = None
+        snapshot = self.snapshot()
+        _, alpha = team_analysis(snapshot, 1, 1, "high", 0.201)
+        _, beta = team_analysis(snapshot, 2, 2, "high", 0.204)
+
+        self.assertIn("puts Club Alpha's chance of at least one clean sheet at 20 percent.", alpha)
+        self.assertIn("puts Club Beta's chance of at least one clean sheet at 20 percent.", beta)
+        sentences = re.split(r"(?<=[.!?])\s+", f"{alpha} {beta}".casefold())
+        self.assertCountEqual(sentences, set(sentences))
 
     def test_changed_position_and_transfer_are_not_name_mapped(self) -> None:
         self.bootstrap["element_types"].append({"id": 3, "singular_name_short": "MID"})

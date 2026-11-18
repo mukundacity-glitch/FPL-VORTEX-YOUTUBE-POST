@@ -2957,6 +2957,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Check required Day 3 secrets
+        shell: bash
+        env:
+          DAY3_RENDER_ONLY: ${{ inputs.render_only }}
+        run: |
+          set -euo pipefail
+          # Drive reads are required in both modes. YouTube can reuse the
+          # Drive OAuth client ID and secret. ODDS_API_KEY is optional.
+          required=(GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REFRESH_TOKEN)
+          if [[ "$DAY3_RENDER_ONLY" != "true" ]]; then
+            required+=(YOUTUBE_OAUTH_REFRESH_TOKEN YOUTUBE_CHANNEL_ID)
+          fi
+          missing=()
+          for name in "${required[@]}"; do
+            value="${!name-}"
+            if [[ -z "${value//[[:space:]]/}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} )); then
+            echo "::error::Missing required Day 3 secrets: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -3055,6 +3079,53 @@ jobs:
             "google-auth>=2.35,<3" \
             "google-auth-httplib2>=0.2,<1"
 
+      - name: Preflight Day 3 dependencies and API access
+        shell: bash
+        env:
+          DAY3_RENDER_ONLY: ${{ inputs.render_only }}
+        run: |
+          set -euo pipefail
+          for command in ffmpeg ffprobe rclone; do
+            if ! command -v "$command" >/dev/null; then
+              echo "::error::Day 3 requires $command on PATH"
+              exit 1
+            fi
+          done
+          ffmpeg -version
+          ffprobe -version
+          python -m pip check
+          python - <<'PY'
+          import importlib
+          import os
+
+          for module in (
+              "requests", "pandas", "numpy", "pyarrow", "PIL", "scipy",
+              "matplotlib", "IPython", "ipywidgets", "playwright.async_api",
+              "edge_tts", "bs4", "cv2", "googleapiclient", "google.auth",
+              "google_auth_httplib2",
+          ):
+              try:
+                  importlib.import_module(module)
+              except (ImportError, OSError) as error:
+                  raise SystemExit(f"Day 3 dependency {module} cannot load: {error}") from error
+
+          from day3.live_evidence import get_json
+
+          try:
+              bootstrap = get_json("/bootstrap-static/")
+              if not isinstance(bootstrap.get("events"), list) or not bootstrap["events"]:
+                  raise ValueError("response has no events")
+          except (OSError, ValueError, AttributeError) as error:
+              raise SystemExit(f"Official FPL API /bootstrap-static/ failed: {error}") from error
+
+          if os.environ["DAY3_RENDER_ONLY"] != "true":
+              from day3.publish_private import _verify_channel, _youtube_service
+
+              with _youtube_service() as youtube:
+                  _verify_channel(youtube)
+              print("YouTube OAuth and channel verified by a read-only request.")
+          PY
+
       - name: Test Day 3 runtime guards
         shell: bash
         run: python -m unittest discover -s day3 -p 'test_*.py' -v
@@ -3107,8 +3178,11 @@ jobs:
               headers={"Content-Type": "application/x-www-form-urlencoded"},
               method="POST",
           )
-          with urllib.request.urlopen(token_request, timeout=30) as response:
-              refreshed = json.loads(response.read().decode("utf-8"))
+          try:
+              with urllib.request.urlopen(token_request, timeout=30) as response:
+                  refreshed = json.load(response)
+          except (OSError, ValueError) as error:
+              raise SystemExit(f"Google Drive OAuth token refresh failed: {error}") from error
 
           access_token = refreshed["access_token"]
           expires_in = int(refreshed.get("expires_in", 3600))
@@ -3159,15 +3233,18 @@ jobs:
               notebook_url,
               headers={"Authorization": f"Bearer {access_token}"},
           )
-          with urllib.request.urlopen(notebook_request, timeout=120) as response:
-              notebook_bytes = response.read()
+          try:
+              with urllib.request.urlopen(notebook_request, timeout=120) as response:
+                  notebook_bytes = response.read()
+              parsed = json.loads(notebook_bytes)
+          except (OSError, ValueError) as error:
+              raise SystemExit(f"Cannot read Drive notebook {os.environ['DAY3_NOTEBOOK_ID']}: {error}") from error
+          if not isinstance(parsed, dict) or not isinstance(parsed.get("cells"), list) or len(parsed["cells"]) < 30:
+              raise SystemExit(f"Drive file {os.environ['DAY3_NOTEBOOK_ID']} is not the expected final Day 3 notebook.")
 
           notebook_path = Path(os.environ["DAY3_NOTEBOOK_PATH"])
           notebook_path.parent.mkdir(parents=True, exist_ok=True)
           notebook_path.write_bytes(notebook_bytes)
-          parsed = json.loads(notebook_bytes.decode("utf-8"))
-          if not isinstance(parsed.get("cells"), list) or len(parsed["cells"]) < 30:
-              raise SystemExit("Downloaded Drive file is not the expected final Day 3 notebook.")
 
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
               env_file.write(f"RCLONE_CONFIG={config_path}\n")
@@ -3245,8 +3322,11 @@ jobs:
           }
 
           required_path="FPL_VORTEX_DATA/00_SOURCE_ARCHIVE/FPL_CORE/data"
-          if ! rclone lsf "vortex-drive:$required_path" --max-depth 1 >/dev/null 2>&1; then
-            echo "Required Drive path is missing: My Drive/$required_path" >&2
+          required_local="/content/drive/MyDrive/$required_path"
+          mkdir -p "$required_local"
+          if ! rclone copy "vortex-drive:$required_path" "$required_local" \
+            --create-empty-src-dirs --transfers 4 --checkers 8; then
+            echo "::error::Could not restore required Drive path: My Drive/$required_path"
             exit 1
           fi
 
@@ -3256,20 +3336,20 @@ jobs:
           restore_optional "FPL_VORTEX/MODEL_HISTORY"
           restore_optional "FPL_VORTEX/elements"
           restore_optional "elements"
-          restore_optional "$required_path"
           restore_optional "FPL_VORTEX_DATA/03_ELITE_MANAGERS"
           restore_optional "FPL_VORTEX_DATA/04_MASTER"
           restore_optional "FPL_VORTEX_DATA/05_MODEL_HISTORY"
           restore_optional "FPL_VORTEX_DATA/06_SNAPSHOTS"
           restore_optional "FPL_VORTEX_DATA/07_LOGS"
 
-      - name: Reset only previous Day 3 render outputs
+      - name: Prepare writable Day 3 output directories
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import os
           import shutil
+          import tempfile
           from pathlib import Path
 
           root = Path(os.environ["DAY3_OUTPUT_ROOT"]).resolve()
@@ -3280,7 +3360,12 @@ jobs:
           for name in ("MP4", "MP3", "SLIDE", "DATA"):
               folder = root / name
               folder.mkdir(parents=True, exist_ok=True)
-              for child in list(folder.iterdir()):
+              try:
+                  with tempfile.TemporaryFile(dir=folder):
+                      pass
+              except OSError as error:
+                  raise SystemExit(f"Day 3 output directory is not writable: {folder}: {error}") from error
+              for child in folder.iterdir():
                   if child.is_dir():
                       shutil.rmtree(child)
                   else:
@@ -3297,6 +3382,7 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/day-3.log"
 
       - name: Verify Day 3 render evidence
+        id: verify_evidence
         run: python -m day3.verify_evidence --output-root "$DAY3_OUTPUT_ROOT"
 
       - name: Upload one private YouTube draft with matching thumbnail
@@ -3321,7 +3407,7 @@ jobs:
         if: ${{ always() && !inputs.render_only && steps.restore_state.outcome == 'success' && steps.run_notebook.outcome != 'skipped' }}
         shell: bash
         env:
-          DAY3_RENDER_OUTCOME: ${{ steps.run_notebook.outcome }}
+          DAY3_EVIDENCE_OUTCOME: ${{ steps.verify_evidence.outcome }}
         run: |
           set -euo pipefail
 
@@ -3335,8 +3421,8 @@ jobs:
             fi
           }
 
-          # A partial render must never delete the last completed Drive export.
-          if [[ "$DAY3_RENDER_OUTCOME" == "success" ]]; then
+          # Sync the video export only after the evidence gate passes.
+          if [[ "$DAY3_EVIDENCE_OUTCOME" == "success" ]]; then
             sync_if_present "FPL_VORTEX/Day_3_3"
           fi
           sync_if_present "FPL_VORTEX/DECISION_ENGINE"
@@ -3348,17 +3434,20 @@ jobs:
 
       - name: Stage final downloadable files
         id: stage_final
-        if: ${{ !cancelled() && steps.run_notebook.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.verify_evidence.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           rm -rf "$RUNNER_TEMP/day3-artifact"
           mkdir -p "$RUNNER_TEMP/day3-artifact"
 
-          final_video="$(find "$DAY3_OUTPUT_ROOT/MP4" -maxdepth 1 -type f -iname '*COMBINED*.mp4' -print -quit || true)"
-          if [[ -n "$final_video" ]]; then
-            cp "$final_video" "$RUNNER_TEMP/day3-artifact/"
+          shopt -s nullglob
+          videos=("$DAY3_OUTPUT_ROOT"/MP4/*COMBINED*.mp4)
+          if (( ${#videos[@]} != 1 )) || [[ ! -s "${videos[0]}" ]]; then
+            echo "::error::Expected one non-empty assembled MP4 under $DAY3_OUTPUT_ROOT/MP4"
+            exit 1
           fi
+          cp -- "${videos[0]}" "$RUNNER_TEMP/day3-artifact/"
 
           # The downloadable artifact contains one finished video only.
           # Thumbnail/report remain in Drive and the thumbnail is applied to YouTube.
@@ -3369,7 +3458,7 @@ jobs:
         with:
           name: day-3-final-${{ github.run_number }}
           path: ${{ runner.temp }}/day3-artifact
-          if-no-files-found: warn
+          if-no-files-found: error
           compression-level: 0
           retention-days: 14
 

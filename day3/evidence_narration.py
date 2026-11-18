@@ -131,9 +131,10 @@ def team_analysis(snapshot: dict[str, Any], team_id: int, rank: int, tier: str,
     clean_label = "clean sheet" if team['clean_sheets'] == 1 else "clean sheets"
     parts = [f"{cue}: ranked {rank}, with {per_match:.1f} actions per match. {team['name']} have conceded {team['conceded']:.0f} goals "
              f"and kept {team['clean_sheets']} {clean_label} in {matches} matches."]
-    parts.append(f"Their next schedule is {fixture_phrase(snapshot, int(team_id))}.")
+    parts.append(f"{team['name']}'s next schedule is {fixture_phrase(snapshot, int(team_id))}.")
     if clean_sheet is not None:
-        parts.append(f"The independent fixture model puts the chance of at least one clean sheet at {100 * clean_sheet:.0f} percent.")
+        parts.append(f"The independent fixture model puts {team['name']}'s chance "
+                     f"of at least one clean sheet at {100 * clean_sheet:.0f} percent.")
     if tier == "high":
         if conceded_rate > 1:
             parts.append(f"That is {conceded_rate:.1f} goals conceded per match for {team['name']} despite the busy defensive workload; individual action points may help, but this ranking does not establish a strong clean-sheet target.")
