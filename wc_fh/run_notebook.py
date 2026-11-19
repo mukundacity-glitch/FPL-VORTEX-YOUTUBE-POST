@@ -55,7 +55,7 @@ def patch_setup(source: str, controls: dict[str, Any]) -> str:
     root = Path(os.environ["WC_FH_OUTPUT_ROOT"]).resolve()
     work = Path(os.environ["RUNNER_TEMP"]) / "wc-fh-work"
     analysis = root / "analysis"
-    for directory in (root / "mp4", root / "data", root / "slide", work, analysis):
+    for directory in (root / "mp4", root / "data", root / "slide", root / "audio", work, analysis):
         directory.mkdir(parents=True, exist_ok=True)
     return root, work, analysis
 '''
@@ -92,10 +92,30 @@ def build_free_hit_scenes(
     return scenes
 
 
-def patch_free_hit_narration(source: str) -> str:
+def sync_wildcard_captaincy(scenes: list[dict[str, Any]], script: list[dict[str, Any]],
+                            narration: dict[str, Any]) -> None:
+    """Keep the generated captaincy script and its measured cues on the same text."""
+    captaincy = [scene for scene in scenes if scene["visual_type"] == "wc_captaincy_final"]
+    if len(captaincy) != 1:
+        raise ValueError("Wildcard narration requires exactly one captaincy scene")
+    scene = captaincy[0]
+    scene_id = scene["scene_id"]
+    segments = [segment for segment in script if segment["id"] == scene_id]
+    sections = [section for section in narration["sections"] if section["slide_id"] == scene_id]
+    if len(segments) != 1 or len(sections) != 1:
+        raise ValueError(f"{scene_id}: Wildcard captaincy is missing or duplicated in the script or narration sections")
+    text = timed_narration(scene)
+    scene["narration_text"] = segments[0]["text"] = sections[0]["narration"] = text
+
+
+def patch_narration_export(source: str) -> str:
+    wildcard_anchor = "        for _vx_voice_section in _vx_voice_object['sections']:"
     anchor = "    _vx_voice_path = Path(VX_NARRATION_PATHS[_vx_voice_key])"
-    if source.count(anchor) != 1:
+    if source.count(anchor) != 1 or source.count(wildcard_anchor) != 1:
         raise ValueError("Notebook narration export contract changed")
+    sync_wildcard = """        from wc_fh.run_notebook import sync_wildcard_captaincy
+        sync_wildcard_captaincy(_vx_voice_scenes, VX_NARRATION[_vx_voice_key], _vx_voice_object)
+"""
     sync = """    if VX_DATA_CONTRACTS[_vx_voice_key]['chip'] == 'freehit':
         from wc_fh.run_notebook import build_free_hit_scenes
         # Use the persisted contract that the renderer reads after preparation.
@@ -106,14 +126,40 @@ def patch_free_hit_narration(source: str) -> str:
             _fh_segment['text'] = _fh_text[_fh_segment['id']]
         VX_SCENE_MANIFESTS[_vx_voice_key] = _vx_voice_scenes
 """
-    return source.replace(anchor, sync + anchor, 1)
+    return source.replace(wildcard_anchor, sync_wildcard + wildcard_anchor, 1).replace(anchor, sync + anchor, 1)
 
 
-def patch_free_hit_preflight(source: str) -> str:
+def timed_narration(scene: dict[str, Any]) -> str:
+    parts = [cue["narration_text"].strip() for cue in scene.get("narration_timeline", [])]
+    if not parts or not all(parts):
+        raise ValueError(f"{scene['scene_id']} ({scene['title']}): timed narration cues are missing or empty")
+    return " ".join(parts)
+
+
+def validate_render_cues(key: str, script: list[dict[str, Any]], scenes: list[dict[str, Any]],
+                         data_hash: str) -> None:
+    if not scenes or [segment["id"] for segment in script] != [scene["scene_id"] for scene in scenes]:
+        raise ValueError(f"{key}: saved script headers differ from the current ordered scenes")
+    for segment, scene in zip(script, scenes):
+        label = f"{key}/{scene['scene_id']} ({scene['title']})"
+        if scene.get("projection_evidence", {}).get("data_hash") != data_hash:
+            raise ValueError(f"{label}: scene data hash does not match the validated render contract")
+        spoken = timed_narration(scene).split()
+        actual = segment["text"].split()
+        if actual != spoken:
+            offset = next((i for i, (a, b) in enumerate(zip(actual, spoken)) if a != b),
+                          min(len(actual), len(spoken)))
+            raise ValueError(
+                f"{label}: saved narration differs from timed cues at word {offset + 1} "
+                f"(script: {actual[offset:offset + 5]!r}, cues: {spoken[offset:offset + 5]!r})"
+            )
+
+
+def patch_render_inputs(source: str) -> str:
     anchor = """    for _vx_target_key, _vx_plan, _vx_label in _render_targets:
         _vx_scripts=decode_script(VX_NARRATION_PATHS[_vx_target_key].read_text(encoding='utf-8'))
         _vx_scenes={scene['scene_id']:scene for scene in VX_SCENE_MANIFESTS[_vx_target_key]}"""
-    render_inputs = """    contract_path=VX_ANALYSIS_ROOT/('wildcard_data.json' if key.startswith('wildcard') else 'freehit_data.json')
+    free_hit_inputs = """    contract_path=VX_ANALYSIS_ROOT/('wildcard_data.json' if key.startswith('wildcard') else 'freehit_data.json')
     contract=json.loads(contract_path.read_text());vx_validate_contract(contract)
     if contract['chip']=='freehit':vx_validate_freehit(contract)
     vx_assert_current_snapshot(contract)
@@ -121,33 +167,52 @@ def patch_free_hit_preflight(source: str) -> str:
     manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')
     # Rebuild visuals from persisted data, then apply only explicit saved narration edits.
     scenes=vx_build_manifest(contract)"""
-    if source.count(anchor) != 1 or source.count(render_inputs) != 1:
-        raise ValueError("Notebook Free Hit render input contract changed")
-    preflight = """    from wc_fh.run_notebook import build_free_hit_scenes
-    _wc_fh_free_hit_render_inputs = {}
+    wildcard_prefix = """    if contract['chip']=='freehit':vx_validate_freehit(contract)
+    manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')
+"""
+    wildcard_inputs = wildcard_prefix + """    # Rebuild visuals from persisted data, then apply only explicit saved narration edits.
+    scenes=vx_build_manifest(contract)
+    if [s['id'] for s in script]!=[s['scene_id'] for s in scenes]:raise ValueError('TXT scene headers must match the selected chip manifest scenes. Regenerate the script or restore the headers.')"""
+    if source.count(anchor) != 1 or source.count(free_hit_inputs) != 1 or source.count(wildcard_inputs) != 1:
+        raise ValueError("Notebook Wildcard/Free Hit render input contract changed")
+    preflight = """    from wc_fh.run_notebook import build_free_hit_scenes, validate_render_cues
+    from copy import deepcopy
+    _wc_fh_render_inputs = {}
     for _vx_target_key, _vx_plan, _vx_label in _render_targets:
-        if _vx_target_key.startswith('free_hit'):
-            _fh_contract = json.loads((VX_ANALYSIS_ROOT / 'freehit_data.json').read_text(encoding='utf-8'))
-            vx_validate_contract(_fh_contract)
-            vx_assert_current_snapshot(_fh_contract)
-            _vx_scripts = decode_script(vx_assert_script_contract(VX_NARRATION_PATHS[_vx_target_key], _fh_contract))
+        _is_free_hit = _vx_target_key.startswith('free_hit')
+        _contract_path = VX_ANALYSIS_ROOT / ('freehit_data.json' if _is_free_hit else 'wildcard_data.json')
+        _fh_contract = json.loads(_contract_path.read_text(encoding='utf-8'))
+        vx_validate_contract(_fh_contract)
+        vx_assert_current_snapshot(_fh_contract)
+        _script_path = VX_NARRATION_PATHS[_vx_target_key]
+        if _is_free_hit:
+            vx_validate_freehit(_fh_contract)
+            _vx_scripts = decode_script(vx_assert_script_contract(_script_path, _fh_contract))
             _target_scenes = build_free_hit_scenes(vx_build_manifest, _fh_contract)
-            if [script['id'] for script in _vx_scripts] != [scene['scene_id'] for scene in _target_scenes]:
-                raise ValueError(f"{_vx_target_key}: Free Hit script headers differ from the current ordered scenes")
-            for _script, _scene in zip(_vx_scripts, _target_scenes):
-                if _script['text'].split() != _scene['narration_text'].split():
-                    raise ValueError(f"{_script['id']}: Free Hit script and timed cues differ before rendering")
+        else:
+            _script_text = _script_path.read_text(encoding='utf-8')
+            if '# DATA_HASH: ' + _fh_contract['data_hash'] not in _script_text.splitlines():
+                raise ValueError(f"{_vx_target_key}: saved narration data hash does not match the render contract")
+            _vx_scripts = decode_script(_script_text)
+            VXWC.validate_render_script(VX_NARRATION_OBJECTS[_vx_target_key], _vx_scripts)
+            # Cell 13 already validated and synchronized the edited Wildcard scenes.
+            _target_scenes = deepcopy(VX_SCENE_MANIFESTS[_vx_target_key])
+        validate_render_cues(_vx_target_key, _vx_scripts, _target_scenes, _fh_contract['data_hash'])
+        if _is_free_hit:
+            for _scene in _target_scenes:
                 if _scene['visual_type'] == 'fh_squad_plan':
                     VX_FREEHIT_SUITE.build_squad_data(_scene, _fh_contract)
-            _wc_fh_free_hit_render_inputs[_vx_target_key] = (_fh_contract, _vx_scripts, _target_scenes)
-        else:
-            _vx_scripts = decode_script(VX_NARRATION_PATHS[_vx_target_key].read_text(encoding='utf-8'))
-            _target_scenes = VX_SCENE_MANIFESTS[_vx_target_key]
+        _wc_fh_render_inputs[_vx_target_key] = (_contract_path, _fh_contract, _vx_scripts, _target_scenes)
         _vx_scenes = {scene['scene_id']: scene for scene in _target_scenes}"""
+    common_inputs = (
+        "    contract_path, contract, script, scenes = _wc_fh_render_inputs[key]\n"
+        "    manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')"
+    )
     return source.replace(anchor, preflight, 1).replace(
-        render_inputs,
-        "    contract, script, scenes = _wc_fh_free_hit_render_inputs[key]\n"
-        "    manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')",
+        free_hit_inputs, common_inputs, 1
+    ).replace(
+        wildcard_inputs,
+        wildcard_prefix + "    _, _, script, scenes = _wc_fh_render_inputs[key]",
         1,
     )
 
@@ -242,10 +307,10 @@ def prepare_cells(notebook: dict[str, Any], controls: dict[str, Any]) -> list[tu
                 raise ValueError("The scene-preparation reload contract changed.")
             source = source.replace(marker, "\nfrom wc_fh.manual_plans import install_manual_narration\ninstall_manual_narration()\n" + marker, 1)
         if label == "13":
-            source = patch_free_hit_narration(source)
+            source = patch_narration_export(source)
         if label == "14":
             source = patch_render(source)
-            source = patch_free_hit_preflight(source)
+            source = patch_render_inputs(source)
             source = patch_narration_loader(source)
             source = patch_masterplan_capture(source)
             # Colab's extra viewer calls .draw() on a Remotion renderer; delivery QA already verifies the 4K exports.
