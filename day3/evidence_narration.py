@@ -85,7 +85,7 @@ def player_analysis(snapshot: dict[str, Any], player_id: int, rank: int,
         if projection["expected_minutes"] == 0:
             parts.append("His next-round availability is zero in that snapshot, so the estimate gives him no playing time. Avoid a new transfer in until an official update clears him.")
         else:
-            parts.append(f"The API still gives him a {100 * player['availability']:.0f} percent playing chance. That is uncertainty, not a confirmed absence for every fixture; wait for a clearer update before buying.")
+            parts.append(f"The official data still gives him a {100 * player['availability']:.0f} percent playing chance. That is uncertainty, not a confirmed absence for every fixture; wait for a clearer update before buying.")
     elif projection["actions"] is None:
         parts.append(f"His next fixture is {fixture_phrase(snapshot, player['team_id'])}, but the forecast is unavailable because {reason.lower().replace('_', ' ')}. I cannot support a buy or sell call from a missing estimate.")
     else:
@@ -104,7 +104,7 @@ def player_analysis(snapshot: dict[str, Any], player_id: int, rank: int,
             if len(player["recent_minutes"]) < 3:
                 parts.append(f"At {player['price']:.1f} million, this is a monitoring option: only {len(player['recent_minutes'])} current-club games support the minutes estimate.")
             elif player["recent_minutes"][-1] < 60:
-                parts.append(f"His latest appearance was {player['recent_minutes'][-1]:.0f} minutes, below the clean-sheet minutes threshold. Check his starting place before spending a transfer; the API does not tell us why those minutes fell.")
+                parts.append(f"His latest appearance was {player['recent_minutes'][-1]:.0f} minutes, below the clean-sheet minutes threshold. Check his starting place before spending a transfer; the official data does not tell us why those minutes fell.")
             elif hit_rate >= 0.5:
                 parts.append(f"At {player['price']:.1f} million, {name}'s contribution points have arrived in at least half his appearances, supporting a place on a value shortlist for this scoring route rather than a prediction of attacking returns.")
             else:
@@ -173,7 +173,7 @@ def defcon_narration(namespace: dict[str, Any]) -> str:
         individuals.append({"player_id": int(row["player_id"]), "anchor": cue})
         parts.append(text)
     team_intro = "Now let's examine every club on the defensive-workload board."
-    parts += [team_intro, "An action total does not measure chances prevented. The API does not provide a tactical explanation for every change, so I will distinguish the recorded outcomes from possible causes."]
+    parts += [team_intro, "An action total does not measure chances prevented. The official data does not provide a tactical explanation for every change, so I will distinguish the recorded outcomes from possible causes."]
     top_cues, bottom_cues = [], []
     bottom_intro = "Now to the clubs with the lowest recorded defensive workload."
     model = namespace.get("PROJECTED_GOALS_PAYLOAD", {}).get("teams", {})
