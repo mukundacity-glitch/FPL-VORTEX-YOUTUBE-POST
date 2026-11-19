@@ -6,6 +6,8 @@ import os
 import re
 import shutil
 import subprocess
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -44,8 +46,22 @@ def configure() -> None:
                                        refresh_token=values[names[2]], grant_type="refresh_token")).encode()
     request = urllib.request.Request("https://oauth2.googleapis.com/token", data=body,
                                      headers={"Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(request, timeout=40) as response:
-        refreshed = json.load(response)
+    for attempt in range(1, 4):
+        try:
+            with urllib.request.urlopen(request, timeout=40) as response:
+                refreshed = json.load(response)
+            break
+        except urllib.error.HTTPError as error:
+            if error.code not in {408, 429, 500, 502, 503, 504} or attempt == 3:
+                raise RuntimeError(f"Drive OAuth refresh failed with HTTP {error.code} on attempt {attempt}.") from error
+            delay = 2 ** attempt
+            retry_after = error.headers.get("Retry-After", "")
+            if retry_after.isdecimal():
+                delay = max(delay, int(retry_after))
+            print(f"Drive OAuth refresh returned HTTP {error.code}; retry {attempt + 1}/3 in {delay}s.", flush=True)
+            time.sleep(delay)
+    if not refreshed.get("access_token"):
+        raise ValueError("Drive OAuth refresh response is missing access_token.")
     token = dict(access_token=refreshed["access_token"], token_type="Bearer", refresh_token=values[names[2]],
                  expiry=(datetime.now(timezone.utc) + timedelta(seconds=max(60, int(refreshed.get("expires_in", 3600)) - 60))).isoformat().replace("+00:00", "Z"))
     directory = Path(os.environ["RUNNER_TEMP"]) / "wc-fh-credentials"
@@ -67,9 +83,11 @@ def configure() -> None:
 
 def copy_optional(remote: str, local: Path) -> bool:
     exists = run("rclone", "lsf", f"wc-fh-drive:{remote}", "--max-depth", "1", check=False)
-    if exists.returncode:
+    if exists.returncode == 3:
         print(f"Optional cache absent: {remote}")
         return False
+    if exists.returncode:
+        raise RuntimeError(f"Cannot check Drive cache {remote} (rclone exit {exists.returncode}): {exists.stderr.strip()[-1800:]}")
     local.mkdir(parents=True, exist_ok=True)
     run("rclone", "copy", f"wc-fh-drive:{remote}", str(local), "--transfers", "4")
     return True
@@ -151,6 +169,13 @@ def restore() -> None:
         missing = [name for name in CLIP_NAMES if not (assets / name).is_file() or not (assets / name).stat().st_size]
         if missing:
             raise FileNotFoundError("Missing original approved media: " + ", ".join(missing))
+        for name in CLIP_NAMES:
+            path = assets / name
+            stream = "a:0" if path.suffix == ".mp3" else "v:0"
+            probe = run("ffprobe", "-v", "error", "-select_streams", stream, "-show_entries",
+                        "stream=codec_name", "-of", "csv=p=0", str(path), check=False)
+            if probe.returncode or not probe.stdout.strip():
+                raise ValueError(f"Invalid approved media {path}: expected stream {stream}. {probe.stderr.strip()}")
         _restore_branding(assets)
     print(f"WC- FH: current notebook restored by ID; output is {root}")
 

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from wc_fh.catalog import build_catalog, player_label
 from wc_fh.controls import (AUTO, CHIPS, CHIP_OPTIONS, POSITIONS, SLOTS, chip_slug, controls_for_chip,
@@ -17,8 +17,8 @@ from PIL import Image
 
 from wc_fh.publish_private import build_package, build_packages, metadata, publish
 from wc_fh.run_notebook import (
-    free_hit_cue_text, install_colab_compatibility, patch_free_hit_narration,
-    patch_free_hit_preflight, patch_setup, select_chip, validate_delivery,
+    free_hit_cue_text, install_colab_compatibility, patch_narration_export,
+    patch_render_inputs, patch_setup, select_chip, sync_wildcard_captaincy, validate_delivery,
 )
 from wc_fh.manual_plans import choose_lineup
 
@@ -179,6 +179,9 @@ class NotebookTests(IsolatedTestCase):
     def test_free_hit_exports_cues_from_the_render_contract_and_rejects_late_drift(self):
         editorial_source = (
             "for _vx_voice_key, _vx_voice_scenes in VX_SCENE_MANIFESTS.items():\n"
+            "    if _vx_voice_key.startswith('wildcard'):\n"
+            "        for _vx_voice_section in _vx_voice_object['sections']:\n"
+            "            pass\n"
             "    _vx_voice_path = Path(VX_NARRATION_PATHS[_vx_voice_key])\n"
         )
         preflight_source = """def render(key):
@@ -190,7 +193,15 @@ class NotebookTests(IsolatedTestCase):
     manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')
     # Rebuild visuals from persisted data, then apply only explicit saved narration edits.
     scenes=vx_build_manifest(contract)
-    return contract, script, scenes
+    return contract_path, contract, script, scenes
+def render_wildcard(key):
+    contract={'chip': 'wildcard'}
+    if contract['chip']=='freehit':vx_validate_freehit(contract)
+    manifest_path=VX_ANALYSIS_ROOT/(key+'_scene_manifest.json')
+    # Rebuild visuals from persisted data, then apply only explicit saved narration edits.
+    scenes=vx_build_manifest(contract)
+    if [s['id'] for s in script]!=[s['scene_id'] for s in scenes]:raise ValueError('TXT scene headers must match the selected chip manifest scenes. Regenerate the script or restore the headers.')
+    return script, scenes
 if True:
     for _vx_target_key, _vx_plan, _vx_label in _render_targets:
         _vx_scripts=decode_script(VX_NARRATION_PATHS[_vx_target_key].read_text(encoding='utf-8'))
@@ -198,8 +209,14 @@ if True:
 """
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "freehit_data.json").write_text(json.dumps({"points": 5.2}))
+            (root / "freehit_data.json").write_text(json.dumps({"points": 5.2, "data_hash": "free-hit"}))
+            (root / "wildcard_data.json").write_text(json.dumps({"points": 6.4, "data_hash": "wildcard"}))
             segment = {"id": "fh_scene_3", "text": "An older estimate of 4.9 points."}
+            wildcard_segment = {"id": "wc_04", "text": "Captaincy plan approved before rendering."}
+            wildcard_scene = {"scene_id": "wc_04", "title": "Captaincy Plan",
+                              "visual_type": "wc_captaincy_final",
+                              "projection_evidence": {"data_hash": "wildcard"},
+                              "narration_timeline": [{"narration_text": wildcard_segment["text"]}]}
             validations = []
             namespace = {
                 "json": json, "Path": Path, "VX_ANALYSIS_ROOT": root,
@@ -212,26 +229,53 @@ if True:
                 "vx_assert_script_contract": lambda path, data: validations.append(("script", data["points"])),
                 "vx_assert_current_snapshot": lambda data: validations.append(("snapshot", data["points"])),
                 "vx_validate_contract": lambda data: validations.append(("data", data["points"])),
+                "vx_validate_freehit": lambda data: validations.append(("free_hit", data["points"])),
                 "VX_FREEHIT_SUITE": SimpleNamespace(build_squad_data=lambda scene, data:
                     validations.append(("pitch", scene["narration_timeline"][0]["hero_player_id"]))),
-                "vx_build_manifest": lambda contract: [{"scene_id": "fh_scene_3",
+                "vx_build_manifest": lambda contract: [{"scene_id": "fh_scene_3", "title": "Free Hit Plan",
+                    "projection_evidence": {"data_hash": contract["data_hash"]},
                     "visual_type": "fh_squad_plan", "narration_timeline": [
                         {"type": "bench", "hero_player_id": 42,
                          "narration_text": f"Expected points are {contract['points']}."
                          " This is substitute cover; his points are separate from the starting-eleven total."}]}],
             }
-            exec(patch_free_hit_narration(editorial_source), namespace)
+            exec(patch_narration_export(editorial_source), namespace)
             self.assertEqual(segment["text"], "Expected points are 5.2.")
-            exec(patch_free_hit_preflight(preflight_source), namespace)
-            self.assertEqual(validations, [("data", 5.2), ("snapshot", 5.2), ("script", 5.2), ("pitch", 42)])
+            exec(patch_render_inputs(preflight_source), namespace)
+            self.assertEqual(validations, [("data", 5.2), ("snapshot", 5.2), ("free_hit", 5.2),
+                                           ("script", 5.2), ("pitch", 42)])
             segment["text"] = "A stale edit."
-            data, scripts, scenes = namespace["render"]("free_hit_auto")
+            contract_path, data, scripts, scenes = namespace["render"]("free_hit_auto")
+            self.assertEqual(contract_path, root / "freehit_data.json")
             self.assertEqual(data["points"], 5.2)
             self.assertEqual(scripts[0]["text"], "Expected points are 5.2.")
             self.assertIs(scenes[0], namespace["_vx_scenes"]["fh_scene_3"])
             self.assertEqual(scenes[0]["narration_timeline"][0]["hero_player_id"], 42)
-            with self.assertRaisesRegex(ValueError, "fh_scene_3.*timed cues differ"):
-                exec(patch_free_hit_preflight(preflight_source), namespace)
+            with self.assertRaisesRegex(ValueError, "fh_scene_3.*differs from timed cues"):
+                exec(patch_render_inputs(preflight_source), namespace)
+
+            wildcard_path = root / "wildcard.txt"
+            wildcard_path.write_text("# DATA_HASH: wildcard\n")
+            namespace.update(_render_targets=[("wildcard_auto", None, "Wildcard / Model")],
+                             VX_NARRATION_PATHS={"wildcard_auto": wildcard_path},
+                             VX_SCENE_MANIFESTS={"wildcard_auto": [wildcard_scene]},
+                             VX_NARRATION_OBJECTS={"wildcard_auto": {}},
+                             VXWC=SimpleNamespace(validate_render_script=lambda *_: None),
+                             decode_script=lambda _: [wildcard_segment.copy()],
+                             vx_build_manifest=Mock(side_effect=AssertionError("Wildcard cues were rebuilt")))
+            exec(patch_render_inputs(preflight_source), namespace)
+            saved, measured = namespace["render_wildcard"]("wildcard_auto")
+            self.assertEqual(saved, [wildcard_segment])
+            self.assertEqual(measured, [wildcard_scene])
+            self.assertIsNot(measured[0], wildcard_scene)
+            wildcard_segment["text"] = "Captaincy plan from an older script."
+            with self.assertRaisesRegex(ValueError, "wildcard_auto/wc_04.*differs from timed cues"):
+                exec(patch_render_inputs(preflight_source), namespace)
+            narration = {"sections": [{"slide_id": "wc_04", "narration": wildcard_segment["text"]}]}
+            sync_wildcard_captaincy([wildcard_scene], [wildcard_segment], narration)
+            exec(patch_render_inputs(preflight_source), namespace)
+            self.assertEqual(wildcard_segment["text"], "Captaincy plan approved before rendering.")
+            self.assertEqual(narration["sections"][0]["narration"], wildcard_segment["text"])
 
     def test_both_delivery_requires_two_matching_final_videos(self):
         for selection in ("Auto", "Manual"):

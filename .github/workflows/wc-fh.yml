@@ -3157,12 +3157,29 @@ jobs:
       - name: Validate manual controls
         run: python -m wc_fh.controls
 
+      - name: Validate required secret settings
+        env:
+          WC_FH_CHECK_YOUTUBE: ${{ inputs.task == 'Render and upload' && !inputs.render_only }}
+        run: |
+          python - <<'PY'
+          import os
+          names = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REFRESH_TOKEN"]
+          if os.environ["WC_FH_CHECK_YOUTUBE"] == "true":
+              names += ["YOUTUBE_OAUTH_REFRESH_TOKEN", "YOUTUBE_CHANNEL_ID"]
+          missing = [name for name in names if not os.environ.get(name, "").strip()]
+          if missing:
+              raise SystemExit("Missing required GitHub secrets: " + ", ".join(missing))
+          PY
+
       - name: Install system media tools
         run: |
           sudo mkdir -p /content/drive/MyDrive
           sudo chown -R "$(id -u):$(id -g)" /content
           sudo apt-get update
           sudo apt-get install --yes ffmpeg rclone
+          ffmpeg -version
+          ffprobe -version
+          rclone version
 
       - name: Set up Node for existing Remotion scenes
         if: inputs.task == 'Render and upload'
@@ -3171,7 +3188,18 @@ jobs:
           node-version: "22"
 
       - name: Install isolated WC- FH dependencies
-        run: python -m pip install -r wc_fh/requirements.txt
+        run: |
+          python -m pip install -r wc_fh/requirements.txt
+          python -m pip check
+
+      - name: Verify YouTube credentials and destination before rendering
+        if: inputs.task == 'Render and upload' && !inputs.render_only
+        run: |
+          python - <<'PY'
+          from day3.publish_private import _verify_channel, _youtube_service
+          _verify_channel(_youtube_service())
+          print("YouTube OAuth and configured channel verified.")
+          PY
 
       - name: Run WC- FH regression checks
         run: python -m unittest discover -s wc_fh -p 'test_*.py' -v
@@ -3196,6 +3224,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          mkdir -p "$WC_FH_OUTPUT_ROOT"
           python -m wc_fh.run_notebook "$WC_FH_NOTEBOOK_PATH" 2>&1 | tee "$WC_FH_OUTPUT_ROOT/execution.log"
 
       - name: Save private YouTube videos with descriptions, SEO tags, hashtags and thumbnails
@@ -3239,7 +3268,21 @@ jobs:
             ${{ env.WC_FH_OUTPUT_ROOT }}/analysis/*media_audit.json
             ${{ env.WC_FH_OUTPUT_ROOT }}/analysis/*scene_manifest.json
             ${{ env.WC_FH_OUTPUT_ROOT }}/analysis/*visual_qa.json
+            ${{ env.WC_FH_OUTPUT_ROOT }}/analysis/latest_runtime_error.json
+            ${{ env.WC_FH_OUTPUT_ROOT }}/analysis/cell_execution_log.jsonl
             ${{ env.WC_FH_OUTPUT_ROOT }}/runtime_error.txt
             ${{ env.WC_FH_OUTPUT_ROOT }}/execution.log
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Downloadable audio and render diagnostics on failure
+        if: failure() && (steps.render.outcome == 'failure' || steps.render.outcome == 'success')
+        uses: actions/upload-artifact@v7
+        with:
+          name: wc-fh-render-debug-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.WC_FH_OUTPUT_ROOT }}/audio/**/*.mp3
+            ${{ runner.temp }}/wc-fh-work/slide3_measured_*.wav
+            ${{ runner.temp }}/wc-fh-work/**/vortex_remotion_*.log
+          if-no-files-found: ignore
+          retention-days: 7
