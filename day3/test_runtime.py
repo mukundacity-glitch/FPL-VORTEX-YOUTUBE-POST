@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -148,6 +150,30 @@ class LiveEvidencePollingTests(unittest.TestCase):
                 poll_interval_seconds=0,
                 max_wait_seconds=0,
             )
+
+
+class PublisherEntryPointTests(unittest.TestCase):
+    def test_direct_script_can_build_metadata_without_repository_on_pythonpath(self):
+        script = Path(__file__).with_name("publish_private.py").resolve()
+        # Match Python's direct-file import path without inheriting the test runner's.
+        program = """
+import runpy
+import sys
+from pathlib import Path
+
+script = Path(sys.argv[1])
+sys.path.insert(0, str(script.parent))
+publisher = runpy.run_path(str(script))
+metadata = publisher["_metadata"](38, 37, "TRANSFER", "AUTO")
+print(metadata["title"])
+"""
+        with tempfile.TemporaryDirectory() as cwd:
+            result = subprocess.run(
+                [sys.executable, "-I", "-c", program, str(script)],
+                cwd=cwd, capture_output=True, text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("FPL GW38", result.stdout)
 
 
 class FinalVideoSelectionTests(unittest.TestCase):

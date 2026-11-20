@@ -5,11 +5,18 @@ import json
 import os
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageOps
+
+# Actions launches this file directly, which puts day3/ on the import path.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vortex.expert_editorial import source_credits
 
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
@@ -200,7 +207,6 @@ def _metadata(preview_gw: int, review_gw: int | None, plan: str, transfer_mode: 
             f"#FPL #FantasyPremierLeague #FPLGW{preview_gw} #FPLVORTEX",
         ]
     )
-    from vortex.expert_editorial import source_credits
     description += source_credits(preview_gw)
     tags = [
         "FPL",
