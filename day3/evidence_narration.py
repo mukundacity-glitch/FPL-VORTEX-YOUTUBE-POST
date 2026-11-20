@@ -164,13 +164,19 @@ def defcon_narration(namespace: dict[str, Any]) -> str:
         snapshot["teams"][team_id]["name"], team_id))
     if [int(row["team_id"]) for row in teams] != expected_order:
         raise RuntimeError("Graphic team ranks disagree with official current-season evidence")
+    def spoken_anchor(phrase: str) -> str:
+        # Both preflight and animation consume these cues after Ryan's speech pass.
+        return namespace["vx_full_word_narration"](
+            phrase, context="DEFCON animation cue", expand_player_context=False,
+        )
+
     opening = "For the upcoming Gameweek, let's separate defensive workload from defensive quality."
     parts = [opening,
              "These are historical action leaders, not five automatic transfers. The forecasts are our independent estimates, not official FPL predictions."]
     individuals = []
     for rank, row in enumerate(top, 1):
         cue, text = player_analysis(snapshot, int(row["player_id"]), rank, row)
-        individuals.append({"player_id": int(row["player_id"]), "anchor": cue})
+        individuals.append({"player_id": int(row["player_id"]), "anchor": spoken_anchor(cue)})
         parts.append(text)
     team_intro = "Now let's examine every club on the defensive-workload board."
     parts += [team_intro, "An action total does not measure chances prevented. The official data does not provide a tactical explanation for every change, so I will distinguish the recorded outcomes from possible causes."]
@@ -191,13 +197,13 @@ def defcon_narration(namespace: dict[str, Any]) -> str:
                                   "high" if rank <= 5 else "low" if rank > len(teams) - 3 else "middle", probability)
         parts.append(text)
         if rank <= 5:
-            top_cues.append({"team_id": team_id, "anchor": cue})
+            top_cues.append({"team_id": team_id, "anchor": spoken_anchor(cue)})
         elif rank > len(teams) - 3:
-            bottom_cues.append({"team_id": team_id, "anchor": cue})
+            bottom_cues.append({"team_id": team_id, "anchor": spoken_anchor(cue)})
     parts.append("Use defensive actions to judge this particular points route. Check availability and minutes first, then compare price, attacking potential and total expected points. Next, we move to the transfer decision desk.")
     namespace["DEFCON_NARRATION_CUES"] = {
-        "opening": opening.rstrip("."), "individual": individuals, "team_intro": team_intro.rstrip("."),
-        "target_teams": top_cues, "avoid_intro": bottom_intro.rstrip("."), "avoid_teams": bottom_cues,
+        "opening": spoken_anchor(opening.rstrip(".")), "individual": individuals, "team_intro": spoken_anchor(team_intro.rstrip(".")),
+        "target_teams": top_cues, "avoid_intro": spoken_anchor(bottom_intro.rstrip(".")), "avoid_teams": bottom_cues,
     }
     return "\n\n".join(parts)
 

@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from day3.evidence_narration import next_fixture_packs, player_analysis, team_analysis, validated_fixture_forecasts
+from day3.evidence_narration import defcon_narration, next_fixture_packs, player_analysis, team_analysis, validated_fixture_forecasts
 from day3.live_evidence import (
     VERSION, assert_snapshot_current, audit_fixture_rows, availability, build_evidence, dc_forecast, digest,
     freeze_official_module, live_role, material_state, player_projection, save_snapshot,
@@ -68,6 +68,37 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(live_role(snapshot, 22)["start"], 1)
         self.assertEqual(player_projection(snapshot, 11)["actions"], 12)
         self.assertEqual(player_projection(snapshot, 22)["actions"], 8)
+
+    def test_defcon_animation_cues_follow_final_spoken_names_in_order(self) -> None:
+        snapshot = self.snapshot()
+        names = ["James Hill", "Exequiel Palacios", "Ethan Ampadu", "Tarik Muharemović", "Vitaly Janelt"]
+        targets = []
+        for pid, name in enumerate(names, 30):
+            snapshot["players"][pid] = dict(snapshot["players"][11], name=name)
+            targets.append({"player_id": pid, "xdefcon": 12})
+        for team_id, name in enumerate(["Leeds", "Man City", "Reading", "Spurs", "Villa", "Wolves"], 3):
+            snapshot["teams"][team_id] = {"name": name}
+
+        def speech(text, *, context, expand_player_context):
+            self.assertFalse(expand_player_context)
+            for name in names:
+                text = text.replace(name, name.split()[-1])
+            return text.replace("Man City", "Manchester City")
+
+        namespace = {
+            "DAY3_EVIDENCE": snapshot, "DAY3_DEFCON_TARGETS": pd.DataFrame(targets),
+            "DAY3_DEFCON_TEAMS": pd.DataFrame({"team_id": range(1, 9)}),
+            "vx_full_word_narration": speech,
+        }
+        spoken = speech(defcon_narration(namespace), context="test", expand_player_context=False)
+        cues = namespace["DEFCON_NARRATION_CUES"]
+        self.assertEqual([row["player_id"] for row in cues["individual"]], list(range(30, 35)))
+        anchors = [cues["opening"], *[r["anchor"] for r in cues["individual"]], cues["team_intro"],
+                   *[r["anchor"] for r in cues["target_teams"]], cues["avoid_intro"],
+                   *[r["anchor"] for r in cues["avoid_teams"]]]
+        cursor = 0
+        for anchor in anchors:
+            cursor = spoken.index(anchor, cursor) + len(anchor)
 
     def test_official_fixture_difficulty_stays_out_of_notebook_and_evidence_file(self) -> None:
         from types import SimpleNamespace
