@@ -10,6 +10,16 @@ from itertools import combinations
 from math import isfinite
 
 SQUAD_BUDGET = 100
+FPL_FINAL_GAMEWEEK = 38
+MODEL_HORIZON_WEEKS = 5
+
+
+def gameweek_horizon(gameweek):
+    """Five available official Gameweeks, shortening safely at season end."""
+    if type(gameweek) is not int or not 1 <= gameweek <= FPL_FINAL_GAMEWEEK:
+        raise ValueError(f"Invalid FPL gameweek: {gameweek!r}")
+    return range(gameweek, min(gameweek + MODEL_HORIZON_WEEKS, FPL_FINAL_GAMEWEEK + 1))
+
 POSITION = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 FORMATION = {"GK": (1, 1), "DEF": (3, 5), "MID": (2, 5), "FWD": (1, 3)}
 
@@ -48,8 +58,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
     forecasts: rows with player_id, gameweek, gameweek_expected_points.
     fixtures: official fixture rows; projections can supply projected home/away goals.
     """
-    if not isinstance(gameweek, int) or not 1 <= gameweek <= 34:
-        raise ValueError("A complete five-gameweek horizon must exist")
+    weeks = gameweek_horizon(gameweek)
     if len(squad) != 15 or len({p["id"] for p in squad}) != 15:
         raise ValueError("Value Board requires 15 unique selected players")
     expected = Counter({1: 2, 2: 5, 3: 5, 4: 3})
@@ -77,13 +86,13 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
         if price < 0:
             raise ValueError("Negative player price")
         weekly = {}
-        for gw in range(gameweek, gameweek + 5):
+        for gw in weeks:
             key = (pid, gw)
             if key not in model:
                 raise ValueError(f"Missing player projection: {key}")
             weekly[gw] = model[key]
         team_fixtures = sorted(
-            (f for f in fixtures if gameweek <= (f.get("event") or 0) < gameweek + 6
+            (f for f in fixtures if gameweek <= (f.get("event") or 0) < min(gameweek + 6, FPL_FINAL_GAMEWEEK + 1)
              and tid in (f.get("team_h"), f.get("team_a"))),
             key=lambda f: (f["event"], f.get("kickoff_time") or "", f["id"]),
         )
@@ -127,7 +136,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
         bank = budget - total_cost
 
     lineups, projections = {}, []
-    for gw in range(gameweek, gameweek + 5):
+    for gw in weeks:
         xi = _best_xi(players, gw)
         lineup_ids = {p["id"] for p in xi}
         captain = sorted(xi, key=lambda p: (-p["weekly"][gw], p["id"]))[0]
@@ -165,7 +174,7 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
         if not (0 <= _number(cue.get("start"), "cue start") < _number(cue.get("end"), "cue end")):
             raise ValueError("Invalid narration cue")
     weekly_plans = []
-    for week in range(gameweek, gameweek + 5):
+    for week in weeks:
         xi, ids, captain, vice = lineups[week]
         reserves = [p for p in players if p["id"] not in ids]
         reserves.sort(key=lambda p: (p["position"] != "GK", -p["weekly"][week], p["id"]))
@@ -188,6 +197,8 @@ def build_value_board(*, gameweek, squad, forecasts, fixtures, teams,
         "budget": budget,
         "totalCost": round(total_cost, 2),
         "bank": round(bank, 2),
+        "forecastHorizonWeeks": len(weeks),
+        "forecastEndGameweek": weeks[-1],
         "fiveGwXpts": round(sum(p["xpts"] for p in projections), 2),
         "projections": projections,
         "weeklyPlans": weekly_plans,

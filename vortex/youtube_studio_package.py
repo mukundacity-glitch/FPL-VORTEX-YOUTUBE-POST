@@ -49,10 +49,8 @@ def _vx23_probe_video(path):
             "ffprobe",
             "-v",
             "error",
-            "-select_streams",
-            "v:0",
             "-show_entries",
-            "stream=width,height,codec_name,avg_frame_rate",
+            "stream=codec_type,width,height,codec_name,avg_frame_rate",
             "-show_entries",
             "format=duration",
             "-of",
@@ -65,19 +63,26 @@ def _vx23_probe_video(path):
     )
     payload = json.loads(result.stdout)
     streams = payload.get("streams") or []
-    if len(streams) != 1:
-        raise RuntimeError(f"Expected one video stream in {path}; found {len(streams)}")
-    stream = streams[0]
+    videos = [stream for stream in streams if stream.get("codec_type") == "video"]
+    audios = [stream for stream in streams if stream.get("codec_type") == "audio"]
+    if len(videos) != 1:
+        raise RuntimeError(f"Expected one video stream in {path}; found {len(videos)}")
+    if not audios or not str(audios[0].get("codec_name") or "").strip():
+        raise RuntimeError(f"Final Day 1 MP4 is missing a verified audio codec/stream: {path}")
+    stream = videos[0]
     rate = str(stream.get("avg_frame_rate") or "0/1")
     try:
         numerator, denominator = rate.split("/", 1)
         fps = float(numerator) / float(denominator)
     except (TypeError, ValueError, ZeroDivisionError):
         fps = 0.0
+    if not math.isfinite(fps) or not 0.0 < fps <= 120.0:
+        raise RuntimeError(f"Final Day 1 MP4 has invalid frame rate: {rate!r}")
     return {
         "width": int(stream.get("width") or 0),
         "height": int(stream.get("height") or 0),
         "codec": str(stream.get("codec_name") or ""),
+        "audio_codec": str(audios[0]["codec_name"]),
         "fps": fps,
         "duration": float(payload.get("format", {}).get("duration") or 0.0),
     }
@@ -124,7 +129,19 @@ def _vx23_chapters(timeline, review_gw):
 
 
 def _vx23_metadata(preview_gw, review_gw, review_status, timeline, board=None):
-    title = f"FPL GW{preview_gw} | Transfer Market Outlook & Best £100m Squad"
+    # A completed Gameweek review must match the immediately following preview.
+    # GW38 is the last valid preview; there must never be a GW39 package.
+    if not 2 <= preview_gw <= 38 or review_gw != preview_gw - 1:
+        raise RuntimeError(
+            f"Day 1 YouTube metadata requires consecutive completed/preview Gameweeks; "
+            f"got review={review_gw}, preview={preview_gw}"
+        )
+    # Do not promise a £100m squad if the live Value Board explicitly uses
+    # a different verified budget (including its existing £101m configuration).
+    budget_is_100m = (board or {}).get("budget") == 100
+    title = (f"FPL GW{preview_gw} | Transfer Market Outlook & Best £100m Squad"
+             if budget_is_100m else
+             f"FPL GW{preview_gw} | Transfer Market Outlook & Value Board")
     status = "provisional" if review_status == "LIVE/PARTIAL" else "final"
     hashtags = ["#FPL", "#FantasyPremierLeague", f"#FPLGameweek{preview_gw}"]
     chapters = _vx23_chapters(timeline, review_gw)
@@ -291,6 +308,7 @@ def build_youtube_studio_package(output_root):
             "sha256": qa["external_media_integration"]["final_sha256"],
             "resolution": [video_probe["width"], video_probe["height"]],
             "codec": video_probe["codec"],
+            "audio_codec": video_probe["audio_codec"],
             "fps": video_probe["fps"],
             "duration_seconds": video_probe["duration"],
         },
