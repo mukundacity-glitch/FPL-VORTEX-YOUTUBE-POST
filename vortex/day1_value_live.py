@@ -18,7 +18,7 @@ from scipy.optimize import Bounds, LinearConstraint, milp
 import numpy as np
 import requests
 
-from .day1_value_board import SQUAD_BUDGET, build_value_board
+from .day1_value_board import SQUAD_BUDGET, build_value_board, gameweek_horizon
 from .football_identity import full_club_name
 
 API = "https://fantasy.premierleague.com/api"
@@ -45,8 +45,7 @@ def select_next_gw(events):
     if len(upcoming) != 1:
         raise ValueError("Could not resolve exactly one official upcoming FPL GW")
     gw = int(upcoming[0]["id"])
-    if gw > 34:
-        raise ValueError("A full five-gameweek horizon is not available")
+    gameweek_horizon(gw)  # Reject invalid season transitions, not the final four GWs.
     return gw
 
 
@@ -295,7 +294,7 @@ def make_live_value_board(*, session=None, snapshot=None):
             if avg < 60 or _status_factor(player) < 1 or not established:
                 continue
         series = []
-        for index, week in enumerate(range(gw, gw+5)):
+        for index, week in enumerate(gameweek_horizon(gw)):
             actual_fixtures = [(fid, rating) for fid, rating in
                                _week_ratings(fixtures, player["team"], week) if fid is not None]
             match_scores = [_model_points(player, rating if rating is not None else 3.0,
