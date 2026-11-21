@@ -77,6 +77,17 @@ class FinalSceneTests(unittest.TestCase):
             _vx23_metadata(11, 9, "FINAL", timeline)
         self.assertEqual(_vx23_metadata(38, 37, "FINAL", timeline)["preview_gw"], 38)
 
+    def test_metadata_does_not_misstate_verified_squad_budget(self):
+        timeline = scene_timeline(self.qa, 325)
+        # The live Value Board may legitimately cost over £100m under its
+        # configured budget. Never describe that video as a £100m squad.
+        high_budget = {"budget": 101, "totalCost": 100.4, "starters": []}
+        metadata = _vx23_metadata(11, 10, "FINAL", timeline, high_budget)
+        self.assertNotIn("£100m", metadata["title"])
+        self.assertIn("Value Board", metadata["title"])
+        standard_budget = {"budget": 100, "totalCost": 99.8, "starters": []}
+        self.assertIn("£100m", _vx23_metadata(11, 10, "FINAL", timeline, standard_budget)["title"])
+
     def test_identical_frames_fail(self):
         def write_frame(command, **kwargs):
             Image.new("L", (3840, 2160), 128).save(command[-1])
