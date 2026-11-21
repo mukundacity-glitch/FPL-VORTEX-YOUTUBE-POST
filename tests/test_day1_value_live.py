@@ -106,6 +106,11 @@ class LiveValueTests(unittest.TestCase):
         for gw in (35, 36, 37, 38):
             with self.subTest(gameweek=gw):
                 snap = snapshot()
+                # A GW35-38 snapshot needs season-to-date starts/minutes. Ten
+                # starts is correctly rejected by the existing eligibility gate.
+                for player in snap["bootstrap"]["elements"]:
+                    player["starts"] = 32
+                    player["minutes"] = 2880
                 snap["bootstrap"]["events"] = [{"id": gw, "is_next": True}]
                 snap["fixtures"] = [
                     {**fixture, "event": gw + fixture["event"] - 11,
