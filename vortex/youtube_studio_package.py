@@ -136,7 +136,12 @@ def _vx23_metadata(preview_gw, review_gw, review_status, timeline, board=None):
             f"Day 1 YouTube metadata requires consecutive completed/preview Gameweeks; "
             f"got review={review_gw}, preview={preview_gw}"
         )
-    title = f"FPL GW{preview_gw} | Transfer Market Outlook & Best £100m Squad"
+    # Do not promise a £100m squad if the live Value Board explicitly uses
+    # a different verified budget (including its existing £101m configuration).
+    budget_is_100m = (board or {}).get("budget") == 100
+    title = (f"FPL GW{preview_gw} | Transfer Market Outlook & Best £100m Squad"
+             if budget_is_100m else
+             f"FPL GW{preview_gw} | Transfer Market Outlook & Value Board")
     status = "provisional" if review_status == "LIVE/PARTIAL" else "final"
     hashtags = ["#FPL", "#FantasyPremierLeague", f"#FPLGameweek{preview_gw}"]
     chapters = _vx23_chapters(timeline, review_gw)
