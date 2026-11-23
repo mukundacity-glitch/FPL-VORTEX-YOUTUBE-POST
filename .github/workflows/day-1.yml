@@ -2,12 +2,6 @@ name: Day 1
 
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: Validate FPL only, check credentials, or generate the private Day 1 draft
-        type: choice
-        options: [publish, validate, credentials]
-        default: publish
   pull_request:
     paths:
       - "1_final_day1.py"
@@ -92,7 +86,7 @@ permissions:
 jobs:
   fpl-preflight:
     name: Check official FPL Gameweek readiness
-    if: github.event_name == 'workflow_dispatch' && inputs.mode != 'credentials'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     outputs:
@@ -135,35 +129,9 @@ jobs:
               print(f"Day 1 will review final GW{report['review_gw']} and preview GW{report['preview_gw']}.", file=summary)
           PY
 
-  credentials-check:
-    name: Check Day 1 credentials without uploading
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'credentials'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    env:
-      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-      GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-      YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
-      YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
-      YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
-      YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-      - run: python -m pip install -r requirements-day1.txt
-      - run: python -m vortex.youtube_private_upload --check-credentials
-      - name: Verify Google Drive OAuth grant and read access
-        if: ${{ !cancelled() }}
-        run: python -m vortex.day1_preflight --check-drive
-
   run-day-1:
     needs: fpl-preflight
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    if: github.event_name == 'workflow_dispatch'
     concurrency:
       group: fpl-vortex-day-1
       cancel-in-progress: false
