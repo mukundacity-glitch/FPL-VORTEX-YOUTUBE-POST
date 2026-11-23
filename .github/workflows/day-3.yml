@@ -3054,8 +3054,10 @@ jobs:
       - name: Install system dependencies
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes ffmpeg rclone
+          set -euo pipefail
+          apt_network=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_network[@]}" -o APT::Update::Error-Mode=any update
+          sudo apt-get "${apt_network[@]}" install --yes ffmpeg rclone
 
       - name: Install Python dependencies
         shell: bash
@@ -3343,35 +3345,7 @@ jobs:
           restore_optional "FPL_VORTEX_DATA/07_LOGS"
 
       - name: Prepare writable Day 3 output directories
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os
-          import shutil
-          import tempfile
-          from pathlib import Path
-
-          root = Path(os.environ["DAY3_OUTPUT_ROOT"]).resolve()
-          expected = Path("/content/drive/MyDrive/FPL_VORTEX/Day_3_3").resolve()
-          if root != expected:
-              raise SystemExit(f"Unsafe Day 3 output path: {root}")
-
-          for name in ("MP4", "MP3", "SLIDE", "DATA"):
-              folder = root / name
-              folder.mkdir(parents=True, exist_ok=True)
-              try:
-                  with tempfile.TemporaryFile(dir=folder):
-                      pass
-              except OSError as error:
-                  raise SystemExit(f"Day 3 output directory is not writable: {folder}: {error}") from error
-              for child in folder.iterdir():
-                  if child.is_dir():
-                      shutil.rmtree(child)
-                  else:
-                      child.unlink()
-          print("Previous Day 3 render outputs cleared")
-          PY
+        run: python -m day3.verify_evidence --output-root "$DAY3_OUTPUT_ROOT" --prepare-output
 
       - name: Run final Day 3 notebook
         id: run_notebook
@@ -3383,7 +3357,11 @@ jobs:
 
       - name: Verify Day 3 render evidence
         id: verify_evidence
-        run: python -m day3.verify_evidence --output-root "$DAY3_OUTPUT_ROOT"
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m day3.verify_evidence --output-root "$DAY3_OUTPUT_ROOT" \
+            --rerender-notebook "$DAY3_NOTEBOOK_PATH" 2>&1 | tee -a "$RUNNER_TEMP/day-3.log"
 
       - name: Upload one private YouTube draft with matching thumbnail
         if: ${{ !inputs.render_only }}
@@ -3395,11 +3373,13 @@ jobs:
             --transfer-mode "$DAY3_TRANSFER_MODE"
 
       - name: Save failed render diagnostics
-        if: ${{ failure() && steps.run_notebook.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
+        if: ${{ failure() && (steps.run_notebook.outcome == 'failure' || steps.verify_evidence.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
         with:
           name: day3-render-diagnostics-${{ github.run_id }}
-          path: /content/FPL_VORTEX_DAY3_WORK/html
+          path: |
+            /content/FPL_VORTEX_DAY3_WORK/html
+            ${{ runner.temp }}/day-3.log
           if-no-files-found: ignore
           retention-days: 7
 

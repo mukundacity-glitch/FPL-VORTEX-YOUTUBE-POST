@@ -494,6 +494,14 @@ def freeze_official_module(module: Any, snapshot: dict[str, Any]) -> None:
     module._vx_get_json = frozen_get
 
 
+class SourceChanged(RuntimeError):
+    """Material FPL data moved during rendering while the planning target stayed valid."""
+
+    def __init__(self, message: str, target: tuple[int, str]) -> None:
+        super().__init__(message)
+        self.target = target
+
+
 def assert_snapshot_current(snapshot: dict[str, Any], loader: Callable[[str], Any] = get_json) -> None:
     cutoff = datetime.fromisoformat(snapshot["cutoff"].replace("Z", "+00:00"))
     now = datetime.now(timezone.utc)
@@ -502,8 +510,16 @@ def assert_snapshot_current(snapshot: dict[str, Any], loader: Callable[[str], An
         raise RuntimeError("Day 3 evidence is stale or its planning deadline has passed; regenerate")
     bootstrap = loader("/bootstrap-static/")
     fixtures = loader("/fixtures/")
+    checked_at = datetime.now(timezone.utc)
+    target = _upcoming_event(bootstrap, checked_at.isoformat())
+    official_deadline = datetime.fromisoformat(target["deadline_time"].replace("Z", "+00:00"))
+    if checked_at >= deadline or int(target["id"]) != snapshot["next_gw"] or official_deadline != deadline:
+        raise RuntimeError("Day 3 planning Gameweek or deadline changed; start a new run with current inputs")
     if digest(material_state(bootstrap, fixtures)) != snapshot["source_hash"]:
-        raise RuntimeError("Official availability, identity or fixture evidence changed; regenerate before upload")
+        raise SourceChanged(
+            "Official availability, identity or fixture evidence changed; regenerate before upload",
+            (snapshot["next_gw"], snapshot["deadline"]),
+        )
 
 
 def audit_fixture_rows(frame: Any, snapshot: dict[str, Any]) -> None:
