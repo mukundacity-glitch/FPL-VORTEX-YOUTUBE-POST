@@ -47,7 +47,7 @@ class PlayerHeroTests(unittest.TestCase):
         self.assertEqual(report["candidates_analyzed"], 4)
         self.assertEqual(sum(hero["breakdown"].values()), 10)
         self.assertEqual(hero["captain_points"], 20)
-        with self.assertRaisesRegex(ValueError, "latest completed"):
+        with self.assertRaisesRegex(ValueError, "completed and checked"):
             analyze(*example(), 9)
         bootstrap, fixtures, live = example()
         live["elements"][0]["stats"]["total_points"] = 11

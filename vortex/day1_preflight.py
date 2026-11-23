@@ -21,10 +21,6 @@ class NotReady(RuntimeError):
     """The official feeds have yet to settle or there is no upcoming preview."""
 
 
-class AwaitingSettlement(NotReady):
-    """The review round exists and FPL is still marking it as provisional."""
-
-
 def _retry_delay(header, attempt):
     delay = 2 ** attempt
     if not header:
@@ -108,7 +104,7 @@ def _fixture_complete(fixture, *, allow_provisional=False):
     )
 
 
-def require_final_review(bootstrap, fixtures, *, now=None):
+def require_final_review(bootstrap, fixtures, *, now=None, review_gw=None):
     if not isinstance(bootstrap, dict):
         raise ValueError("Official FPL bootstrap-static must be a JSON object")
     for field in ("elements", "teams", "element_types"):
@@ -132,38 +128,18 @@ def require_final_review(bootstrap, fixtures, *, now=None):
     if preview not in future_ids:
         raise NotReady(f"Official FPL still points at GW{preview}, whose deadline has passed; retry after the feed advances")
 
-    # The existing premium broadcast requires the immediately preceding event.
-    review = preview - 1
+    # Keep the retrospective score-checked while allowing the preview to use today's feed.
+    review = completed_week(bootstrap) if review_gw is None else review_gw
     event = by_id.get(review)
-    if event is None:
-        raise NotReady(f"GW{preview} preview has no preceding official Gameweek to review")
+    if not event or not 1 <= review < preview:
+        raise NotReady(f"GW{preview} preview has no earlier score-checked Gameweek to review")
     matches = [fixture for fixture in fixtures if fixture.get("event") == review]
     if not any(fixture.get("event") == preview for fixture in fixtures):
         raise NotReady(f"Official FPL has no fixtures for upcoming GW{preview}")
-    finished = sum(_fixture_complete(fixture) for fixture in matches)
-    complete_or_provisional = sum(
-        _fixture_complete(fixture, allow_provisional=True)
-        for fixture in matches
-    )
-    if (not matches or finished != len(matches) or completed_week(bootstrap) != review):
-        pending = [fixture for fixture in matches if not _fixture_complete(fixture)]
-        kickoffs = [fixture["kickoff_time"] for fixture in pending
-                    if fixture.get("started") is not True and isinstance(fixture.get("kickoff_time"), str)]
-        next_kickoff = f"; next unfinished kickoff {min(kickoffs)}" if kickoffs else ""
-        event_flags = (event.get("finished"), event.get("data_checked"))
-        awaiting_settlement = (
-            bool(matches)
-            and all(type(flag) is bool for flag in event_flags)
-            and not all(event_flags)
-        )
-        readiness_error = AwaitingSettlement if awaiting_settlement else NotReady
-        raise readiness_error(
-            f"GW{review} is not final for the GW{preview} preview: "
-            f"{complete_or_provisional}/{len(matches)} full-time (including provisional), "
-            f"{finished} finalized; finished={event.get('finished')!r}, "
-            f"data_checked={event.get('data_checked')!r}{next_kickoff}. "
-            "Retry after all fixtures are final and FPL has locked the scores."
-        )
+    if not matches or not all(_fixture_complete(fixture) for fixture in matches):
+        raise NotReady(f"Official FPL GW{review} review is missing finalized fixture data")
+    if event.get("finished") is not True or event.get("data_checked") is not True:
+        raise NotReady(f"Official FPL GW{review} review is not score-checked")
     return review, preview, deadlines[preview]
 
 
@@ -201,25 +177,35 @@ def verify_environment(review, preview, deadline):
 
 
 
+def verify_run_gameweeks(bootstrap, fixtures):
+    review, preview, deadline = require_final_review(
+        bootstrap, fixtures, review_gw=int(os.environ["VORTEX_DAY1_REVIEW_GW"])
+    )
+    verify_environment(review, preview, deadline)
+    return review, preview, deadline
+
+
 def verify_notebook_snapshot(namespace):
     data = namespace["data"]
     loader = namespace["_fpl_module"]
     with loader._vx_http_session() as session:
         fixtures = loader._vx_get_json(session, "/fixtures/")
-    review, preview, deadline = require_final_review(data["bootstrap"], fixtures)
-    verify_environment(review, preview, deadline)
-    if (data["review_gw"], data["next_gw"], data["review_status"]) != (review, preview, "FINAL"):
+    review, preview, _ = verify_run_gameweeks(data["bootstrap"], fixtures)
+    if data["next_gw"] != preview or review not in data["review_ready_gws"]:
         raise NotReady("The notebook and official Day 1 readiness check disagree on the final review and preview.")
+    data.update(review_gw=review, review_status="FINAL",
+                review_fixture_state=data["fixture_state_counts_by_gw"][review])
+    namespace["LATEST_COMPLETED_GW"] = review
+    namespace["AUTO_REVIEW_GW"] = review
     print(f"Day 1 notebook confirmed final GW{review} and upcoming GW{preview}.", flush=True)
-
 
 
 def check_live(*, verify=False):
     bootstrap = fetch_json("/bootstrap-static/")
     fixtures = fetch_json("/fixtures/")
-    review, preview, deadline = require_final_review(bootstrap, fixtures)
+    select_gameweeks = verify_run_gameweeks if verify else require_final_review
+    review, preview, deadline = select_gameweeks(bootstrap, fixtures)
     if verify:
-        verify_environment(review, preview, deadline)
         print(f"Day 1 Gameweek unchanged: final GW{review}, preview GW{preview}, deadline {deadline.isoformat()}.")
         return None
     live = fetch_json(f"/event/{review}/live/")
@@ -238,10 +224,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check-drive", action="store_true")
     mode.add_argument("--verify-environment", action="store_true")
-    mode.add_argument("--defer-unsettled", action="store_true")
     args = parser.parse_args()
-    if args.defer_unsettled and args.report is None:
-        parser.error("--defer-unsettled requires --report")
     try:
         if args.check_drive:
             _, token = drive_credentials()
@@ -251,10 +234,7 @@ def main():
             return
         result = check_live(verify=args.verify_environment)
     except (RuntimeError, ValueError, KeyError, TypeError) as exc:
-        if not args.defer_unsettled or not isinstance(exc, AwaitingSettlement):
-            raise SystemExit(f"Day 1 FPL preflight blocked production: {exc}") from exc
-        print(f"Day 1 deferred. {exc}")
-        result = {"status": "deferred", "reason": str(exc)}
+        raise SystemExit(f"Day 1 FPL preflight blocked production: {exc}") from exc
     if args.report and result is not None:
         args.report.write_text(json.dumps(result) + "\n", encoding="utf-8")
 

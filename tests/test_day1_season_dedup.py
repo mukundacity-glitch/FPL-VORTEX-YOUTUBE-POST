@@ -167,6 +167,26 @@ class Day1SeasonDedupeTests(unittest.TestCase):
             persisted = json.loads((root / "DATA" / "youtube_private_upload.json").read_text())
             self.assertEqual(persisted["season_id"], "2026-2027")
 
+    def test_earlier_review_has_its_own_upload_identity(self):
+        revision = "a" * 40
+        with (
+            TemporaryDirectory() as folder,
+            patch.dict("os.environ", {}, clear=True),
+            patch("vortex.youtube_private_upload._official_season_identity",
+                  return_value=("2026-2027", datetime(2026, 7, 1, tzinfo=timezone.utc))),
+            patch("vortex.youtube_private_upload._youtube_service"),
+            patch("vortex.youtube_private_upload._verify_channel", return_value={"id": "id", "title": "title"}),
+            patch("vortex.youtube_private_upload._find_existing_gameweek_video",
+                  return_value={"video_id": "existing-id", "privacy_status": "private"}) as find,
+            patch("vortex.youtube_private_upload._confirm_private"),
+        ):
+            path = Path(folder) / "receipt.json"
+            for review, expected in ((10, f"{revision}-review10"), (11, revision)):
+                package = {"package_path": path, "metadata": {"preview_gw": 12, "review_gw": review},
+                           "upload_tags": ["FPL"], "render_revision": revision}
+                upload_day1_package(package, path)
+                self.assertEqual(find.call_args.kwargs["revision_tag"], f"fpl-vortex-day1-{expected}")
+
     def test_lost_insert_response_cannot_start_a_second_upload(self):
         journal = {}
         def store(_remote, filename, record=None):

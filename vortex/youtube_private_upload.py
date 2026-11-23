@@ -487,6 +487,8 @@ def upload_day1_package(package, report_path, *, hero=False):
     if expected_deadline and not hero:
         if str(preview_gw) != os.environ.get("VORTEX_DAY1_PREVIEW_GW"):
             raise RuntimeError("YouTube package preview Gameweek differs from preflight")
+        if str(package["metadata"].get("review_gw")) != os.environ.get("VORTEX_DAY1_REVIEW_GW"):
+            raise RuntimeError("YouTube package review Gameweek differs from preflight")
         deadline = datetime.fromisoformat(expected_deadline)
         if deadline <= datetime.now(timezone.utc):
             raise RuntimeError("Preview deadline passed before YouTube upload; regenerate the episode")
@@ -499,7 +501,12 @@ def upload_day1_package(package, report_path, *, hero=False):
     marker = f"fpl-vortex-{season_id}-gw{preview_gw:02d}-{series}"
     legacy_marker = f"fpl-vortex-auto-gw{preview_gw:02d}-player-hero" if hero else _upload_marker(preview_gw)
     revision = package.get("render_revision")
-    revision_tag = f"fpl-vortex-day1-{revision}" if revision else None
+    review_gw = package["metadata"].get("review_gw")
+    earlier_review = not hero and isinstance(review_gw, int) and 1 <= review_gw < preview_gw - 1
+    revision_key = revision
+    if earlier_review:
+        revision_key = f"{revision or 'default'}-review{review_gw}"
+    revision_tag = f"fpl-vortex-day1-{revision_key}" if revision_key else None
     identity_tags = [marker, revision_tag] if revision_tag else [marker]
     package["upload_tags"] = list(dict.fromkeys(package["upload_tags"] + identity_tags))
     if len(",".join(package["upload_tags"])) > 500:
@@ -532,7 +539,7 @@ def upload_day1_package(package, report_path, *, hero=False):
         _write_json_atomic(report_path, report)
 
         journal_remote = os.environ.get("VORTEX_DAY1_UPLOAD_JOURNAL")
-        journal_name = f"{marker}-{revision or 'default'}.json"
+        journal_name = f"{marker}-{revision_key or 'default'}.json"
         previous = _upload_journal(journal_remote, journal_name) if journal_remote else None
         existing = _find_existing_gameweek_video(
             youtube, marker=marker, legacy_marker=legacy_marker,

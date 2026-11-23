@@ -96,7 +96,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     outputs:
-      ready: ${{ steps.readiness.outputs.ready }}
       review: ${{ steps.readiness.outputs.review }}
       preview: ${{ steps.readiness.outputs.preview }}
       deadline: ${{ steps.readiness.outputs.deadline }}
@@ -113,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           report="${RUNNER_TEMP}/day1-readiness.json"
-          if ! python -m vortex.day1_preflight --report "${report}" --defer-unsettled > "${RUNNER_TEMP}/day1-preflight.log" 2>&1; then
+          if ! python -m vortex.day1_preflight --report "${report}" > "${RUNNER_TEMP}/day1-preflight.log" 2>&1; then
             cat "${RUNNER_TEMP}/day1-preflight.log"
             tail -n 1 "${RUNNER_TEMP}/day1-preflight.log" >> "${GITHUB_STEP_SUMMARY}"
             exit 1
@@ -130,16 +129,10 @@ jobs:
               Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as outputs,
               Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary,
           ):
-              if report.get("status") == "deferred":
-                  print("ready=false", file=outputs)
-                  print("### Day 1 deferred", file=summary)
-                  print(report["reason"], file=summary)
-              else:
-                  print(f"review={report['review_gw']}", file=outputs)
-                  print(f"preview={report['preview_gw']}", file=outputs)
-                  print(f"deadline={report['preview_deadline_utc']}", file=outputs)
-                  print("ready=true", file=outputs)
-                  print(f"Final GW{report['review_gw']} is ready for the GW{report['preview_gw']} preview.", file=summary)
+              print(f"review={report['review_gw']}", file=outputs)
+              print(f"preview={report['preview_gw']}", file=outputs)
+              print(f"deadline={report['preview_deadline_utc']}", file=outputs)
+              print(f"Day 1 will review final GW{report['review_gw']} and preview GW{report['preview_gw']}.", file=summary)
           PY
 
   credentials-check:
@@ -170,7 +163,7 @@ jobs:
 
   run-day-1:
     needs: fpl-preflight
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish' && needs.fpl-preflight.outputs.ready == 'true'
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
     concurrency:
       group: fpl-vortex-day-1
       cancel-in-progress: false

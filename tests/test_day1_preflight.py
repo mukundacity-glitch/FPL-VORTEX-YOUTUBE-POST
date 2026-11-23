@@ -1,15 +1,14 @@
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from datetime import datetime, timezone
 from email.message import Message
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 
 from vortex.day1_preflight import (
-    AwaitingSettlement, NotReady, drive_credentials, fetch_json, main, require_final_review, verify_environment,
+    NotReady, drive_credentials, fetch_json, main, require_final_review, verify_environment, verify_notebook_snapshot,
 )
 from vortex.youtube_private_upload import _youtube_service
 
@@ -40,15 +39,47 @@ class Day1PreflightTests(unittest.TestCase):
     def check(self):
         return require_final_review(self.bootstrap, self.fixtures, now=self.now)
 
-    def test_incident_nine_of_ten_prevents_render(self):
-        with self.assertRaisesRegex(AwaitingSettlement, r"GW11.*9/10.*data_checked=False.*20:00:00Z"):
-            self.check()
+    def test_incident_nine_of_ten_uses_latest_verified_review(self):
+        self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
+        self.assertEqual(self.check()[:2], (10, 12))
 
-    def test_full_time_without_score_lock_still_waits(self):
+    def test_full_time_without_score_lock_uses_latest_verified_review(self):
+        self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
         self.fixtures[9].update(started=True, minutes=90, team_h_score=0,
                                 team_a_score=0, finished_provisional=True)
-        with self.assertRaisesRegex(NotReady, r"10/10.*data_checked=False"):
-            self.check()
+        self.assertEqual(self.check()[:2], (10, 12))
+
+    def test_locked_week_during_render_preserves_verified_review(self):
+        self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
+        self.events[1].update(finished=True, data_checked=True)
+        for fixture in self.fixtures[:10]:
+            fixture.update(started=True, minutes=90, team_h_score=0, team_a_score=0, finished=True)
+        self.assertEqual(self.check()[:2], (11, 12))
+        self.assertEqual(require_final_review(self.bootstrap, self.fixtures,
+                                              now=self.now, review_gw=10)[:2], (10, 12))
+
+    def test_notebook_replaces_provisional_review_without_changing_preview(self):
+        self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
+        fixture_state = {"fixtures": 1, "completed": 1}
+        loader = MagicMock()
+        loader._vx_get_json.return_value = self.fixtures
+        namespace = {
+            "data": {
+                "bootstrap": self.bootstrap, "next_gw": 12, "review_gw": 11,
+                "review_status": "LIVE/PARTIAL", "review_ready_gws": [10],
+                "fixture_state_counts_by_gw": {10: fixture_state},
+            },
+            "_fpl_module": loader,
+        }
+        initial = dict(VORTEX_DAY1_REVIEW_GW="10", VORTEX_DAY1_PREVIEW_GW="12",
+                       VORTEX_DAY1_PREVIEW_DEADLINE="2026-11-27T18:30:00+00:00")
+        with patch.dict("os.environ", initial, clear=True), patch("vortex.day1_preflight.datetime", wraps=datetime) as clock:
+            clock.now.return_value = self.now
+            verify_notebook_snapshot(namespace)
+        self.assertEqual(namespace["data"]["review_gw"], 10)
+        self.assertEqual(namespace["data"]["review_status"], "FINAL")
+        self.assertEqual(namespace["data"]["review_fixture_state"], fixture_state)
+        self.assertEqual(namespace["data"]["next_gw"], 12)
 
     def test_settled_zero_goal_week_passes_without_ten_match_requirement(self):
         self.events[1].update(finished=True, data_checked=True)
@@ -61,7 +92,7 @@ class Day1PreflightTests(unittest.TestCase):
 
     def test_missing_fixtures_or_no_preview_is_explicit(self):
         self.fixtures = [self.fixtures[-1]]
-        with self.assertRaisesRegex(NotReady, r"GW11.*0/0"):
+        with self.assertRaisesRegex(NotReady, r"GW10.*missing finalized"):
             self.check()
         self.events.pop()
         with self.assertRaisesRegex(NotReady, "No upcoming official Gameweek"):
@@ -117,23 +148,13 @@ class Day1PreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(NotReady, "identity changed"):
                 verify_environment(12, 13, datetime(2026, 11, 29, tzinfo=timezone.utc))
 
-    def test_preflight_can_report_unsettled_gameweek_without_failing(self):
-        with TemporaryDirectory() as folder:
-            report = Path(folder) / "readiness.json"
-            with (
-                patch("sys.argv", ["day1_preflight", "--defer-unsettled", "--report", str(report)]),
-                patch("vortex.day1_preflight.check_live", side_effect=AwaitingSettlement("GW11 provisional")),
-            ):
-                main()
-            self.assertEqual(json.loads(report.read_text()), {"status": "deferred", "reason": "GW11 provisional"})
-
-    def test_preflight_does_not_defer_api_or_missing_data_failures(self):
+    def test_preflight_reports_api_or_missing_data_failures(self):
         with TemporaryDirectory() as folder:
             report = Path(folder) / "readiness.json"
             for failure in (RuntimeError("FPL HTTP 503"), NotReady("Official FPL has no fixtures")):
                 with (
                     self.subTest(failure=failure),
-                    patch("sys.argv", ["day1_preflight", "--defer-unsettled", "--report", str(report)]),
+                    patch("sys.argv", ["day1_preflight", "--report", str(report)]),
                     patch("vortex.day1_preflight.check_live", side_effect=failure),
                 ):
                     with self.assertRaisesRegex(SystemExit, str(failure)):
