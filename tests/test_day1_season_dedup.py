@@ -144,12 +144,15 @@ class Day1SeasonDedupeTests(unittest.TestCase):
             root = Path(tmp)
             (root / "DATA").mkdir()
             with (
+                patch.dict("os.environ", {
+                    "VORTEX_DAY1_REVIEW_GW": "10",
+                    "VORTEX_DAY1_PREVIEW_GW": "12",
+                    "VORTEX_DAY1_PREVIEW_DEADLINE": "2099-11-27T18:30:00+00:00",
+                }, clear=True),
                 patch("vortex.youtube_private_upload._validate_package",
                       return_value={"package_path": root / "DATA" / "package.json",
-                                    "metadata": {"preview_gw": 12},
+                                    "metadata": {"review_gw": 10, "preview_gw": 12},
                                     "upload_tags": ["FPL"]}),
-                patch("vortex.youtube_private_upload._official_season_identity",
-                      return_value=("2026-2027", datetime(2026, 7, 1, tzinfo=timezone.utc))),
                 patch("vortex.youtube_private_upload._youtube_service", return_value=Mock()),
                 patch("vortex.youtube_private_upload._verify_channel",
                       return_value={"id": "owned-channel", "title": "VORTEX"}),
@@ -165,7 +168,7 @@ class Day1SeasonDedupeTests(unittest.TestCase):
             self.assertTrue(report["duplicate_prevented"])
             self.assertEqual(report["preview_gw"], 12)
             persisted = json.loads((root / "DATA" / "youtube_private_upload.json").read_text())
-            self.assertEqual(persisted["season_id"], "2026-2027")
+            self.assertEqual(persisted["season_id"], "2099-2100")
 
     def test_earlier_review_has_its_own_upload_identity(self):
         revision = "a" * 40
