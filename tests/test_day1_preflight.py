@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from datetime import datetime, timezone
 from email.message import Message
@@ -5,7 +8,9 @@ from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from vortex.day1_preflight import NotReady, drive_credentials, fetch_json, require_final_review, verify_environment
+from vortex.day1_preflight import (
+    AwaitingSettlement, NotReady, drive_credentials, fetch_json, main, require_final_review, verify_environment,
+)
 from vortex.youtube_private_upload import _youtube_service
 
 
@@ -36,7 +41,7 @@ class Day1PreflightTests(unittest.TestCase):
         return require_final_review(self.bootstrap, self.fixtures, now=self.now)
 
     def test_incident_nine_of_ten_prevents_render(self):
-        with self.assertRaisesRegex(NotReady, r"GW11.*9/10.*data_checked=False.*20:00:00Z"):
+        with self.assertRaisesRegex(AwaitingSettlement, r"GW11.*9/10.*data_checked=False.*20:00:00Z"):
             self.check()
 
     def test_full_time_without_score_lock_still_waits(self):
@@ -111,3 +116,26 @@ class Day1PreflightTests(unittest.TestCase):
             verify_environment(11, 12, datetime.fromisoformat(initial["VORTEX_DAY1_PREVIEW_DEADLINE"]))
             with self.assertRaisesRegex(NotReady, "identity changed"):
                 verify_environment(12, 13, datetime(2026, 11, 29, tzinfo=timezone.utc))
+
+    def test_preflight_can_report_unsettled_gameweek_without_failing(self):
+        with TemporaryDirectory() as folder:
+            report = Path(folder) / "readiness.json"
+            with (
+                patch("sys.argv", ["day1_preflight", "--defer-unsettled", "--report", str(report)]),
+                patch("vortex.day1_preflight.check_live", side_effect=AwaitingSettlement("GW11 provisional")),
+            ):
+                main()
+            self.assertEqual(json.loads(report.read_text()), {"status": "deferred", "reason": "GW11 provisional"})
+
+    def test_preflight_does_not_defer_api_or_missing_data_failures(self):
+        with TemporaryDirectory() as folder:
+            report = Path(folder) / "readiness.json"
+            for failure in (RuntimeError("FPL HTTP 503"), NotReady("Official FPL has no fixtures")):
+                with (
+                    self.subTest(failure=failure),
+                    patch("sys.argv", ["day1_preflight", "--defer-unsettled", "--report", str(report)]),
+                    patch("vortex.day1_preflight.check_live", side_effect=failure),
+                ):
+                    with self.assertRaisesRegex(SystemExit, str(failure)):
+                        main()
+                    self.assertFalse(report.exists())
