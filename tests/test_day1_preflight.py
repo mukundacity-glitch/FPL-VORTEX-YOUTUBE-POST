@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 
 from vortex.day1_preflight import (
-    NotReady, drive_credentials, fetch_json, main, require_final_review, verify_environment, verify_notebook_snapshot,
+    NotReady, drive_credentials, fetch_json, main, select_review, verify_environment, verify_notebook_snapshot,
 )
 from vortex.youtube_private_upload import _youtube_service
 
@@ -37,49 +37,39 @@ class Day1PreflightTests(unittest.TestCase):
         ]
 
     def check(self):
-        return require_final_review(self.bootstrap, self.fixtures, now=self.now)
+        return select_review(self.bootstrap, self.fixtures, now=self.now)
 
-    def test_incident_nine_of_ten_uses_latest_verified_review(self):
+    def test_review_is_preceding_gameweek_while_scores_are_provisional(self):
         self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
-        self.assertEqual(self.check()[:2], (10, 12))
+        review, preview, _, status = self.check()
+        self.assertEqual((review, preview, status), (11, 12, "LIVE/PARTIAL"))
 
-    def test_full_time_without_score_lock_uses_latest_verified_review(self):
-        self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
+    def test_all_full_time_without_score_lock_remains_provisional(self):
         self.fixtures[9].update(started=True, minutes=90, team_h_score=0,
                                 team_a_score=0, finished_provisional=True)
-        self.assertEqual(self.check()[:2], (10, 12))
+        self.assertEqual(self.check()[3], "LIVE/PARTIAL")
 
-    def test_locked_week_during_render_preserves_verified_review(self):
-        self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
-        self.events[1].update(finished=True, data_checked=True)
-        for fixture in self.fixtures[:10]:
-            fixture.update(started=True, minutes=90, team_h_score=0, team_a_score=0, finished=True)
-        self.assertEqual(self.check()[:2], (11, 12))
-        self.assertEqual(require_final_review(self.bootstrap, self.fixtures,
-                                              now=self.now, review_gw=10)[:2], (10, 12))
-
-    def test_notebook_replaces_provisional_review_without_changing_preview(self):
-        self.fixtures.append(dict(self.fixtures[0], id=12, event=10, finished=True))
-        fixture_state = {"fixtures": 1, "completed": 1}
+    def test_notebook_keeps_provisional_review_without_changing_preview(self):
+        fixture_state = {"fixtures": 10, "completed": 9}
         loader = MagicMock()
         loader._vx_get_json.return_value = self.fixtures
         namespace = {
             "data": {
-                "bootstrap": self.bootstrap, "next_gw": 12, "review_gw": 11,
-                "review_status": "LIVE/PARTIAL", "review_ready_gws": [10],
-                "fixture_state_counts_by_gw": {10: fixture_state},
+                "bootstrap": self.bootstrap, "next_gw": 12, "review_gw": 10,
+                "review_status": "FINAL", "review_ready_gws": [10],
+                "fixture_state_counts_by_gw": {11: fixture_state},
             },
-            "_fpl_module": loader,
+            "_fpl_module": loader, "LATEST_COMPLETED_GW": 10,
         }
-        initial = dict(VORTEX_DAY1_REVIEW_GW="10", VORTEX_DAY1_PREVIEW_GW="12",
+        initial = dict(VORTEX_DAY1_REVIEW_GW="11", VORTEX_DAY1_PREVIEW_GW="12",
                        VORTEX_DAY1_PREVIEW_DEADLINE="2026-11-27T18:30:00+00:00")
         with patch.dict("os.environ", initial, clear=True), patch("vortex.day1_preflight.datetime", wraps=datetime) as clock:
             clock.now.return_value = self.now
             verify_notebook_snapshot(namespace)
-        self.assertEqual(namespace["data"]["review_gw"], 10)
-        self.assertEqual(namespace["data"]["review_status"], "FINAL")
+        self.assertEqual(namespace["data"]["review_gw"], 11)
+        self.assertEqual(namespace["data"]["review_status"], "LIVE/PARTIAL")
         self.assertEqual(namespace["data"]["review_fixture_state"], fixture_state)
-        self.assertEqual(namespace["data"]["next_gw"], 12)
+        self.assertEqual(namespace["LATEST_COMPLETED_GW"], 10)
 
     def test_settled_zero_goal_week_passes_without_ten_match_requirement(self):
         self.events[1].update(finished=True, data_checked=True)
@@ -87,12 +77,13 @@ class Day1PreflightTests(unittest.TestCase):
         for fixture in self.fixtures[:-1]:
             fixture["finished"] = True
         self.assertEqual(self.check()[:2], (11, 12))
+        self.assertEqual(self.check()[3], "FINAL")
         self.events[2]["is_next"] = None
         self.assertEqual(self.check()[:2], (11, 12))
 
     def test_missing_fixtures_or_no_preview_is_explicit(self):
         self.fixtures = [self.fixtures[-1]]
-        with self.assertRaisesRegex(NotReady, r"GW10.*missing finalized"):
+        with self.assertRaisesRegex(NotReady, r"GW11.*no verified full-time"):
             self.check()
         self.events.pop()
         with self.assertRaisesRegex(NotReady, "No upcoming official Gameweek"):

@@ -22,8 +22,10 @@ SCENES = {
 def scene_manifest(reports, review_gw, next_gw, fps, logo, *, review_status, latest_completed):
     if not isinstance(review_gw, int) or not isinstance(next_gw, int) or not 1 <= review_gw < next_gw <= 38:
         raise ValueError("Expected a completed review gameweek and an upcoming planning gameweek")
-    if review_status != "FINAL" or review_gw != latest_completed:
-        raise ValueError("Premium Day 1 needs the selected score-checked review before rendering")
+    if review_gw != next_gw - 1 or review_status not in {"FINAL", "LIVE/PARTIAL"}:
+        raise ValueError("Premium Day 1 needs the Gameweek immediately preceding the preview")
+    if review_status == "FINAL" and review_gw != latest_completed:
+        raise ValueError("Premium Day 1 final review must match the score-checked Gameweek")
     result = []
     for report in reports:
         key = report["key"]

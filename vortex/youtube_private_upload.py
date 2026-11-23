@@ -501,11 +501,8 @@ def upload_day1_package(package, report_path, *, hero=False):
     marker = f"fpl-vortex-{season_id}-gw{preview_gw:02d}-{series}"
     legacy_marker = f"fpl-vortex-auto-gw{preview_gw:02d}-player-hero" if hero else _upload_marker(preview_gw)
     revision = package.get("render_revision")
-    review_gw = package["metadata"].get("review_gw")
-    earlier_review = not hero and isinstance(review_gw, int) and 1 <= review_gw < preview_gw - 1
-    revision_key = revision
-    if earlier_review:
-        revision_key = f"{revision or 'default'}-review{review_gw}"
+    provisional_review = not hero and package["metadata"].get("review_status") == "LIVE/PARTIAL"
+    revision_key = f"{revision or 'default'}-provisional" if provisional_review else revision
     revision_tag = f"fpl-vortex-day1-{revision_key}" if revision_key else None
     identity_tags = [marker, revision_tag] if revision_tag else [marker]
     package["upload_tags"] = list(dict.fromkeys(package["upload_tags"] + identity_tags))

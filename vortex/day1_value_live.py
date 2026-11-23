@@ -252,7 +252,7 @@ def make_live_value_board(*, session=None, snapshot=None):
     bootstrap = snapshot["bootstrap"] if snapshot else fetch_json(f"{API}/bootstrap-static/", session)
     fixtures = snapshot["fixtures"] if snapshot else fetch_json(f"{API}/fixtures/", session)
     if os.environ.get("VORTEX_DAY1_REVIEW_GW") and snapshot is None:
-        _, gw, _ = verify_run_gameweeks(bootstrap, fixtures)
+        _, gw, _, _ = verify_run_gameweeks(bootstrap, fixtures)
     else:
         gw = select_next_gw(bootstrap["events"])
     all_players = bootstrap["elements"]

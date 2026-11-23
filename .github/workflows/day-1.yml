@@ -126,7 +126,7 @@ jobs:
               print(f"review={report['review_gw']}", file=outputs)
               print(f"preview={report['preview_gw']}", file=outputs)
               print(f"deadline={report['preview_deadline_utc']}", file=outputs)
-              print(f"Day 1 will review final GW{report['review_gw']} and preview GW{report['preview_gw']}.", file=summary)
+              print(f"Day 1 will review GW{report['review_gw']} ({report['review_status']}) and preview GW{report['preview_gw']}.", file=summary)
           PY
 
   run-day-1:

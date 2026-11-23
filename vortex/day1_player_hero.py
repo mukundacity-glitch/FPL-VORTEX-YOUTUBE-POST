@@ -1,4 +1,4 @@
-"""Retrospective Day 1 hero analysis based on official, final FPL data."""
+"""Retrospective Day 1 hero analysis based on official FPL results."""
 from collections import defaultdict
 from datetime import datetime, timezone
 from html import escape
@@ -82,11 +82,6 @@ def spoken_scoring(points):
                   for key in points if points[key]])
 
 
-def completed_week(bootstrap):
-    return max((int(row["id"]) for row in bootstrap["events"]
-                if row.get("finished") is True and row.get("data_checked") is True), default=0)
-
-
 def _score_breakdown(row, fixtures):
     by_stat = defaultdict(float)
     for explanation in row.get("explain") or []:
@@ -100,13 +95,28 @@ def _score_breakdown(row, fixtures):
     return dict(by_stat)
 
 
+def verified_full_time(fixture):
+    return (
+        fixture.get("started") is True
+        and isinstance(fixture.get("minutes"), (int, float))
+        and fixture["minutes"] >= 90
+        and (fixture.get("finished") is True or fixture.get("finished_provisional") is True)
+        and all(type(fixture.get(key)) is int and fixture[key] >= 0
+                for key in ("team_h_score", "team_a_score"))
+    )
+
+
 def analyze(bootstrap, fixtures, live, gameweek):
     event = next((row for row in bootstrap["events"] if row["id"] == gameweek), None)
-    if not event or event.get("finished") is not True or event.get("data_checked") is not True:
-        raise ValueError("Hero analysis requires a completed and checked FPL gameweek")
+    if not event:
+        raise ValueError("Hero analysis requires an official FPL Gameweek")
     matches = {f["id"]: f for f in fixtures if f.get("event") == gameweek}
-    if not matches or not all(f.get("finished") for f in matches.values()):
-        raise ValueError("Hero analysis requires finalized fixtures")
+    final = (event.get("finished") is True and event.get("data_checked") is True
+             and bool(matches) and all(f.get("finished") is True for f in matches.values()))
+    if not final:
+        matches = {key: fixture for key, fixture in matches.items() if verified_full_time(fixture)}
+    if not matches:
+        raise ValueError("Hero analysis requires verified full-time fixtures")
     players = {p["id"]: p for p in bootstrap["elements"]}
     entries = number(event.get("entries"))
     pool = []
@@ -146,7 +156,9 @@ def analyze(bootstrap, fixtures, live, gameweek):
         candidate["score"] = sum(weight * candidate["measures"][key] / maxima[key]
                                  for key, weight in WEIGHTS.items()
                                  if maxima[key] > 0 and candidate["measures"][key] is not None)
-    return select_profiles(pool, bootstrap, matches, gameweek)
+    report = select_profiles(pool, bootstrap, matches, gameweek)
+    report["provisional"] = not final
+    return report
 
 
 def select_profiles(pool, bootstrap, matches, gameweek):
@@ -254,6 +266,8 @@ def add_recent_context(profile, history, gameweek):
 
 def narration(analysis, spoken_names, *, compact=False):
     lines = [f"Three players from Gameweek {analysis['gameweek']} show how different performances earn Fantasy Premier League points."]
+    if analysis.get("provisional"):
+        lines.insert(0, "These are provisional returns from matches that have reached full time. Fantasy points may change.")
     seen_sentences = set()
     for cue, profile, name in zip(PLAYER_CUES, analysis["players"], spoken_names, strict=True):
         breakdown = sorted(((key, value) for key, value in profile["breakdown"].items() if value),
@@ -354,7 +368,7 @@ def render(analysis, cue_times, assets, logo):
     style = Path(__file__).with_name("day1_player_hero.css").read_text()
     return f"""<!DOCTYPE html><html lang="en"><meta charset="utf-8"><style>{style}</style>
     <body><header>{logo}<div>FPL PLAYER HERO CARD<strong>The Numbers Behind the Points</strong></div>
-    <b>GAMEWEEK {analysis['gameweek']}</b></header>
+    <b>GAMEWEEK {analysis['gameweek']}{' · PROVISIONAL' if analysis.get('provisional') else ''}</b></header>
     <div class="profiles">{profiles}</div>
     <footer>OFFICIAL FPL MATCH DATA <b>FPL VORTEX</b></footer>
     <script>
