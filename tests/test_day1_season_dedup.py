@@ -13,6 +13,7 @@ from vortex.youtube_private_upload import (
     _find_existing_gameweek_video,
     _official_season_identity,
     upload_private,
+    upload_day1_package,
 )
 
 
@@ -154,15 +155,44 @@ class Day1SeasonDedupeTests(unittest.TestCase):
                       return_value={"id": "owned-channel", "title": "VORTEX"}),
                 patch("vortex.youtube_private_upload._find_existing_gameweek_video",
                       return_value={"video_id": "existing-private", "privacy_status": "private"}),
+                patch("vortex.youtube_private_upload._confirm_private") as confirm,
                 patch("vortex.youtube_private_upload._insert_private_video") as insert,
             ):
                 report = upload_private(root)
             insert.assert_not_called()
+            confirm.assert_called_once()
             self.assertEqual(report["status"], "already_uploaded")
             self.assertTrue(report["duplicate_prevented"])
             self.assertEqual(report["preview_gw"], 12)
             persisted = json.loads((root / "DATA" / "youtube_private_upload.json").read_text())
             self.assertEqual(persisted["season_id"], "2026-2027")
+
+    def test_lost_insert_response_cannot_start_a_second_upload(self):
+        journal = {}
+        def store(_remote, filename, record=None):
+            if record is None:
+                return journal.get(filename)
+            journal[filename] = record
+
+        with (
+            TemporaryDirectory() as folder,
+            patch.dict("os.environ", {"VORTEX_DAY1_UPLOAD_JOURNAL": "drive:test"}, clear=True),
+            patch("vortex.youtube_private_upload._official_season_identity",
+                  return_value=("2026-2027", datetime(2026, 7, 1, tzinfo=timezone.utc))),
+            patch("vortex.youtube_private_upload._youtube_service"),
+            patch("vortex.youtube_private_upload._verify_channel", return_value={"id": "id", "title": "title"}),
+            patch("vortex.youtube_private_upload._find_existing_gameweek_video", return_value=None),
+            patch("vortex.youtube_private_upload._upload_journal", side_effect=store),
+            patch("vortex.youtube_private_upload._insert_private_video", side_effect=TimeoutError()) as insert,
+        ):
+            path = Path(folder) / "receipt.json"
+            package = {"package_path": path, "metadata": {"preview_gw": 12}, "upload_tags": ["FPL"]}
+            with self.assertRaisesRegex(RuntimeError, "TimeoutError"):
+                upload_day1_package(package, path)
+            with self.assertRaisesRegex(RuntimeError, "Unresolved prior YouTube upload attempt"):
+                upload_day1_package(package, path)
+            insert.assert_called_once()
+            self.assertEqual(next(iter(journal.values()))["status"], "upload_started")
 
 
 if __name__ == "__main__":

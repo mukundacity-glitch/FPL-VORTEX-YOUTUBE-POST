@@ -5,10 +5,20 @@ import hashlib
 import json
 import os
 import re
+import subprocess
+import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+
+try:
+    from googleapiclient.errors import HttpError
+except ModuleNotFoundError:  # Offline data and repository contract tests.
+    _HTTP_ERRORS = ()
+else:
+    _HTTP_ERRORS = (HttpError,)
 
 DEFAULT_OUTPUT_ROOT = Path("/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO")
 PACKAGE_NAME = "youtube_video_1_of_3_package.json"
@@ -113,7 +123,7 @@ def _find_existing_gameweek_video(youtube: Any, *, marker: str,
     Legacy gameweek tags are matched against the official season start.
     Incomplete inventory checks fail before an upload can begin.
     """
-    response = youtube.channels().list(part="contentDetails", mine=True).execute()
+    response = youtube.channels().list(part="contentDetails", mine=True).execute(num_retries=5)
     channels = response.get("items") or []
     if len(channels) != 1:
         raise RuntimeError("Cannot verify exactly one owned uploads playlist")
@@ -121,17 +131,21 @@ def _find_existing_gameweek_video(youtube: Any, *, marker: str,
     if not uploads:
         raise RuntimeError("Owner uploads playlist is unavailable; duplicate check blocked")
     token = None
+    seen_tokens = set()
     for _ in range(max_pages):
         params = {"part": "contentDetails", "playlistId": uploads, "maxResults": 50}
         if token:
             params["pageToken"] = token
-        page = youtube.playlistItems().list(**params).execute()
+        page = youtube.playlistItems().list(**params).execute(num_retries=5)
         ids = [str((x.get("contentDetails") or {}).get("videoId") or "")
                for x in page.get("items") or []]
         ids = [x for x in ids if x]
         if ids:
-            details = youtube.videos().list(part="snippet,status", id=",".join(ids)).execute()
-            for video in details.get("items") or []:
+            details = youtube.videos().list(part="snippet,status", id=",".join(ids)).execute(num_retries=5)
+            videos = details.get("items") or []
+            if {video.get("id") for video in videos} != set(ids):
+                raise RuntimeError("YouTube omitted video details from the owner inventory; duplicate check blocked")
+            for video in videos:
                 snippet = video.get("snippet") or {}
                 tags = set(snippet.get("tags") or [])
                 matched = marker in tags
@@ -163,6 +177,9 @@ def _find_existing_gameweek_video(youtube: Any, *, marker: str,
         token = page.get("nextPageToken")
         if not token:
             return None
+        if token in seen_tokens:
+            raise RuntimeError("YouTube uploads playlist repeated a page token; duplicate check blocked")
+        seen_tokens.add(token)
     raise RuntimeError(
         f"Owner upload inventory exceeded {max_pages} pages; refuse duplicate-risk upload"
     )
@@ -266,8 +283,16 @@ def _validate_package(output_root: Path) -> dict[str, Any]:
 
 
 def _youtube_service():
+    refresh_token = _required_env("YOUTUBE_OAUTH_REFRESH_TOKEN")
+    client_id = _oauth_value("YOUTUBE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = _oauth_value("YOUTUBE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_CLIENT_SECRET")
+    if not client_id.endswith(".apps.googleusercontent.com"):
+        raise RuntimeError("YouTube OAuth client ID has an invalid format")
     try:
+        import httplib2
+        from google.auth.exceptions import RefreshError, TransportError
         from google.auth.transport.requests import Request as GoogleRequest
+        from google_auth_httplib2 import AuthorizedHttp
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
     except ImportError as exc:
@@ -278,16 +303,23 @@ def _youtube_service():
 
     credentials = Credentials(
         token=None,
-        refresh_token=_required_env("YOUTUBE_OAUTH_REFRESH_TOKEN"),
+        refresh_token=refresh_token,
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=_oauth_value("YOUTUBE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID"),
-        client_secret=_oauth_value(
-            "YOUTUBE_OAUTH_CLIENT_SECRET",
-            "GOOGLE_OAUTH_CLIENT_SECRET",
-        ),
+        client_id=client_id,
+        client_secret=client_secret,
         scopes=[YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READ_SCOPE],
     )
-    credentials.refresh(GoogleRequest())
+    try:
+        credentials.refresh(GoogleRequest())
+    except RefreshError as exc:
+        body = next((arg for arg in exc.args if isinstance(arg, dict)), {})
+        reason = body.get("error")
+        if reason in ("invalid_grant", "invalid_client", "invalid_scope", "unauthorized_client"):
+            raise RuntimeError(f"YouTube OAuth rejected the refresh grant ({reason}). "
+                               "Check the OAuth consent, scopes and GitHub secrets.") from None
+        raise RuntimeError("YouTube OAuth refresh failed. Check the Google OAuth service and consent.") from None
+    except TransportError:
+        raise RuntimeError("YouTube OAuth refresh transport failed.") from None
     granted_scopes = set(credentials.granted_scopes or ())
     if granted_scopes:
         required_scopes = {YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READ_SCOPE}
@@ -297,7 +329,8 @@ def _youtube_service():
                 "YouTube refresh token is missing required OAuth scope(s): "
                 + ", ".join(sorted(missing))
             )
-    return build("youtube", "v3", credentials=credentials, cache_discovery=False)
+    transport = AuthorizedHttp(credentials, http=httplib2.Http(timeout=60))
+    return build("youtube", "v3", http=transport, cache_discovery=False)
 
 
 def _verify_channel(youtube) -> dict[str, str]:
@@ -374,19 +407,73 @@ def _insert_private_video(youtube, package: dict[str, Any]) -> str:
 
 
 def _confirm_private(youtube, video_id: str) -> None:
-    response = youtube.videos().list(
-        part="status",
-        id=video_id,
-        fields="items(id,status/privacyStatus)",
-    ).execute(num_retries=5)
-    items = response.get("items") or []
-    if len(items) != 1:
-        raise RuntimeError("Could not verify the uploaded YouTube video")
-    actual = str((items[0].get("status") or {}).get("privacyStatus") or "")
-    if actual != YOUTUBE_PRIVACY_STATUS:
-        raise RuntimeError(
-            f"YouTube safety check failed: expected private, received {actual!r}"
-        )
+    for attempt in range(4):
+        response = youtube.videos().list(
+            part="status",
+            id=video_id,
+            fields="items(id,status(privacyStatus,uploadStatus,rejectionReason,failureReason))",
+        ).execute(num_retries=5)
+        items = response.get("items") or []
+        if len(items) == 1 and items[0].get("id") == video_id:
+            status = items[0].get("status") or {}
+            actual = status.get("privacyStatus")
+            if actual != YOUTUBE_PRIVACY_STATUS:
+                raise RuntimeError(f"YouTube safety check failed: expected private, received {actual!r}")
+            state = status.get("uploadStatus")
+            if state in {"failed", "rejected", "deleted"}:
+                raise RuntimeError(f"YouTube reports upload status {state} for {video_id}")
+            if state not in {"uploaded", "processed"}:
+                raise RuntimeError(f"YouTube returned an unknown upload status for {video_id}")
+            print(f"[YOUTUBE] Verified private video; YouTube upload status: {state}.")
+            return
+        if attempt < 3:
+            time.sleep(2 ** (attempt + 1))
+    raise RuntimeError("YouTube did not return the requested private video after upload; check its Studio status")
+
+
+def _youtube_error(exc) -> str:
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    if not isinstance(status, int):
+        if isinstance(exc, (RuntimeError, FileNotFoundError)):
+            return str(exc)
+        return type(exc).__name__
+    try:
+        body = json.loads(exc.content)
+        errors = body.get("error", {}).get("errors", [])
+        reason = errors[0].get("reason") if errors else None
+    except (TypeError, ValueError, AttributeError):
+        reason = None
+    reason = reason if isinstance(reason, str) and re.fullmatch(r"[A-Za-z0-9_]{1,80}", reason) else "unknown"
+    if reason in {"quotaExceeded", "dailyLimitExceeded", "dailyLimitExceededUnreg"}:
+        return f"YouTube HTTP {status} ({reason}); check the project's quota and retry after its Pacific Time reset."
+    if reason == "uploadLimitExceeded":
+        return f"YouTube HTTP {status} ({reason}); the channel reached its upload limit. Check YouTube Studio."
+    return f"YouTube HTTP {status} ({reason})"
+
+
+def _upload_journal(remote, filename, row=None):
+    """Persist intent before the insert so a lost response cannot trigger a second one."""
+    def run(*args):
+        result = subprocess.run(["rclone", *args], capture_output=True, text=True, timeout=120)
+        if result.returncode:
+            raise RuntimeError(f"Day 1 upload journal Drive operation {args[0]} failed "
+                               f"(rclone exit {result.returncode}); upload safety check blocked")
+        return result.stdout
+
+    if row is None:
+        run("mkdir", remote)
+        if filename not in run("lsf", "--files-only", "--max-depth", "1", remote).splitlines():
+            return None
+        record = json.loads(run("cat", f"{remote}/{filename}"))
+        if not isinstance(record, dict) or record.get("status") not in {"upload_started", "video_created"}:
+            raise RuntimeError("Day 1 upload journal is invalid; resolve it before starting another upload")
+        return record
+
+    with tempfile.TemporaryDirectory(prefix="day1-upload-") as folder:
+        local = Path(folder) / filename
+        _write_json_atomic(local, row)
+        run("copyto", "--ignore-times", str(local), f"{remote}/{filename}")
+
 
 
 def upload_private(output_root: Path) -> dict[str, Any]:
@@ -396,7 +483,18 @@ def upload_private(output_root: Path) -> dict[str, Any]:
 
 def upload_day1_package(package, report_path, *, hero=False):
     preview_gw = int(package["metadata"]["preview_gw"])
-    season_id, season_start = _official_season_identity(preview_gw)
+    expected_deadline = os.environ.get("VORTEX_DAY1_PREVIEW_DEADLINE")
+    if expected_deadline and not hero:
+        if str(preview_gw) != os.environ.get("VORTEX_DAY1_PREVIEW_GW"):
+            raise RuntimeError("YouTube package preview Gameweek differs from preflight")
+        deadline = datetime.fromisoformat(expected_deadline)
+        if deadline <= datetime.now(timezone.utc):
+            raise RuntimeError("Preview deadline passed before YouTube upload; regenerate the episode")
+        start_year = deadline.year if deadline.month >= 7 else deadline.year - 1
+        season_id = f"{start_year}-{start_year + 1}"
+        season_start = datetime(start_year, 7, 1, tzinfo=timezone.utc)
+    else:
+        season_id, season_start = _official_season_identity(preview_gw)
     series = "player-hero" if hero else "video-1-of-3"
     marker = f"fpl-vortex-{season_id}-gw{preview_gw:02d}-{series}"
     legacy_marker = f"fpl-vortex-auto-gw{preview_gw:02d}-player-hero" if hero else _upload_marker(preview_gw)
@@ -433,12 +531,26 @@ def upload_day1_package(package, report_path, *, hero=False):
         report["status"] = "channel_verified"
         _write_json_atomic(report_path, report)
 
+        journal_remote = os.environ.get("VORTEX_DAY1_UPLOAD_JOURNAL")
+        journal_name = f"{marker}-{revision or 'default'}.json"
+        previous = _upload_journal(journal_remote, journal_name) if journal_remote else None
         existing = _find_existing_gameweek_video(
             youtube, marker=marker, legacy_marker=legacy_marker,
             season_start=season_start, revision_tag=revision_tag,
         )
+        if previous and previous["status"] == "video_created":
+            prior_id = previous.get("video_id")
+            if not isinstance(prior_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", prior_id):
+                raise RuntimeError("Day 1 upload journal has an invalid YouTube video ID")
+            if existing and existing["video_id"] != prior_id:
+                raise RuntimeError("YouTube inventory and the Day 1 upload journal identify different drafts")
+            existing = {"video_id": prior_id, "privacy_status": YOUTUBE_PRIVACY_STATUS}
         if existing:
             video_id = existing["video_id"]
+            _confirm_private(youtube, video_id)
+            if journal_remote and previous and previous["status"] == "upload_started":
+                _upload_journal(journal_remote, journal_name, {"status": "video_created", "video_id": video_id,
+                                                               "at": _utc_now()})
             report.update({
                 "status": "already_uploaded",
                 "completed_at": _utc_now(),
@@ -454,8 +566,16 @@ def upload_day1_package(package, report_path, *, hero=False):
             print("[YOUTUBE] Day 1 already uploaded for this season, gameweek and render revision.")
             return report
 
+        if previous:
+            raise RuntimeError(f"Unresolved prior YouTube upload attempt ({journal_name}). "
+                               "Check the owner uploads in YouTube Studio before clearing the journal.")
+        if journal_remote:
+            _upload_journal(journal_remote, journal_name, {"status": "upload_started", "at": _utc_now()})
         print("[YOUTUBE] Uploading the current Day 1 render as PRIVATE.")
         video_id = _insert_private_video(youtube, package)
+        if journal_remote:
+            _upload_journal(journal_remote, journal_name, {"status": "video_created", "video_id": video_id,
+                                                           "at": _utc_now()})
         report.update(
             {
                 "status": "private_video_uploaded_verification_pending",
@@ -478,12 +598,12 @@ def upload_day1_package(package, report_path, *, hero=False):
         print(f"[YOUTUBE] Studio: {report['youtube']['studio_url']}")
         print("[YOUTUBE] Automatic Public/Unlisted/scheduled publishing: DISABLED")
         return report
-    except Exception as exc:
+    except (*_HTTP_ERRORS, RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as exc:
         report["status"] = "failed"
         report["failed_at"] = _utc_now()
-        report["error"] = f"{type(exc).__name__}: {exc}"
+        report["error"] = _youtube_error(exc)
         _write_json_atomic(report_path, report)
-        raise
+        raise RuntimeError(report["error"]) from None
 
 
 def main() -> None:
@@ -498,7 +618,16 @@ def main() -> None:
         type=Path,
         default=Path(os.environ.get("DAY1_OUTPUT_ROOT", DEFAULT_OUTPUT_ROOT)),
     )
+    parser.add_argument("--check-credentials", action="store_true")
     args = parser.parse_args()
+    if args.check_credentials:
+        try:
+            youtube = _youtube_service()
+            _verify_channel(youtube)
+        except (*_HTTP_ERRORS, RuntimeError, OSError) as exc:
+            raise SystemExit(f"Day 1 YouTube credential check: {_youtube_error(exc)}") from None
+        print("[YOUTUBE] OAuth grant and owned channel: PASS")
+        return
     upload_private(args.output_root)
 
 

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from math import isfinite
 from pathlib import Path
 import json
+import os
 import unicodedata
 from typing import Any
 
@@ -18,7 +19,8 @@ from scipy.optimize import Bounds, LinearConstraint, milp
 import numpy as np
 import requests
 
-from .day1_value_board import SQUAD_BUDGET, build_value_board
+from .day1_value_board import SQUAD_BUDGET, build_value_board, gameweek_horizon
+from .day1_preflight import fetch_json as fetch_official_json, require_final_review, verify_environment
 from .football_identity import full_club_name
 
 API = "https://fantasy.premierleague.com/api"
@@ -26,8 +28,9 @@ USER_AGENT = "FPL-VORTEX-Day1-ValueBoard/1.0"
 
 
 def fetch_json(url: str, session=None) -> Any:
-    transport = session or requests
-    response = transport.get(url, timeout=30, headers={"User-Agent": USER_AGENT})
+    if session is None:
+        return fetch_official_json(url.removeprefix(API))
+    response = session.get(url, timeout=30, headers={"User-Agent": USER_AGENT})
     response.raise_for_status()
     return response.json()
 
@@ -45,8 +48,7 @@ def select_next_gw(events):
     if len(upcoming) != 1:
         raise ValueError("Could not resolve exactly one official upcoming FPL GW")
     gw = int(upcoming[0]["id"])
-    if gw > 34:
-        raise ValueError("A full five-gameweek horizon is not available")
+    gameweek_horizon(gw)  # Reject invalid season transitions, not the final four GWs.
     return gw
 
 
@@ -105,13 +107,18 @@ def _fetch_recent(players, session, priority=()):
         -fnum(p.get("selected_by_percent")), p["id"],
     ))[:110]
     result = {}
+    consecutive_failures = 0
     for player in candidates:
         try:
             payload = fetch_json(f"{API}/element-summary/{player['id']}/", session)
-            result[player["id"]] = payload.get("history", [])
-        except (requests.RequestException, ValueError, KeyError):
-            # Missing summaries are marked as fallback to season minutes.
-            result[player["id"]] = []
+            result[player["id"]] = payload.get("history") or []
+            consecutive_failures = 0
+        except (requests.RequestException, RuntimeError, ValueError, KeyError) as exc:
+            consecutive_failures += 1
+            print(f"[VALUE BOARD] Player history unavailable for {player['id']}: {exc}. Using season minutes.")
+            if consecutive_failures >= 3:
+                print("[VALUE BOARD] Three consecutive history requests failed. Using season minutes for the remaining players.")
+                break
     return result
 
 
@@ -244,7 +251,11 @@ def _optimise(players, cost, points, next_scores, minutes, *, budget, preferred,
 def make_live_value_board(*, session=None, snapshot=None):
     bootstrap = snapshot["bootstrap"] if snapshot else fetch_json(f"{API}/bootstrap-static/", session)
     fixtures = snapshot["fixtures"] if snapshot else fetch_json(f"{API}/fixtures/", session)
-    gw = select_next_gw(bootstrap["events"])
+    if os.environ.get("VORTEX_DAY1_REVIEW_GW") and snapshot is None:
+        review, gw, deadline = require_final_review(bootstrap, fixtures)
+        verify_environment(review, gw, deadline)
+    else:
+        gw = select_next_gw(bootstrap["events"])
     all_players = bootstrap["elements"]
     raw_teams = bootstrap["teams"]
     team_map = {t["id"]: {
@@ -295,7 +306,7 @@ def make_live_value_board(*, session=None, snapshot=None):
             if avg < 60 or _status_factor(player) < 1 or not established:
                 continue
         series = []
-        for index, week in enumerate(range(gw, gw+5)):
+        for index, week in enumerate(gameweek_horizon(gw)):
             actual_fixtures = [(fid, rating) for fid, rating in
                                _week_ratings(fixtures, player["team"], week) if fid is not None]
             match_scores = [_model_points(player, rating if rating is not None else 3.0,
@@ -370,5 +381,4 @@ def make_live_value_board(*, session=None, snapshot=None):
 
 
 if __name__ == "__main__":
-    import json
     print(json.dumps(make_live_value_board(), ensure_ascii=False, indent=2))
