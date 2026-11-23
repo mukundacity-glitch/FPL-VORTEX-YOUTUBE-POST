@@ -101,13 +101,13 @@ def _score_breakdown(row, fixtures):
 
 
 def analyze(bootstrap, fixtures, live, gameweek):
-    if not gameweek or gameweek != completed_week(bootstrap):
-        raise ValueError("Hero analysis requires the latest completed and checked FPL gameweek")
+    event = next((row for row in bootstrap["events"] if row["id"] == gameweek), None)
+    if not event or event.get("finished") is not True or event.get("data_checked") is not True:
+        raise ValueError("Hero analysis requires a completed and checked FPL gameweek")
     matches = {f["id"]: f for f in fixtures if f.get("event") == gameweek}
     if not matches or not all(f.get("finished") for f in matches.values()):
         raise ValueError("Hero analysis requires finalized fixtures")
     players = {p["id"]: p for p in bootstrap["elements"]}
-    event = next(row for row in bootstrap["events"] if row["id"] == gameweek)
     entries = number(event.get("entries"))
     pool = []
     for row in live["elements"]:

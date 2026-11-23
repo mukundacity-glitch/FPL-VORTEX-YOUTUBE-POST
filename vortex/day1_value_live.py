@@ -20,7 +20,7 @@ import numpy as np
 import requests
 
 from .day1_value_board import SQUAD_BUDGET, build_value_board, gameweek_horizon
-from .day1_preflight import fetch_json as fetch_official_json, require_final_review, verify_environment
+from .day1_preflight import fetch_json as fetch_official_json, verify_run_gameweeks
 from .football_identity import full_club_name
 
 API = "https://fantasy.premierleague.com/api"
@@ -252,8 +252,7 @@ def make_live_value_board(*, session=None, snapshot=None):
     bootstrap = snapshot["bootstrap"] if snapshot else fetch_json(f"{API}/bootstrap-static/", session)
     fixtures = snapshot["fixtures"] if snapshot else fetch_json(f"{API}/fixtures/", session)
     if os.environ.get("VORTEX_DAY1_REVIEW_GW") and snapshot is None:
-        review, gw, deadline = require_final_review(bootstrap, fixtures)
-        verify_environment(review, gw, deadline)
+        _, gw, _ = verify_run_gameweeks(bootstrap, fixtures)
     else:
         gw = select_next_gw(bootstrap["events"])
     all_players = bootstrap["elements"]
