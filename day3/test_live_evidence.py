@@ -15,7 +15,7 @@ import pandas as pd
 
 from day3.evidence_narration import defcon_narration, next_fixture_packs, player_analysis, team_analysis, validated_fixture_forecasts
 from day3.live_evidence import (
-    VERSION, assert_snapshot_current, audit_fixture_rows, availability, build_evidence, dc_forecast, digest,
+    VERSION, SourceChanged, assert_snapshot_current, audit_fixture_rows, availability, build_evidence, dc_forecast, digest,
     freeze_official_module, live_role, material_state, player_projection, save_snapshot,
 )
 from day3.verify_evidence import file_hash, verify_bundle
@@ -232,6 +232,24 @@ class EvidenceTests(unittest.TestCase):
             raise OSError("API unavailable")
         with self.assertRaises(OSError):
             assert_snapshot_current(snapshot, failed_loader)
+
+    def test_changed_material_same_target_is_recoverable(self) -> None:
+        snapshot = self.snapshot()
+        self.bootstrap["elements"][0]["news"] = "Updated official team news"
+        def loader(path: str):
+            return self.bootstrap if path == "/bootstrap-static/" else self.fixtures
+        with self.assertRaises(SourceChanged) as result:
+            assert_snapshot_current(snapshot, loader)
+        self.assertEqual(result.exception.target, (snapshot["next_gw"], snapshot["deadline"]))
+
+    def test_rescheduled_deadline_requires_new_dispatch(self) -> None:
+        snapshot = self.snapshot()
+        self.bootstrap["events"][1]["deadline_time"] = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+        def loader(path: str):
+            return self.bootstrap if path == "/bootstrap-static/" else self.fixtures
+        with self.assertRaisesRegex(RuntimeError, "deadline changed") as result:
+            assert_snapshot_current(snapshot, loader)
+        self.assertNotIsInstance(result.exception, SourceChanged)
 
     def test_integral_float_normalization_does_not_fake_source_changes(self) -> None:
         self.assertEqual(digest({"value": 1}), digest({"value": 1.0}))
