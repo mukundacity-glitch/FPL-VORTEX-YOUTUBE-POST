@@ -102,6 +102,35 @@ class LiveValueTests(unittest.TestCase):
         ]
         self.assertEqual(_resolve_picks(players, preferences), ({1: 3}, {2: 1}, []))
 
+    def test_gw35_to_gw38_keep_only_remaining_official_gameweeks(self):
+        for gw in (35, 36, 37, 38):
+            with self.subTest(gameweek=gw):
+                snap = snapshot()
+                # A GW35-38 snapshot needs season-to-date starts/minutes. Ten
+                # starts is correctly rejected by the existing eligibility gate.
+                for player in snap["bootstrap"]["elements"]:
+                    player["starts"] = 32
+                    player["minutes"] = 2880
+                snap["bootstrap"]["events"] = [{"id": gw, "is_next": True}]
+                snap["fixtures"] = [
+                    {**fixture, "event": gw + fixture["event"] - 11,
+                     "id": (gw + fixture["event"] - 11) * 100 + fixture["id"] % 100}
+                    for fixture in snap["fixtures"]
+                    if gw + fixture["event"] - 11 <= 38
+                ]
+                board = make_live_value_board(snapshot=snap)
+                remaining = list(range(gw, 39))
+                self.assertEqual([row["gameweek"] for row in board["weeklyPlans"]], remaining)
+                self.assertEqual([row["gameweek"] for row in board["projections"]], remaining)
+                self.assertEqual(board["forecastHorizonWeeks"], len(remaining))
+                self.assertEqual(board["forecastEndGameweek"], 38)
+                self.assertEqual(len(board["starters"]), 11)
+                self.assertEqual(len(board["bench"]), 4)
+
+    def test_never_generate_gameweek_39(self):
+        with self.assertRaises(ValueError):
+            select_next_gw([{"id": 39, "is_next": True}])
+
     def test_missing_next_gw_fails_closed(self):
         with self.assertRaises(ValueError):
             select_next_gw([{"id": 11, "is_next": False}])

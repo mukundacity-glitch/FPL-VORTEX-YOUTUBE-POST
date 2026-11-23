@@ -108,7 +108,9 @@ class TestDay1Diagnostics(unittest.TestCase):
     def test_market_contract_runs_after_its_pandas_dependency_is_installed(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         production = workflow.split("\n  run-day-1:\n", 1)[1].split("\n  editorial-contracts:\n", 1)[0]
-        install = production.index('"pandas>=2.2,<3"')
+        install = production.index("python -m pip install -r requirements-day1.txt")
+        requirements = WORKFLOW.parents[2] / "requirements-day1.txt"
+        self.assertIn("pandas==", requirements.read_text(encoding="utf-8"))
         market_check = production.index("test_day1_market_desk.py")
         self.assertLess(install, market_check)
         self.assertLess(market_check, production.index("Execute Day 1 cells once in order"))

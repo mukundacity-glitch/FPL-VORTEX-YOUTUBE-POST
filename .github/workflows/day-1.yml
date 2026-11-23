@@ -2,6 +2,12 @@ name: Day 1
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate FPL only, check credentials, or generate the private Day 1 draft
+        type: choice
+        options: [publish, validate, credentials]
+        default: publish
   pull_request:
     paths:
       - "1_final_day1.py"
@@ -40,6 +46,9 @@ on:
       - "day3/transfer_desk.py"
       - "tools/hero_card_audit/**"
       - ".github/workflows/day-1.yml"
+      - "vortex/day1_preflight.py"
+      - "tests/test_day1_preflight.py"
+      - "requirements-day1.txt"
       - "vortex/youtube_private_upload.py"
       - "vortex/day1_upload_status.py"
       - "day2/youtube.py"
@@ -81,8 +90,78 @@ permissions:
   contents: read
 
 jobs:
+  fpl-preflight:
+    name: Check official FPL Gameweek readiness
+    if: github.event_name == 'workflow_dispatch' && inputs.mode != 'credentials'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    outputs:
+      review: ${{ steps.readiness.outputs.review }}
+      preview: ${{ steps.readiness.outputs.preview }}
+      deadline: ${{ steps.readiness.outputs.deadline }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Validate official fixtures, score lock and review data
+        id: readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/day1-readiness.json"
+          if ! python -m vortex.day1_preflight --report "${report}" > "${RUNNER_TEMP}/day1-preflight.log" 2>&1; then
+            cat "${RUNNER_TEMP}/day1-preflight.log"
+            tail -n 1 "${RUNNER_TEMP}/day1-preflight.log" >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          cat "${RUNNER_TEMP}/day1-preflight.log"
+          python - "${report}" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as outputs:
+              print(f"review={report['review_gw']}", file=outputs)
+              print(f"preview={report['preview_gw']}", file=outputs)
+              print(f"deadline={report['preview_deadline_utc']}", file=outputs)
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              print(f"Final GW{report['review_gw']} is ready for the GW{report['preview_gw']} preview.", file=summary)
+          PY
+
+  credentials-check:
+    name: Check Day 1 credentials without uploading
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'credentials'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+      YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
+      YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
+      YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
+      YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -r requirements-day1.txt
+      - run: python -m vortex.youtube_private_upload --check-credentials
+      - name: Verify Google Drive OAuth grant and read access
+        if: ${{ !cancelled() }}
+        run: python -m vortex.day1_preflight --check-drive
+
   run-day-1:
-    if: github.event_name == 'workflow_dispatch'
+    needs: fpl-preflight
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
     concurrency:
       group: fpl-vortex-day-1
       cancel-in-progress: false
@@ -91,6 +170,9 @@ jobs:
       PYTHONUNBUFFERED: "1"
       VORTEX_DAY1_VIDEO_TARGET_SECONDS: "330"
       SOURCE_FILE: 1_final_day1.py
+      VORTEX_DAY1_REVIEW_GW: ${{ needs.fpl-preflight.outputs.review }}
+      VORTEX_DAY1_PREVIEW_GW: ${{ needs.fpl-preflight.outputs.preview }}
+      VORTEX_DAY1_PREVIEW_DEADLINE: ${{ needs.fpl-preflight.outputs.deadline }}
       DAY1_ASSET_FOLDER_ID: 1h3Loznr5RnsMyh-kUd-zMxEgOf98uFSt
       DAY1_ASSET_DIR: /content/drive/MyDrive/FPL_VORTEX/Assets
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
@@ -230,26 +312,15 @@ jobs:
       - name: Install Python dependencies
         shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install \
-            "requests>=2.32,<3" \
-            "pandas>=2.2,<3" \
-            "numpy>=2.0,<3" \
-            "pyarrow>=17,<20" \
-            "Pillow>=10.4,<12" \
-            "scipy>=1.14,<2" \
-            "matplotlib>=3.9,<4" \
-            "ipython>=8.27,<10" \
-            "playwright>=1.46,<2" \
-            "edge-tts==7.3.1" \
-            "google-api-python-client>=2.147,<3" \
-            "google-auth>=2.35,<3" \
-            "google-auth-httplib2>=0.2,<1"
+          python -m pip install -r requirements-day1.txt
           python -m unittest discover -s tests -p 'test_day1_source_loader.py' -v
           python -m unittest discover -s tests -p 'test_day1_market_desk.py' -v
           python -m unittest discover -s tests -p 'test_day1_value_live.py' -v
           # Broadcast imports Pillow; validate it only after Python dependencies exist.
           python -m unittest discover -s tests -p 'test_day1_broadcast.py' -v
+
+      - name: Verify YouTube OAuth grant and private channel before rendering
+        run: python -m vortex.youtube_private_upload --check-credentials
 
       - name: Install Chromium runtime
         shell: bash
@@ -261,47 +332,12 @@ jobs:
           python - <<'PY'
           import json
           import os
-          import urllib.parse
-          import urllib.request
           from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
-          secret_names = (
-              "GOOGLE_OAUTH_CLIENT_ID",
-              "GOOGLE_OAUTH_CLIENT_SECRET",
-              "GOOGLE_OAUTH_REFRESH_TOKEN",
-          )
-          secrets = {
-              name: (os.environ.get(name) or "").strip()
-              for name in secret_names
-          }
-          missing = [name for name, value in secrets.items() if not value]
-          if missing:
-              raise SystemExit(
-                  "Missing required GitHub secret(s): " + ", ".join(missing)
-              )
-          if not secrets["GOOGLE_OAUTH_CLIENT_ID"].endswith(
-              ".apps.googleusercontent.com"
-          ):
-              raise SystemExit("GOOGLE_OAUTH_CLIENT_ID has an invalid format")
+          from vortex.day1_preflight import drive_credentials
 
-          request_data = urllib.parse.urlencode(
-              {
-                  "client_id": secrets["GOOGLE_OAUTH_CLIENT_ID"],
-                  "client_secret": secrets["GOOGLE_OAUTH_CLIENT_SECRET"],
-                  "refresh_token": secrets["GOOGLE_OAUTH_REFRESH_TOKEN"],
-                  "grant_type": "refresh_token",
-              }
-          ).encode("utf-8")
-          request = urllib.request.Request(
-              "https://oauth2.googleapis.com/token",
-              data=request_data,
-              headers={"Content-Type": "application/x-www-form-urlencoded"},
-              method="POST",
-          )
-          with urllib.request.urlopen(request, timeout=30) as response:
-              refreshed = json.loads(response.read().decode("utf-8"))
-
+          secrets, refreshed = drive_credentials()
           expires_in = int(refreshed.get("expires_in", 3600))
           token = {
               "access_token": refreshed["access_token"],
@@ -484,7 +520,7 @@ jobs:
           PY
 
       - name: Set up Day 1 broadcast renderer
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
@@ -565,7 +601,7 @@ jobs:
                       print(f"Day 1 Edge Ryan connection: PASS ({audio_bytes} audio bytes, {word_count} words)")
                       return
                   except aiohttp.ClientResponseError as exc:
-                      if exc.status not in {500, 502, 503, 504}:
+                      if exc.status not in {429, 500, 502, 503, 504}:
                           raise
                       last_error = exc
                   except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
@@ -624,6 +660,11 @@ jobs:
                   else:
                       print(f"::error::Block {index} ({label}): cell execution unsuccessful without an exception", flush=True)
                   raise RuntimeError(f"Day 1 block {index} failed: {label}") from err
+
+              if label == "FPL VORTEX WEEKLY — CELL 3":
+                  from vortex.day1_preflight import verify_notebook_snapshot
+
+                  verify_notebook_snapshot(shell.user_ns)
 
           print("Day 1 execution: PASS")
           PY
@@ -792,6 +833,9 @@ jobs:
           print("Day 1 output structure, final QA, and private YouTube package: PASS")
           PY
 
+      - name: Recheck official Gameweek and preview deadline before publishing
+        run: python -m vortex.day1_preflight --verify-environment
+
       - name: Publish outputs and persistent state to Google Drive
         shell: bash
         run: |
@@ -826,6 +870,8 @@ jobs:
 
       - name: Upload final 4K video privately to YouTube
         shell: bash
+        env:
+          VORTEX_DAY1_UPLOAD_JOURNAL: vortex-drive:FPL_VORTEX/DAY1_UPLOAD_JOURNAL
         run: python -m vortex.youtube_private_upload
 
       - name: Confirm PRIVATE YouTube draft and show Studio link
@@ -871,14 +917,16 @@ jobs:
     timeout-minutes: 6
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Configure Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install existing source-loader test dependencies
         run: python -m pip install "pandas>=2.2,<3" "numpy>=2.0,<3" Pillow scipy requests edge-tts
-      - name: Compile the 33 untouched notebook-cell boundaries and check editorial binding
+      - name: Verify official Gameweek readiness and retry contracts
+        run: python -m unittest discover -s tests -p 'test_day1_preflight.py' -v
+      - name: Compile the 33 notebook-cell boundaries and check editorial binding
         run: python -m unittest discover -s tests -p 'test_day1_editorial_integration.py' -v
       - name: Compile Day 1 live editorial and packaging changes
         run: python -m py_compile vortex/day1_live_editorial.py vortex/day1_editorial.py vortex/day1_agenda.py vortex/youtube_studio_package.py
@@ -942,9 +990,9 @@ jobs:
     timeout-minutes: 8
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Configure Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install layout runtime
@@ -958,7 +1006,7 @@ jobs:
           DAY1_BRIEF_SCREENSHOT_DIR=hero-card-qa python -m unittest discover -s tests -p 'test_day1_brief_browser.py' -v
       - name: Save layout evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: day1-hero-card-layout
           path: hero-card-qa
@@ -970,8 +1018,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Verify private draft detection and preserve public uploads
@@ -988,8 +1036,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Scene 2 Python contract

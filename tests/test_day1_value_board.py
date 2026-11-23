@@ -61,6 +61,33 @@ class ValueBoardTests(unittest.TestCase):
             build_value_board(gameweek=11, squad=squad, forecasts=forecasts,
                               fixtures=fixtures, teams=teams)
 
+    def test_end_of_season_horizon_has_no_nonexistent_gameweek(self):
+        squad, _forecasts, teams, fixtures = sample()
+        for gameweek in (35, 38):
+            with self.subTest(gameweek=gameweek):
+                weeks = range(gameweek, 39)
+                forecasts = [
+                    {"player_id": player["id"], "gameweek": week,
+                     "gameweek_expected_points": player["id"] / 10}
+                    for player in squad for week in weeks
+                ]
+                board = build_value_board(
+                    gameweek=gameweek, squad=squad, forecasts=forecasts,
+                    fixtures=fixtures, teams=teams
+                )
+                self.assertEqual([row["gameweek"] for row in board["projections"]], list(weeks))
+                self.assertEqual(board["forecastHorizonWeeks"], len(weeks))
+                self.assertEqual(board["forecastEndGameweek"], 38)
+                self.assertTrue(all(set(player["weekly"]) == set(weeks)
+                                    for player in board["starters"] + board["bench"]))
+
+    def test_gameweek_39_is_not_a_valid_value_board(self):
+        squad, forecasts, teams, fixtures = sample()
+        with self.assertRaisesRegex(ValueError, "gameweek"):
+            build_value_board(
+                gameweek=39, squad=squad, forecasts=forecasts, fixtures=fixtures, teams=teams
+            )
+
     def test_no_unverified_fixture_data_fabricated(self):
         board = self.build()
         self.assertEqual(board["nextFixtures"], [])
