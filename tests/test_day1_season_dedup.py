@@ -170,7 +170,7 @@ class Day1SeasonDedupeTests(unittest.TestCase):
             persisted = json.loads((root / "DATA" / "youtube_private_upload.json").read_text())
             self.assertEqual(persisted["season_id"], "2099-2100")
 
-    def test_earlier_review_has_its_own_upload_identity(self):
+    def test_provisional_review_has_its_own_upload_identity(self):
         revision = "a" * 40
         with (
             TemporaryDirectory() as folder,
@@ -184,8 +184,8 @@ class Day1SeasonDedupeTests(unittest.TestCase):
             patch("vortex.youtube_private_upload._confirm_private"),
         ):
             path = Path(folder) / "receipt.json"
-            for review, expected in ((10, f"{revision}-review10"), (11, revision)):
-                package = {"package_path": path, "metadata": {"preview_gw": 12, "review_gw": review},
+            for status, expected in (("LIVE/PARTIAL", f"{revision}-provisional"), ("FINAL", revision)):
+                package = {"package_path": path, "metadata": {"preview_gw": 12, "review_gw": 11, "review_status": status},
                            "upload_tags": ["FPL"], "render_revision": revision}
                 upload_day1_package(package, path)
                 self.assertEqual(find.call_args.kwargs["revision_tag"], f"fpl-vortex-day1-{expected}")

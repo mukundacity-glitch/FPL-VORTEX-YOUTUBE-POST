@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from .day1_player_hero import analyze, completed_week
+from .day1_player_hero import analyze, verified_full_time
 
 FPL_API = "https://fantasy.premierleague.com/api"
 RETRYABLE = {429, 500, 502, 503, 504}
@@ -92,19 +92,7 @@ def _deadline(event):
     return stamp.astimezone(timezone.utc)
 
 
-def _fixture_complete(fixture, *, allow_provisional=False):
-    return (
-        fixture.get("started") is True
-        and isinstance(fixture.get("minutes"), (int, float))
-        and fixture["minutes"] >= 90
-        and (fixture.get("finished") is True
-             or (allow_provisional and fixture.get("finished_provisional") is True))
-        and all(type(fixture.get(key)) is int and fixture[key] >= 0
-                for key in ("team_h_score", "team_a_score"))
-    )
-
-
-def require_final_review(bootstrap, fixtures, *, now=None, review_gw=None):
+def select_review(bootstrap, fixtures, *, now=None):
     if not isinstance(bootstrap, dict):
         raise ValueError("Official FPL bootstrap-static must be a JSON object")
     for field in ("elements", "teams", "element_types"):
@@ -128,19 +116,22 @@ def require_final_review(bootstrap, fixtures, *, now=None, review_gw=None):
     if preview not in future_ids:
         raise NotReady(f"Official FPL still points at GW{preview}, whose deadline has passed; retry after the feed advances")
 
-    # Keep the retrospective score-checked while allowing the preview to use today's feed.
-    review = completed_week(bootstrap) if review_gw is None else review_gw
+    review = preview - 1
     event = by_id.get(review)
-    if not event or not 1 <= review < preview:
-        raise NotReady(f"GW{preview} preview has no earlier score-checked Gameweek to review")
+    if event is None:
+        raise NotReady(f"GW{preview} preview has no preceding official Gameweek to review")
     matches = [fixture for fixture in fixtures if fixture.get("event") == review]
     if not any(fixture.get("event") == preview for fixture in fixtures):
         raise NotReady(f"Official FPL has no fixtures for upcoming GW{preview}")
-    if not matches or not all(_fixture_complete(fixture) for fixture in matches):
-        raise NotReady(f"Official FPL GW{review} review is missing finalized fixture data")
-    if event.get("finished") is not True or event.get("data_checked") is not True:
-        raise NotReady(f"Official FPL GW{review} review is not score-checked")
-    return review, preview, deadlines[preview]
+    complete = sum(verified_full_time(fixture) for fixture in matches)
+    if not complete:
+        raise NotReady(f"Official FPL GW{review} has no verified full-time results to review")
+    final = (
+        event.get("finished") is True and event.get("data_checked") is True
+        and all(fixture.get("finished") is True for fixture in matches)
+        and complete == len(matches)
+    )
+    return review, preview, deadlines[preview], "FINAL" if final else "LIVE/PARTIAL"
 
 
 def drive_credentials():
@@ -178,11 +169,9 @@ def verify_environment(review, preview, deadline):
 
 
 def verify_run_gameweeks(bootstrap, fixtures):
-    review, preview, deadline = require_final_review(
-        bootstrap, fixtures, review_gw=int(os.environ["VORTEX_DAY1_REVIEW_GW"])
-    )
+    review, preview, deadline, status = select_review(bootstrap, fixtures)
     verify_environment(review, preview, deadline)
-    return review, preview, deadline
+    return review, preview, deadline, status
 
 
 def verify_notebook_snapshot(namespace):
@@ -190,32 +179,34 @@ def verify_notebook_snapshot(namespace):
     loader = namespace["_fpl_module"]
     with loader._vx_http_session() as session:
         fixtures = loader._vx_get_json(session, "/fixtures/")
-    review, preview, _ = verify_run_gameweeks(data["bootstrap"], fixtures)
-    if data["next_gw"] != preview or review not in data["review_ready_gws"]:
-        raise NotReady("The notebook and official Day 1 readiness check disagree on the final review and preview.")
-    data.update(review_gw=review, review_status="FINAL",
-                review_fixture_state=data["fixture_state_counts_by_gw"][review])
-    namespace["LATEST_COMPLETED_GW"] = review
+    review, preview, _, status = verify_run_gameweeks(data["bootstrap"], fixtures)
+    fixture_state = data["fixture_state_counts_by_gw"].get(review)
+    if data["next_gw"] != preview or not fixture_state or not fixture_state["completed"]:
+        raise NotReady("The notebook and official Day 1 readiness check disagree on the review and preview.")
+    data.update(review_gw=review, review_status=status, review_fixture_state=fixture_state)
     namespace["AUTO_REVIEW_GW"] = review
-    print(f"Day 1 notebook confirmed final GW{review} and upcoming GW{preview}.", flush=True)
+    if status == "FINAL":
+        namespace["LATEST_COMPLETED_GW"] = review
+    print(f"Day 1 notebook confirmed GW{review} ({status}) and upcoming GW{preview}.", flush=True)
 
 
 def check_live(*, verify=False):
     bootstrap = fetch_json("/bootstrap-static/")
     fixtures = fetch_json("/fixtures/")
-    select_gameweeks = verify_run_gameweeks if verify else require_final_review
-    review, preview, deadline = select_gameweeks(bootstrap, fixtures)
+    select_gameweeks = verify_run_gameweeks if verify else select_review
+    review, preview, deadline, status = select_gameweeks(bootstrap, fixtures)
     if verify:
-        print(f"Day 1 Gameweek unchanged: final GW{review}, preview GW{preview}, deadline {deadline.isoformat()}.")
+        print(f"Day 1 Gameweek unchanged: GW{review} ({status}), preview GW{preview}, deadline {deadline.isoformat()}.")
         return None
     live = fetch_json(f"/event/{review}/live/")
     if not isinstance(live, dict):
         raise ValueError(f"Official FPL GW{review} live feed must be a JSON object")
     _rows(live.get("elements"), f"GW{review} live.elements")
     analyzed = analyze(bootstrap, fixtures, live, review)
-    print(f"Day 1 FPL data ready: final GW{review}, preview GW{preview}, "
+    print(f"Day 1 FPL data ready: GW{review} ({status}), preview GW{preview}, "
           f"deadline {deadline.isoformat()}, {analyzed['candidates_analyzed']} verified hero candidates.")
-    return {"review_gw": review, "preview_gw": preview, "preview_deadline_utc": deadline.isoformat()}
+    return {"review_gw": review, "review_status": status,
+            "preview_gw": preview, "preview_deadline_utc": deadline.isoformat()}
 
 
 def main():

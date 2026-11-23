@@ -47,7 +47,7 @@ class PlayerHeroTests(unittest.TestCase):
         self.assertEqual(report["candidates_analyzed"], 4)
         self.assertEqual(sum(hero["breakdown"].values()), 10)
         self.assertEqual(hero["captain_points"], 20)
-        with self.assertRaisesRegex(ValueError, "completed and checked"):
+        with self.assertRaisesRegex(ValueError, "verified full-time fixtures"):
             analyze(*example(), 9)
         bootstrap, fixtures, live = example()
         live["elements"][0]["stats"]["total_points"] = 11
@@ -55,6 +55,17 @@ class PlayerHeroTests(unittest.TestCase):
         live["elements"][1]["stats"]["total_points"] = 12
         with self.assertRaisesRegex(ValueError, "reconcile"):
             analyze(bootstrap, fixtures, live, 8)
+
+    def test_provisional_hero_excludes_unfinished_fixtures_and_labels_points(self):
+        bootstrap, fixtures, live = example()
+        bootstrap["events"][0].update(finished=False, data_checked=False)
+        fixtures[0].update(started=True, minutes=90, finished=False, finished_provisional=True)
+        fixtures.append(dict(fixtures[0], id=99, minutes=20, finished_provisional=False))
+        live["elements"][0]["explain"].append({"fixture": 99, "stats": []})
+        report = analyze(bootstrap, fixtures, live, 8)
+        self.assertTrue(report["provisional"])
+        self.assertEqual(report["candidates_analyzed"], 3)
+        self.assertIn("provisional returns", narration(report, [p["name"] for p in report["players"]]))
 
     def test_visible_metrics_and_spoken_reasons_omit_unknowns(self):
         report = analyze(*example(), 8)

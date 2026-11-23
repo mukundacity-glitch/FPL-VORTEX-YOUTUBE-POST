@@ -218,10 +218,10 @@ def _check_previous_program(qa, review, board):
         raise RuntimeError(f"Expected four verified original scenes before Scene 05, found {qa.get('scene_keys')}")
     actual_review_gw = int(review.get("gw") or 0)
     expected_review = int(os.environ.get("VORTEX_DAY1_REVIEW_GW", actual_review_gw))
-    if actual_review_gw != expected_review or not 1 <= actual_review_gw < board["nextGameweek"]:
+    if actual_review_gw != expected_review or actual_review_gw != board["nextGameweek"] - 1:
         raise RuntimeError("Live FPL Scene 05 gameweek differs from original program review")
-    if str(review.get("status") or "").upper() not in {"FINAL", "COMPLETE"}:
-        raise RuntimeError("Five-scene premium build requires finalized review")
+    if str(review.get("status") or "").upper() not in {"FINAL", "COMPLETE", "LIVE/PARTIAL"}:
+        raise RuntimeError("Five-scene premium build requires a verified review status")
     if qa.get("external_media_integration", {}).get("applied"):
         raise RuntimeError("Scene 05 must be inserted before external background music integration")
 

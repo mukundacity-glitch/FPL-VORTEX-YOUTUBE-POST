@@ -38,15 +38,15 @@ class Day1BroadcastTests(unittest.TestCase):
                                            "value_board": dict(board, nextGameweek=12)}],
                            10, 11, 24, "logo", review_status="FINAL", latest_completed=10)
 
-    def test_stale_and_provisional_reviews_fail(self):
-        for review, status in ((9, "FINAL"), (10, "LIVE/PARTIAL")):
+    def test_wrong_gameweek_and_unverified_final_reviews_fail(self):
+        for review, status in ((9, "FINAL"), (10, "UNKNOWN")):
             with self.assertRaises(ValueError):
                 scene_manifest(
                     self.reports, review, 11, 24, "logo",
                     review_status=status, latest_completed=10,
                 )
 
-    def test_partial_intervening_week_uses_correct_scene_labels(self):
-        scenes = scene_manifest(self.reports, 10, 12, 24, "logo",
-                                review_status="FINAL", latest_completed=10)
-        self.assertEqual([scene["label"] for scene in scenes], ["GW12", "GW10", "GW10", "GW12"])
+    def test_provisional_review_uses_the_week_preceding_preview(self):
+        scenes = scene_manifest(self.reports, 11, 12, 24, "logo",
+                                review_status="LIVE/PARTIAL", latest_completed=10)
+        self.assertEqual([scene["label"] for scene in scenes], ["GW12", "GW11", "GW11", "GW12"])
