@@ -12,12 +12,36 @@ from unittest.mock import Mock, patch
 from vortex.youtube_private_upload import (
     _find_existing_gameweek_video,
     _official_season_identity,
+    _youtube_service,
     upload_private,
     upload_day1_package,
 )
 
 
 class Day1SeasonDedupeTests(unittest.TestCase):
+    def test_youtube_service_uses_google_resumable_transport(self):
+        credentials = Mock(granted_scopes=None)
+        build_http = Mock(return_value=Mock(redirect_codes=frozenset({301, 302, 303, 307})))
+        authorized = Mock()
+        build = Mock()
+        dependencies = {
+            "google.auth.exceptions": Mock(RefreshError=RuntimeError, TransportError=OSError),
+            "google.auth.transport.requests": Mock(),
+            "google.oauth2.credentials": Mock(Credentials=Mock(return_value=credentials)),
+            "google_auth_httplib2": Mock(AuthorizedHttp=authorized),
+            "googleapiclient.discovery": Mock(build=build),
+            "googleapiclient.http": Mock(build_http=build_http),
+            "httplib2": Mock(),
+        }
+        settings = {"YOUTUBE_OAUTH_CLIENT_ID": "test.apps.googleusercontent.com",
+                    "YOUTUBE_OAUTH_CLIENT_SECRET": "test", "YOUTUBE_OAUTH_REFRESH_TOKEN": "test"}
+        with patch.dict("sys.modules", dependencies), patch.dict("os.environ", settings, clear=True):
+            self.assertIs(_youtube_service(), build.return_value)
+
+        build_http.assert_called_once_with()
+        authorized.assert_called_once_with(credentials, http=build_http.return_value)
+        build.assert_called_once_with("youtube", "v3", http=authorized.return_value, cache_discovery=False)
+
     def _client(self, *, tags, published="2026-11-03T12:00:00Z", next_page=None,
                 privacy="private"):
         youtube = Mock()
