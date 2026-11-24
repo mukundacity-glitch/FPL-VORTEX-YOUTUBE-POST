@@ -241,6 +241,26 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(SourceChanged) as result:
             assert_snapshot_current(snapshot, loader)
         self.assertEqual(result.exception.target, (snapshot["next_gw"], snapshot["deadline"]))
+        self.assertIn("changed in players", str(result.exception))
+
+    def test_reordered_official_rows_do_not_invalidate_the_render(self) -> None:
+        stats = self.fixtures[0]["stats"]
+        stats.append({"identifier": "bonus", "h": [{"element": 11, "value": 1}, {"element": 33, "value": 1}], "a": []})
+        snapshot = self.snapshot()
+
+        self.bootstrap["events"].reverse()
+        self.bootstrap["elements"].reverse()
+        self.fixtures.reverse()
+        stats.reverse()
+        stats[0]["h"].reverse()
+
+        def loader(path: str):
+            return self.bootstrap if path == "/bootstrap-static/" else self.fixtures
+
+        assert_snapshot_current(snapshot, loader)
+        stats[0]["h"][0]["value"] = 2
+        with self.assertRaisesRegex(SourceChanged, "changed in fixtures"):
+            assert_snapshot_current(snapshot, loader)
 
     def test_rescheduled_deadline_requires_new_dispatch(self) -> None:
         snapshot = self.snapshot()

@@ -66,12 +66,24 @@ def material_state(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]]) ->
     fields = ("id", "code", "team", "team_join_date", "element_type", "status", "chance_of_playing_next_round", "news",
               "minutes", "starts", "defensive_contribution")
     fixture_fields = ("id", "event", "team_h", "team_a", "kickoff_time", "started", "finished",
-                      "finished_provisional", "team_h_score", "team_a_score", "stats")
+                      "finished_provisional", "team_h_score", "team_a_score")
+    fixture_state = []
+    for row in sorted(fixtures, key=lambda row: row["id"]):
+        fixture = {key: row.get(key) for key in fixture_fields}
+        stats = row.get("stats")
+        if isinstance(stats, list):
+            # FPL may reorder stat categories and tied players without changing the facts.
+            stats = [
+                {key: sorted(value, key=lambda item: item["element"]) if key in ("h", "a") else value
+                 for key, value in stat.items()}
+                for stat in sorted(stats, key=lambda stat: stat["identifier"])
+            ]
+        fixture_state.append(dict(fixture, stats=stats))
     return {
         "players": [{key: row.get(key) for key in fields} for row in sorted(bootstrap["elements"], key=lambda row: row["id"])],
-        "fixtures": [{key: row.get(key) for key in fixture_fields} for row in sorted(fixtures, key=lambda row: row["id"])],
+        "fixtures": fixture_state,
         "events": [{key: row.get(key) for key in ("id", "deadline_time", "finished", "data_checked")}
-                   for row in bootstrap["events"]],
+                   for row in sorted(bootstrap["events"], key=lambda row: row["id"])],
     }
 
 
@@ -328,11 +340,13 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
             "news_added": player.get("news_added"), "transferred": transferred,
             "last_dc": next((row["dc"] for row in totals if row["gameweek"] == max(history_gws)), None) if history_gws else None,
         }
+    source_state = material_state(bootstrap, fixtures)
     snapshot = {
         "version": VERSION, "cutoff": cutoff, "next_gw": next_gw, "deadline": target["deadline_time"],
         "history_gameweeks": history_gws, "players": output, "teams": teams, "fixtures": fixtures,
         "event_ids": [int(event["id"]) for event in bootstrap["events"]],
-        "source_hash": digest(material_state(bootstrap, fixtures)),
+        "source_hash": digest(source_state),
+        "source_section_hashes": {name: digest(rows) for name, rows in source_state.items()},
         "sources": [API_ROOT + "/bootstrap-static/", API_ROOT + "/fixtures/"]
                    + [API_ROOT + f"/event/{gameweek}/live/" for gameweek in history_gws],
         "rules_source": RULE_SOURCE, "projection_method": "Current-season DC/90 times recency-weighted official fixture minutes; Poisson threshold per fixture. Uncalibrated independent estimate.",
@@ -515,9 +529,15 @@ def assert_snapshot_current(snapshot: dict[str, Any], loader: Callable[[str], An
     official_deadline = datetime.fromisoformat(target["deadline_time"].replace("Z", "+00:00"))
     if checked_at >= deadline or int(target["id"]) != snapshot["next_gw"] or official_deadline != deadline:
         raise RuntimeError("Day 3 planning Gameweek or deadline changed; start a new run with current inputs")
-    if digest(material_state(bootstrap, fixtures)) != snapshot["source_hash"]:
+    source_state = material_state(bootstrap, fixtures)
+    if digest(source_state) != snapshot["source_hash"]:
+        previous = snapshot.get("source_section_hashes", {})
+        changed = ", ".join(name for name, rows in source_state.items() if previous.get(name) != digest(rows))
+        message = "Official FPL evidence changed"
+        if previous and changed:
+            message += f" in {changed}"
         raise SourceChanged(
-            "Official availability, identity or fixture evidence changed; regenerate before upload",
+            f"{message}; regenerate before upload",
             (snapshot["next_gw"], snapshot["deadline"]),
         )
 
