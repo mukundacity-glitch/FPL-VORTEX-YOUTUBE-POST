@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import ast
+import subprocess
+import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import Mock, patch
 
-from wc_fh.forecast_compat import install_team_aliases, patch_forecast_loader
+from wc_fh.forecast_compat import CORE_TREE_URL, fetch_core_git_tree, install_team_aliases, patch_forecast_loader
 
 
 class ForecastCompatibilityTests(unittest.TestCase):
@@ -16,6 +18,9 @@ class ForecastCompatibilityTests(unittest.TestCase):
             return {'spurs': 'tottenham hotspur', 'man city': 'manchester city',
                     'brighton': 'brighton and hove albion'}.get(name, name)
         model._vx_norm_team_name = original
+        model.refresh_fpl_core = lambda boot, fixtures, root, now, client: client.get(
+            CORE_TREE_URL, required=True, timeout=8,
+        )
         return model
 
     def test_provider_names_share_canonical_identity(self):
@@ -64,6 +69,67 @@ class ForecastCompatibilityTests(unittest.TestCase):
         source = "raise RuntimeError('hash mismatch')\nimport vortex_upstream_fdr\n"
         with self.assertRaisesRegex(RuntimeError, 'hash mismatch'):
             exec(patch_forecast_loader(source), {})
+
+    def test_forecast_uses_current_git_tree_when_rest_returns_403(self):
+        model = self.model()
+        espn_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=123"
+        model.refresh_fpl_core = lambda boot, fixtures, root, now, client: (
+            client.get(CORE_TREE_URL, required=True, timeout=8),
+            client.get(espn_url, required=True, timeout=6),
+        )
+        client = Mock()
+        client.get.side_effect = [RuntimeError("Required current source unavailable; HTTPError HTTP 403"), {"rosters": []}]
+        git_result = {"sha": "a" * 40, "tree": [{"path": "data/teams.csv", "type": "blob", "sha": "b" * 40}]}
+
+        with patch.dict('sys.modules', {'vortex_upstream_fdr': model}), \
+             patch('wc_fh.forecast_compat.fetch_core_git_tree', return_value=git_result) as fallback:
+            exec(patch_forecast_loader('import vortex_upstream_fdr\n'), {})
+            self.assertEqual(model.refresh_fpl_core(None, None, None, None, client), (git_result, {"rosters": []}))
+
+        fallback.assert_called_once_with()
+        client.get.assert_called_with(espn_url, required=True, timeout=6)
+
+    def test_complete_rest_tree_is_used_without_cloning(self):
+        model = self.model()
+        rest_result = {"sha": "a" * 40, "tree": [{"path": "data/teams.csv", "type": "blob", "sha": "b" * 40}]}
+        client = Mock()
+        client.get.return_value = rest_result
+        with patch.dict('sys.modules', {'vortex_upstream_fdr': model}), \
+             patch('wc_fh.forecast_compat.fetch_core_git_tree') as fallback:
+            exec(patch_forecast_loader('import vortex_upstream_fdr\n'), {})
+            self.assertIs(model.refresh_fpl_core(None, None, None, None, client), rest_result)
+        fallback.assert_not_called()
+
+    def test_incomplete_rest_tree_and_git_timeout_fail_with_both_causes(self):
+        model = self.model()
+        client = Mock()
+        client.get.return_value = {"sha": "a" * 40, "tree": [{"path": "data/teams.csv"}], "truncated": True}
+        with patch.dict('sys.modules', {'vortex_upstream_fdr': model}), \
+             patch('wc_fh.forecast_compat.fetch_core_git_tree', side_effect=subprocess.TimeoutExpired('git', 60)):
+            exec(patch_forecast_loader('import vortex_upstream_fdr\n'), {})
+            with self.assertRaisesRegex(RuntimeError, r'REST .*incomplete tree.* Git .*timed out'):
+                model.refresh_fpl_core(None, None, None, None, client)
+
+    def test_git_listing_returns_commit_and_blob_ids_for_paths_with_spaces(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, text=True, stderr=subprocess.PIPE).strip()
+
+            git('init', '-b', 'main')
+            git('config', 'uploadpack.allowFilter', 'true')
+            path = 'data/By Tournament/Premier League/teams.csv'
+            (root / path).parent.mkdir(parents=True)
+            (root / path).write_text('id,name\n1,Arsenal\n', encoding='utf-8')
+            (root / 'README').write_text('fixture\n', encoding='utf-8')
+            git('add', '.')
+            git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Test source')
+            with patch('wc_fh.forecast_compat.CORE_REPOSITORY', root.as_uri()):
+                listing = fetch_core_git_tree()
+
+            self.assertEqual(listing['sha'], git('rev-parse', 'HEAD'))
+            self.assertEqual(listing['tree'], [{'path': path, 'type': 'blob', 'sha': git('rev-parse', f'HEAD:{path}')}])
 
     def test_loader_refuses_missing_or_duplicate_import(self):
         for source in ('pass\n', 'import vortex_upstream_fdr\nimport vortex_upstream_fdr\n',
