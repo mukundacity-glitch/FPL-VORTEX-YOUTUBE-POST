@@ -164,20 +164,38 @@ def _upcoming_event(bootstrap: dict[str, Any], cutoff: str) -> dict[str, Any]:
     return min(next_events, key=lambda event: event["deadline_time"])
 
 
-def _fixture_verified_final(fixture: dict[str, Any]) -> bool:
-    return bool(fixture.get("finished")) and bool(fixture.get("finished_provisional", True))
+def _score_locked_gameweeks(bootstrap: dict[str, Any]) -> set[int]:
+    return {int(event["id"]) for event in bootstrap["events"] if event.get("data_checked") is True}
 
 
-def _completed_prior_fixtures(fixtures: list[dict[str, Any]], next_gw: int) -> list[dict[str, Any]]:
+def _fixture_verified_final(fixture: dict[str, Any], score_locked: set[int]) -> bool:
+    if fixture.get("finished") and fixture.get("finished_provisional", True):
+        return True
+    # Fixture flags can lag the official Gameweek score lock. Build evidence
+    # still reconciles the official live player stats with the bootstrap totals.
+    return (
+        fixture.get("started") is True
+        and fixture.get("finished_provisional") is True
+        and int(fixture["event"]) in score_locked
+        and all(type(fixture.get(key)) is int and fixture[key] >= 0
+                for key in ("team_h_score", "team_a_score"))
+    )
+
+
+def _completed_prior_fixtures(
+    fixtures: list[dict[str, Any]], next_gw: int, score_locked: set[int],
+) -> list[dict[str, Any]]:
     return [
         row for row in fixtures
         if row.get("event") is not None
         and int(row["event"]) < next_gw
-        and _fixture_verified_final(row)
+        and _fixture_verified_final(row, score_locked)
     ]
 
 
-def _unfinished_prior_fixtures(fixtures: list[dict[str, Any]], next_gw: int) -> list[dict[str, Any]]:
+def _unfinished_prior_fixtures(
+    fixtures: list[dict[str, Any]], next_gw: int, score_locked: set[int],
+) -> list[dict[str, Any]]:
     """Started earlier-Gameweek fixtures that do not yet have verified final stats."""
     return sorted(
         [
@@ -185,7 +203,7 @@ def _unfinished_prior_fixtures(fixtures: list[dict[str, Any]], next_gw: int) -> 
             if row.get("event") is not None
             and int(row["event"]) < next_gw
             and row.get("started")
-            and not _fixture_verified_final(row)
+            and not _fixture_verified_final(row, score_locked)
         ],
         key=lambda row: (
             int(row.get("event") or 0),
@@ -232,8 +250,9 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
         raise RuntimeError("Duplicate official player or fixture identity")
     positions = {int(row["id"]): str(row["singular_name_short"]).replace("GKP", "GK")
                  for row in bootstrap["element_types"]}
-    completed = _completed_prior_fixtures(fixtures, next_gw)
-    unfinished = _unfinished_prior_fixtures(fixtures, next_gw)
+    score_locked = _score_locked_gameweeks(bootstrap)
+    completed = _completed_prior_fixtures(fixtures, next_gw, score_locked)
+    unfinished = _unfinished_prior_fixtures(fixtures, next_gw, score_locked)
     if unfinished:
         raise RuntimeError(
             "An earlier Gameweek fixture is not verified final: "
@@ -394,7 +413,8 @@ def capture_evidence(
                 "restart Day 3 so all projections use one Gameweek."
             )
 
-        unfinished = _unfinished_prior_fixtures(fixtures, current_next_gw)
+        score_locked = _score_locked_gameweeks(bootstrap)
+        unfinished = _unfinished_prior_fixtures(fixtures, current_next_gw, score_locked)
         if unfinished:
             elapsed = time.monotonic() - wait_started
             remaining = max_wait_seconds - elapsed
@@ -413,7 +433,7 @@ def capture_evidence(
             time.sleep(delay)
             continue
 
-        completed = _completed_prior_fixtures(fixtures, current_next_gw)
+        completed = _completed_prior_fixtures(fixtures, current_next_gw, score_locked)
         history_gws = sorted({int(row["event"]) for row in completed})
         with ThreadPoolExecutor(max_workers=6) as executor:
             responses = list(executor.map(

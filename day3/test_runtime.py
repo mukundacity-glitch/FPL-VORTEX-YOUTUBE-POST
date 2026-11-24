@@ -151,6 +151,42 @@ class LiveEvidencePollingTests(unittest.TestCase):
                 max_wait_seconds=0,
             )
 
+    def test_provisional_fixture_requires_same_gameweek_score_lock(self) -> None:
+        fixture = self.fixture(False, True)
+
+        def loader(path: str) -> Any:
+            return {
+                "/bootstrap-static/": self.bootstrap,
+                "/fixtures/": [fixture],
+                "/event/1/live/": self.live_payload,
+            }[path]
+
+        def capture() -> dict[str, Any]:
+            return live_evidence.capture_evidence(
+                {"next_gw": 2}, loader=loader, max_wait_seconds=0,
+            )
+
+        self.bootstrap["events"][0]["finished"] = True
+        self.bootstrap["events"][1]["data_checked"] = True
+        with self.assertRaisesRegex(RuntimeError, "fixture #701"):
+            capture()
+
+        self.bootstrap["events"][0]["data_checked"] = True
+        with patch.object(live_evidence.time, "sleep") as sleep:
+            snapshot = capture()
+        sleep.assert_not_called()
+        self.assertEqual(snapshot["history_gameweeks"], [1])
+        self.assertEqual(snapshot["fixtures"][0], fixture)
+
+        for field, value in (("finished_provisional", False), ("team_a_score", None)):
+            with self.subTest(field=field), patch.dict(fixture, {field: value}):
+                with self.assertRaisesRegex(RuntimeError, "fixture #701"):
+                    capture()
+
+        self.bootstrap["elements"][0]["minutes"] = 90
+        with self.assertRaisesRegex(RuntimeError, "bootstrap/history season minutes conflict"):
+            capture()
+
 
 class PublisherEntryPointTests(unittest.TestCase):
     def test_direct_script_can_build_metadata_without_repository_on_pythonpath(self):
