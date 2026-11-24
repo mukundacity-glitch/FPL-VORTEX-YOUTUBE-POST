@@ -15,10 +15,11 @@ from typing import Any
 
 try:
     from googleapiclient.errors import HttpError
+    from httplib2 import HttpLib2Error
 except ModuleNotFoundError:  # Offline data and repository contract tests.
     _HTTP_ERRORS = ()
 else:
-    _HTTP_ERRORS = (HttpError,)
+    _HTTP_ERRORS = (HttpError, HttpLib2Error)
 
 DEFAULT_OUTPUT_ROOT = Path("/content/drive/MyDrive/FPL_VORTEX/FIRST VIDEO")
 PACKAGE_NAME = "youtube_video_1_of_3_package.json"
@@ -289,12 +290,12 @@ def _youtube_service():
     if not client_id.endswith(".apps.googleusercontent.com"):
         raise RuntimeError("YouTube OAuth client ID has an invalid format")
     try:
-        import httplib2
         from google.auth.exceptions import RefreshError, TransportError
         from google.auth.transport.requests import Request as GoogleRequest
         from google_auth_httplib2 import AuthorizedHttp
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
+        from googleapiclient.http import build_http
     except ImportError as exc:
         raise RuntimeError(
             "YouTube upload dependencies are missing; install google-api-python-client "
@@ -329,7 +330,8 @@ def _youtube_service():
                 "YouTube refresh token is missing required OAuth scope(s): "
                 + ", ".join(sorted(missing))
             )
-    transport = AuthorizedHttp(credentials, http=httplib2.Http(timeout=60))
+    # Google's transport passes resumable 308 responses through to next_chunk().
+    transport = AuthorizedHttp(credentials, http=build_http())
     return build("youtube", "v3", http=transport, cache_discovery=False)
 
 
