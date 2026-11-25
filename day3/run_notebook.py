@@ -26,6 +26,8 @@ from day3.remove_shortlists import purge_shortlist_artifacts, remove_shortlist_c
 from day3.narration_pacing import patch_narration_pacing_source
 from day3.popup_audio import patch_popup_audio_source
 from day3.evidence_pipeline import patch_evidence_pipeline
+from day3.frozen_fpl import FrozenFPL
+from day3.live_evidence import capture_evidence
 
 
 PLAN_VALUES = {"NEITHER", "ROLL", "TRANSFER"}
@@ -1178,21 +1180,50 @@ def _prepare_code_cells(notebook_path: Path) -> list[tuple[int, str]]:
 
 
 def run_notebook(notebook_path: Path) -> None:
+    import requests
+
     cells = _prepare_code_cells(notebook_path)
     _install_colab_compatibility()
     shell = InteractiveShell.instance()
     shell.autoawait = True
     shell.user_ns["__name__"] = "__main__"
     shell.user_ns["__file__"] = str(notebook_path)
-
-    for cell_index, source in cells:
-        print(f"\n{'=' * 76}\n▶ DAY 3 NOTEBOOK CELL {cell_index}\n{'=' * 76}", flush=True)
-        result = shell.run_cell(source, store_history=False, silent=False)
-        error = result.error_before_exec or result.error_in_exec
-        if error is not None:
-            raise RuntimeError(f"Day 3 notebook cell {cell_index} failed") from error
-        if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
-            purge_shortlist_artifacts(shell.user_ns["OUTPUT_ROOT"], shell.user_ns["WORK_ROOT"])
+    snapshot = capture_evidence()
+    expected_gw = os.environ.get("DAY3_RECOVERY_GW")
+    if expected_gw and (str(snapshot["next_gw"]), snapshot["deadline"]) != (
+        expected_gw, os.environ.get("DAY3_RECOVERY_DEADLINE")
+    ):
+        raise RuntimeError("Day 3 recovery target moved before rendering; start a new run")
+    shell.user_ns["DAY3_EVIDENCE"] = snapshot
+    frozen = FrozenFPL(snapshot)
+    with frozen.installed():
+        for cell_index, source in cells:
+            if cell_index == PITCH_SOURCE_CELL_INDEX:
+                namespace = shell.user_ns
+                namespace["DAY3_REVIEW_TRANSFERS"] = []
+                entry = namespace.get("FPL_TEAM_ID") or namespace.get("TEAM_ID") or namespace.get("ENTRY_ID")
+                if entry and namespace["SLIDE_SELECTION"].get("gw_review"):
+                    try:
+                        response = requests.get(
+                            f"https://fantasy.premierleague.com/api/entry/{int(entry)}/transfers/", timeout=30,
+                        )
+                        response.raise_for_status()
+                        rows = response.json()
+                        if not isinstance(rows, list):
+                            raise ValueError("FPL transfer history was not a list")
+                        namespace["DAY3_REVIEW_TRANSFERS"] = rows
+                    except (requests.RequestException, ValueError) as error:
+                        print(f"[DAY 3] Review transfer history unavailable ({type(error).__name__}); using the captured entry history count.")
+                snapshot["frozen_endpoint_hash"] = frozen.seal()
+                print("[DAY 3] Official FPL inputs sealed before graphics and narration.", flush=True)
+            print(f"\n{'=' * 76}\n▶ DAY 3 NOTEBOOK CELL {cell_index}\n{'=' * 76}", flush=True)
+            result = shell.run_cell(source, store_history=False, silent=False)
+            error = result.error_before_exec or result.error_in_exec
+            if error is not None:
+                raise RuntimeError(f"Day 3 notebook cell {cell_index} failed") from error
+            if cell_index == NOTEBOOK_CONTROL_CELL_INDEX:
+                purge_shortlist_artifacts(shell.user_ns["OUTPUT_ROOT"], shell.user_ns["WORK_ROOT"])
+        frozen.verify()
 
     from day3.verify_evidence import finalize_evidence_bundle
     finalize_evidence_bundle(shell.user_ns)
@@ -1217,6 +1248,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
