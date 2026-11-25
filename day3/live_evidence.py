@@ -542,6 +542,7 @@ def scoped_source_state(bootstrap, fixtures, scope, next_gw):
     """Facts whose current values can invalidate the sealed episode."""
     watched_players = set(scope["player_ids"])
     decisions = set(scope["decision_player_ids"])
+    defcon_players = set(scope.get("defcon_player_ids", []))
     quoted_news = set(scope.get("quoted_news_player_ids", []))
     horizons = scope["fixture_horizons"]
     review_teams = set(scope["review_team_ids"])
@@ -554,6 +555,8 @@ def scoped_source_state(bootstrap, fixtures, scope, next_gw):
                 **{key: row.get(key) for key in ("code", "team", "element_type")},
                 "availability": [chance, reason],
                 **({"now_cost": row.get("now_cost")} if player_id in decisions else {}),
+                **({key: row.get(key) for key in ("minutes", "defensive_contribution")}
+                   if player_id in defcon_players else {}),
                 **({"news": str(row.get("news") or "").strip()} if player_id in quoted_news else {}),
             }
     watched_fixtures = {}
@@ -649,3 +652,4 @@ def audit_fixture_rows(frame: Any, snapshot: dict[str, Any]) -> None:
             actual_actions = number(row["defcon_expected_contributions"], "expected DC actions")
             if not math.isclose(actual_actions, expected_actions, abs_tol=1e-6):
                 raise RuntimeError("Expected DC actions do not reconcile to official rate and fixture minutes")
+

@@ -14,6 +14,7 @@ def video_scope(namespace, scripts):
     snapshot = namespace["DAY3_EVIDENCE"]
     selected = namespace["SLIDE_SELECTION"]
     player_ids, decision_ids, defcon_teams = set(), set(), set()
+    defcon_ids = set()
 
     def collect(value, target=player_ids):
         if isinstance(value, dict):
@@ -40,14 +41,15 @@ def video_scope(namespace, scripts):
                 raise RuntimeError(f"Day 3 cannot seal {scene} without player IDs")
 
     for scene, variable in (
-        ("03_defcon", "DAY3_DEFCON_PLAYERS"),
         ("06_benching_dilemma", "DAY3_BENCHING_START16"),
         ("06_benching_dilemma", "DAY3_BENCHING_BENCH16"),
     ):
         if selected.get(scene):
             player_ids.update(int(value) for value in namespace[variable]["player_id"])
     if selected.get("03_defcon"):
-        defcon_teams.update(snapshot["players"][int(pid)]["team_id"] for pid in namespace["DAY3_DEFCON_PLAYERS"]["player_id"])
+        defcon_ids.update(int(pid) for pid in namespace["DAY3_DEFCON_PLAYERS"]["player_id"])
+        player_ids.update(defcon_ids)
+        defcon_teams.update(snapshot["players"][pid]["team_id"] for pid in defcon_ids)
         for name in ("DAY3_DEFCON_TOP_TEAMS", "DAY3_DEFCON_AVOID_TEAMS"):
             defcon_teams.update(int(value) for value in namespace[name]["team_id"])
     if selected.get("05_transfer_decision_desk"):
@@ -64,6 +66,7 @@ def video_scope(namespace, scripts):
         review_teams.update(snapshot["players"][pid]["team_id"] for pid in review_ids)
         player_ids.update(review_ids)
 
+    player_ids.update(decision_ids)
     original_speech = "\n".join(scripts.values())
     speech = " " + " ".join(_normalized(line) for line in scripts.values()) + " "
     quoted_news_players = set()
@@ -83,7 +86,6 @@ def video_scope(namespace, scripts):
         if pid in player_ids and len(news) > 8 and f" {news} " in speech:
             quoted_news_players.add(pid)
 
-    player_ids.update(decision_ids)
     unknown = player_ids - snapshot["players"].keys()
     if unknown:
         raise RuntimeError(f"Day 3 video refers to unknown FPL players: {sorted(unknown)}")
@@ -97,6 +99,7 @@ def video_scope(namespace, scripts):
     return {
         "player_ids": sorted(player_ids),
         "decision_player_ids": sorted(decision_ids),
+        "defcon_player_ids": sorted(defcon_ids),
         "quoted_news_player_ids": sorted(quoted_news_players),
         "fixture_horizons": fixture_horizons,
         "next_gameweek_all_fixtures": bool(selected.get("03_projected_goals")),

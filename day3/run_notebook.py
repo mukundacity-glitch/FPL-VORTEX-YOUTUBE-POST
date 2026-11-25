@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import types
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -1189,6 +1190,9 @@ def run_notebook(notebook_path: Path) -> None:
     shell.user_ns["__name__"] = "__main__"
     shell.user_ns["__file__"] = str(notebook_path)
     snapshot = capture_evidence()
+    deadline = datetime.fromisoformat(snapshot["deadline"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) >= deadline:
+        raise RuntimeError("Day 3 planning deadline passed during capture; rendering skipped")
     expected_gw = os.environ.get("DAY3_RECOVERY_GW")
     if expected_gw and (str(snapshot["next_gw"]), snapshot["deadline"]) != (
         expected_gw, os.environ.get("DAY3_RECOVERY_DEADLINE")
@@ -1248,3 +1252,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+

@@ -34,6 +34,10 @@ class FrozenFPLTests(unittest.TestCase):
             self.assertEqual(requests.get(base + "/bootstrap-static/?_vx=1").json(), snapshot["_bootstrap"])
             with urllib.request.urlopen(base + "/fixtures/?_vortex=2") as response:
                 self.assertEqual(json.load(response), [])
+            with self.assertRaisesRegex(RuntimeError, "public FPL GET"):
+                urllib.request.urlopen(base + "/fixtures/", data=b"")
+            with self.assertRaisesRegex(RuntimeError, "public FPL GET"):
+                urllib.request.urlopen(base + "/fixtures/", b"")
             url = base + "/entry/99/event/1/picks/"
             self.assertEqual(requests.get(url + "?_vx=3").json(), {"picks": [11]})
             self.assertEqual(len(frozen.seal()), 64)
@@ -43,6 +47,27 @@ class FrozenFPLTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "uncaptured FPL endpoints"):
                 frozen.verify()
         self.assertEqual(looked_up, [url + "?_vx=3"])
+
+    def test_redirect_that_removes_only_cache_busting_query_is_captured(self):
+        url = "https://fantasy.premierleague.com/api/entry/99/history/"
+        frozen = FrozenFPL({"_bootstrap": {}, "fixtures": [], "_event_payloads": {}})
+        looked_up = []
+
+        def send(session, request, **kwargs):
+            looked_up.append(request.url)
+            if request.url != url:
+                return session.send(requests.Request("GET", url).prepare(), **kwargs)
+            response = requests.Response()
+            response.status_code = 200
+            response._content = b'{"current":[]}'
+            response._content_consumed = True
+            return response
+
+        with patch.object(requests.Session, "send", send), frozen.installed():
+            self.assertEqual(requests.get(url + "?_vx=1").json(), {"current": []})
+            frozen.seal()
+            self.assertEqual(requests.get(url).json(), {"current": []})
+        self.assertEqual(looked_up, [url + "?_vx=1", url])
 
 
 class PublishedVideoEvidenceTests(unittest.TestCase):
@@ -89,6 +114,20 @@ class PublishedVideoEvidenceTests(unittest.TestCase):
             self.bootstrap["elements"].pop(0)
             with self.assertRaisesRegex(SourceChanged, r"player 11 removed; fixture 2 \(kickoff_time\)"):
                 verify_bundle(root, self.loader)
+
+    def test_only_displayed_defcon_player_stat_corrections_trigger_recovery(self):
+        from day3.live_evidence import scoped_source_state
+
+        scope = {"player_ids": [11, 22], "decision_player_ids": [], "defcon_player_ids": [11],
+                 "fixture_horizons": {}, "review_team_ids": [], "review_gw": None,
+                 "next_gameweek_all_fixtures": False}
+        self.snapshot["video_scope"] = scope
+        self.snapshot["video_source_state"] = scoped_source_state(self.bootstrap, self.fixtures, scope, 2)
+        self.bootstrap["elements"][1]["defensive_contribution"] = 10
+        assert_snapshot_current(self.snapshot, self.loader)
+        self.bootstrap["elements"][0].update(minutes=81, defensive_contribution=10)
+        with self.assertRaisesRegex(SourceChanged, r"player 11 \(minutes, defensive_contribution\)"):
+            assert_snapshot_current(self.snapshot, self.loader)
 
     def test_scope_cannot_be_changed_after_sealing(self):
         with TemporaryDirectory() as directory:

@@ -6,6 +6,7 @@ import hashlib
 import json
 from concurrent.futures import Future
 from contextlib import contextmanager
+from contextvars import ContextVar
 from threading import Lock
 from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urlsplit
@@ -79,6 +80,7 @@ class FrozenFPL:
 
         send = requests.Session.send
         urlopen = urllib.request.urlopen
+        following_redirect = ContextVar("day3_following_fpl_redirect", default=False)
 
         def frozen_send(session, request, **kwargs):
             endpoint = _endpoint(request.url)
@@ -86,10 +88,17 @@ class FrozenFPL:
                 return send(session, request, **kwargs)
             if request.method != "GET":
                 raise RuntimeError("Day 3 only captures public FPL GET requests")
+            if following_redirect.get():
+                # Requests re-enters Session.send while following a redirect.
+                return send(session, request, **kwargs)
 
             def fetch():
-                with send(session, request, **kwargs) as result:
-                    return result.status_code, result.content
+                token = following_redirect.set(True)
+                try:
+                    with send(session, request, **kwargs) as result:
+                        return result.status_code, result.content
+                finally:
+                    following_redirect.reset(token)
 
             status, body = self._read(endpoint, fetch)
             response = requests.Response()
@@ -106,7 +115,11 @@ class FrozenFPL:
             endpoint = _endpoint(url)
             if endpoint is None:
                 return urlopen(request, *args, **kwargs)
-            if isinstance(request, urllib.request.Request) and request.get_method() != "GET":
+            data = args[0] if args else kwargs.get("data")
+            method = getattr(request, "method", None)
+            if method is None:
+                method = "POST" if data is not None or getattr(request, "data", None) is not None else "GET"
+            if method != "GET":
                 raise RuntimeError("Day 3 only captures public FPL GET requests")
 
             def fetch():
