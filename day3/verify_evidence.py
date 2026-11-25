@@ -11,7 +11,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-from day3.live_evidence import VERSION, SourceChanged, assert_snapshot_current, digest, get_json, save_snapshot
+from day3.live_evidence import VERSION, SourceChanged, assert_snapshot_current, digest, get_json, save_snapshot, scoped_source_state
+from day3.video_evidence import video_scope
 
 
 RENDER_WORK_ROOT = Path("/content/FPL_VORTEX_DAY3_WORK")
@@ -36,24 +37,34 @@ def finalize_evidence_bundle(namespace: dict[str, Any]) -> None:
     videos = list((output_root / "MP4").glob("*COMBINED*.mp4"))
     if len(videos) != 1:
         raise RuntimeError("Exactly one assembled video is required to seal current evidence")
+    if not snapshot.get("frozen_endpoint_hash"):
+        raise RuntimeError("Official FPL inputs were never sealed before rendering")
+    snapshot["video_scope"] = video_scope(namespace, scripts)
+    snapshot["video_source_state"] = scoped_source_state(
+        snapshot["_bootstrap"], snapshot["fixtures"], snapshot["video_scope"], snapshot["next_gw"],
+    )
     save_snapshot(snapshot, directory)
     payload = {
         "version": VERSION, "cutoff": snapshot["cutoff"], "next_gw": snapshot["next_gw"],
         "run_id": os.environ.get("GITHUB_RUN_ID", "local"),
         "source_hash": snapshot["source_hash"], "scripts": scripts, "scripts_hash": digest(scripts),
+        "snapshot_sha256": file_hash(directory / "day3_live_evidence.json"),
         "video": videos[0].name, "video_sha256": file_hash(videos[0]),
     }
     (directory / "day3_script_evidence.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     (directory / "Day3_Complete_Narration.txt").write_text(
         "\n\n".join(filename + "\n" + text for filename, text in scripts.items()), encoding="utf-8")
     print(f"Sealed {len(scripts)} regenerated scene scripts and final video against {snapshot['source_hash'][:12]}")
+    print(f"[DAY 3] Upload evidence covers {len(snapshot['video_source_state']['player'])} players "
+          f"and {len(snapshot['video_source_state']['fixture'])} fixtures.")
 
 
 def verify_bundle(
     output_root: Path, loader: Callable[[str], Any] = get_json, *, expected_target: tuple[int, str] | None = None,
 ) -> None:
     folder = output_root / "DATA"
-    snapshot = json.loads((folder / "day3_live_evidence.json").read_text(encoding="utf-8"))
+    snapshot_file = folder / "day3_live_evidence.json"
+    snapshot = json.loads(snapshot_file.read_text(encoding="utf-8"))
     evidence = json.loads((folder / "day3_script_evidence.json").read_text(encoding="utf-8"))
     if evidence.get("version") != VERSION or snapshot.get("version") != VERSION:
         raise RuntimeError("Old narration implementation cannot pass the evidence gate")
@@ -61,6 +72,9 @@ def verify_bundle(
         raise RuntimeError("Narration belongs to a different workflow run")
     if evidence["source_hash"] != snapshot["source_hash"] or evidence["next_gw"] != snapshot["next_gw"]:
         raise RuntimeError("Narration and source snapshot disagree")
+    if (not snapshot.get("frozen_endpoint_hash") or "video_scope" not in snapshot
+            or evidence.get("snapshot_sha256") != file_hash(snapshot_file)):
+        raise RuntimeError("Day 3 video evidence snapshot was changed or was never sealed")
     if expected_target and (snapshot["next_gw"], snapshot["deadline"]) != expected_target:
         raise RuntimeError("Regenerated Day 3 video belongs to a different planning Gameweek or deadline")
     if digest(evidence["scripts"]) != evidence["scripts_hash"]:
@@ -100,12 +114,12 @@ def prepare_output(output_root: Path) -> None:
                 shutil.rmtree(child)
 
 
-def verify_with_recovery(output_root: Path, rerender: Callable[[], None]) -> None:
+def verify_with_recovery(output_root: Path, rerender: Callable[[tuple[int, str]], None]) -> None:
     try:
         verify_bundle(output_root)
     except SourceChanged as changed:
         print(f"[DAY 3] {changed}. Regenerating GW{changed.target[0]} once from a fresh snapshot.", flush=True)
-        rerender()
+        rerender(changed.target)
         verify_bundle(output_root, expected_target=changed.target)
 
 
@@ -123,7 +137,7 @@ def main() -> None:
     elif arguments.rerender_notebook:
         notebook = arguments.rerender_notebook.resolve()
 
-        def rerender() -> None:
+        def rerender(target: tuple[int, str]) -> None:
             if not notebook.is_file():
                 raise FileNotFoundError(notebook)
             if RENDER_WORK_ROOT.resolve() != RENDER_WORK_ROOT:
@@ -131,7 +145,8 @@ def main() -> None:
             prepare_output(arguments.output_root)
             if RENDER_WORK_ROOT.exists():
                 shutil.rmtree(RENDER_WORK_ROOT)
-            subprocess.run([sys.executable, "-m", "day3.run_notebook", str(notebook)], check=True)
+            env = dict(os.environ, DAY3_RECOVERY_GW=str(target[0]), DAY3_RECOVERY_DEADLINE=target[1])
+            subprocess.run([sys.executable, "-m", "day3.run_notebook", str(notebook)], check=True, env=env)
 
         verify_with_recovery(arguments.output_root, rerender)
     else:

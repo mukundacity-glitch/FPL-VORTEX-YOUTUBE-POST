@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 
 API_ROOT = "https://fantasy.premierleague.com/api"
-VERSION = "DAY3-LIVE-EVIDENCE-V2-VERIFIED-RETRY"
+VERSION = "DAY3-LIVE-EVIDENCE-V3-SCOPED"
 OFFICIAL_DIFFICULTY_FIELDS = {"team_h_difficulty", "team_a_difficulty"}
 RULE_SOURCE = "https://www.premierleague.com/en/news/4361991/"
 DC_THRESHOLDS = {"DEF": 10, "MID": 12, "FWD": 12}
@@ -374,7 +374,7 @@ def build_evidence(bootstrap: dict[str, Any], fixtures: list[dict[str, Any]],
 
 
 def capture_evidence(
-    data: dict[str, Any],
+    data: dict[str, Any] | None = None,
     loader: Callable[[str], Any] = get_json,
     *,
     poll_interval_seconds: float = EVIDENCE_POLL_INTERVAL_SECONDS,
@@ -387,12 +387,12 @@ def capture_evidence(
     Refresh both official endpoints on every attempt; never bypass the final-statistics
     guard or build a snapshot from a partially updated Gameweek.
     """
-    if data.get("api_fallback_used"):
+    if data is not None and data.get("api_fallback_used"):
         raise RuntimeError("Day 3 narration requires fresh official data; cached fallback is forbidden")
     if poll_interval_seconds < 0 or max_wait_seconds < 0:
         raise ValueError("Day 3 evidence wait intervals must be non-negative")
 
-    requested_next_gw = int(data["next_gw"])
+    requested_next_gw = int(data["next_gw"]) if data is not None else None
     wait_started = time.monotonic()
 
     while True:
@@ -406,7 +406,9 @@ def capture_evidence(
         cutoff = datetime.now(timezone.utc).isoformat()
         target = _upcoming_event(bootstrap, cutoff)
         current_next_gw = int(target["id"])
-        if current_next_gw != requested_next_gw:
+        if requested_next_gw is None:
+            requested_next_gw = current_next_gw
+        elif current_next_gw != requested_next_gw:
             raise RuntimeError(
                 "The official FPL deadline changed during Day 3 data capture "
                 f"(started for GW{requested_next_gw}, now GW{current_next_gw}); "
@@ -536,6 +538,56 @@ class SourceChanged(RuntimeError):
         self.target = target
 
 
+def scoped_source_state(bootstrap, fixtures, scope, next_gw):
+    """Facts whose current values can invalidate the sealed episode."""
+    watched_players = set(scope["player_ids"])
+    decisions = set(scope["decision_player_ids"])
+    defcon_players = set(scope.get("defcon_player_ids", []))
+    quoted_news = set(scope.get("quoted_news_player_ids", []))
+    horizons = scope["fixture_horizons"]
+    review_teams = set(scope["review_team_ids"])
+    players = {}
+    for row in bootstrap["elements"]:
+        player_id = int(row["id"])
+        if player_id in watched_players:
+            chance, reason = availability(row)
+            players[str(player_id)] = {
+                **{key: row.get(key) for key in ("code", "team", "element_type")},
+                "availability": [chance, reason],
+                **({"now_cost": row.get("now_cost")} if player_id in decisions else {}),
+                **({key: row.get(key) for key in ("minutes", "defensive_contribution")}
+                   if player_id in defcon_players else {}),
+                **({"news": str(row.get("news") or "").strip()} if player_id in quoted_news else {}),
+            }
+    watched_fixtures = {}
+    for row in fixtures:
+        gw = row.get("event")
+        if gw is None:
+            continue
+        clubs = {row["team_h"], row["team_a"]}
+        relevant = (gw == next_gw and scope["next_gameweek_all_fixtures"]
+                    or any(next_gw <= gw <= horizons.get(str(team), 0) for team in clubs)
+                    or gw == scope["review_gw"] and clubs & review_teams)
+        if relevant:
+            watched_fixtures[str(row["id"])] = {key: row.get(key) for key in (
+                "event", "kickoff_time", "team_h", "team_a", "team_h_score", "team_a_score",
+            )}
+    return {"player": players, "fixture": watched_fixtures}
+
+
+def scoped_source_changes(before, after):
+    for group, rows in before.items():
+        current = after[group]
+        for identifier in sorted(rows.keys() | current.keys(), key=int):
+            if identifier not in rows or identifier not in current:
+                action = "added" if identifier in current else "removed"
+                yield f"{group} {identifier} {action}"
+                continue
+            fields = [key for key, value in rows[identifier].items() if current[identifier][key] != value]
+            if fields:
+                yield f"{group} {identifier} ({', '.join(fields)})"
+
+
 def assert_snapshot_current(snapshot: dict[str, Any], loader: Callable[[str], Any] = get_json) -> None:
     cutoff = datetime.fromisoformat(snapshot["cutoff"].replace("Z", "+00:00"))
     now = datetime.now(timezone.utc)
@@ -545,10 +597,19 @@ def assert_snapshot_current(snapshot: dict[str, Any], loader: Callable[[str], An
     bootstrap = loader("/bootstrap-static/")
     fixtures = loader("/fixtures/")
     checked_at = datetime.now(timezone.utc)
+    if checked_at >= deadline:
+        raise RuntimeError("Day 3 planning deadline passed during evidence verification; no upload")
     target = _upcoming_event(bootstrap, checked_at.isoformat())
     official_deadline = datetime.fromisoformat(target["deadline_time"].replace("Z", "+00:00"))
-    if checked_at >= deadline or int(target["id"]) != snapshot["next_gw"] or official_deadline != deadline:
+    if int(target["id"]) != snapshot["next_gw"] or official_deadline != deadline:
         raise RuntimeError("Day 3 planning Gameweek or deadline changed; start a new run with current inputs")
+    if "video_scope" in snapshot:
+        state = scoped_source_state(bootstrap, fixtures, snapshot["video_scope"], snapshot["next_gw"])
+        changes = list(scoped_source_changes(snapshot["video_source_state"], state))
+        if changes:
+            raise SourceChanged("Day 3 video evidence changed: " + "; ".join(changes),
+                                (snapshot["next_gw"], snapshot["deadline"]))
+        return
     source_state = material_state(bootstrap, fixtures)
     if digest(source_state) != snapshot["source_hash"]:
         previous = snapshot.get("source_section_hashes", {})
@@ -591,3 +652,4 @@ def audit_fixture_rows(frame: Any, snapshot: dict[str, Any]) -> None:
             actual_actions = number(row["defcon_expected_contributions"], "expected DC actions")
             if not math.isclose(actual_actions, expected_actions, abs_tol=1e-6):
                 raise RuntimeError("Expected DC actions do not reconcile to official rate and fixture minutes")
+

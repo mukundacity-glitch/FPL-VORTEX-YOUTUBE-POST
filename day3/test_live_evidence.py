@@ -16,7 +16,7 @@ import pandas as pd
 from day3.evidence_narration import defcon_narration, next_fixture_packs, player_analysis, team_analysis, validated_fixture_forecasts
 from day3.live_evidence import (
     VERSION, SourceChanged, assert_snapshot_current, audit_fixture_rows, availability, build_evidence, dc_forecast, digest,
-    freeze_official_module, live_role, material_state, player_projection, save_snapshot,
+    freeze_official_module, live_role, material_state, player_projection, save_snapshot, scoped_source_state,
 )
 from day3.verify_evidence import file_hash, verify_bundle
 
@@ -319,6 +319,10 @@ class EvidenceTests(unittest.TestCase):
 
     def test_publication_bundle_rejects_tampered_script_or_video(self) -> None:
         snapshot = self.snapshot()
+        snapshot["frozen_endpoint_hash"] = "a" * 64
+        snapshot["video_scope"] = {"player_ids": [11], "decision_player_ids": [], "fixture_horizons": {"1": 2},
+                                   "next_gameweek_all_fixtures": False, "review_gw": None, "review_team_ids": []}
+        snapshot["video_source_state"] = scoped_source_state(self.bootstrap, self.fixtures, snapshot["video_scope"], 2)
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"GITHUB_RUN_ID": "test-run"}):
             root = Path(directory)
             data = root / "DATA"; data.mkdir()
@@ -326,10 +330,12 @@ class EvidenceTests(unittest.TestCase):
             (video / "COMBINED.mp4").write_bytes(b"verified-video")
             scripts = {"Slide_03.txt": "Current researched script."}
             (data / "Slide_03.txt").write_text(scripts["Slide_03.txt"])
-            (data / "day3_live_evidence.json").write_text(json.dumps(snapshot))
+            snapshot_file = data / "day3_live_evidence.json"
+            snapshot_file.write_text(json.dumps(snapshot))
             evidence = {"version": VERSION, "source_hash": snapshot["source_hash"], "next_gw": 2,
                         "run_id": "test-run", "scripts": scripts, "scripts_hash": digest(scripts),
-                        "video": "COMBINED.mp4", "video_sha256": file_hash(video / "COMBINED.mp4")}
+                        "video": "COMBINED.mp4", "video_sha256": file_hash(video / "COMBINED.mp4"),
+                        "snapshot_sha256": file_hash(snapshot_file)}
             (data / "day3_script_evidence.json").write_text(json.dumps(evidence))
             loader = lambda path: self.bootstrap if path == "/bootstrap-static/" else self.fixtures
             verify_bundle(root, loader)

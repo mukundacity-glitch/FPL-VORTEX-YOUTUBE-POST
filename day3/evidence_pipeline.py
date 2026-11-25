@@ -87,11 +87,12 @@ def patch_evidence_pipeline(cell_index: int, source: str) -> str:
     if cell_index == 5:
         source = replace_once(source, 'EXPECTED_REVIEW_GW = int(NEXT_GW) - 1 if int(NEXT_GW) > 1 else None',
                               'EXPECTED_REVIEW_GW = max(data.get("review_ready_gws") or [], default=None)')
-        source = replace_once(source, 'data = fetch_fpl_data()', 'data = fetch_fpl_data()\n' + textwrap.dedent('''
+        source = replace_once(source, 'data = fetch_fpl_data()', textwrap.dedent('''
 
-            from day3.live_evidence import capture_evidence, freeze_official_module, save_snapshot
-            DAY3_EVIDENCE = capture_evidence(data)
-            freeze_official_module(_fpl_module, DAY3_EVIDENCE)
+            from day3.live_evidence import save_snapshot
+            data = fetch_fpl_data()
+            if data.get("api_fallback_used") or int(data["next_gw"]) != DAY3_EVIDENCE["next_gw"]:
+                raise RuntimeError("Notebook FPL inputs disagree with the frozen Day 3 snapshot")
             save_snapshot(DAY3_EVIDENCE, Path(DATA_DIR))
             print(f"Verified live cutoff: {DAY3_EVIDENCE['cutoff']}; GW{DAY3_EVIDENCE['next_gw']}; no cached fallback")
         '''))
@@ -100,6 +101,8 @@ def patch_evidence_pipeline(cell_index: int, source: str) -> str:
     if cell_index == 6:
         source = patch_phase1_archive_refresh(source)
         source += '\nif failed_retained or failed_missing:\n    raise RuntimeError("Current-season source refresh failed; stale files may not feed narration")\n'
+    if cell_index == 29:
+        source = replace_once(source, "fetch_entry_transfers(_review_entry_id)", "DAY3_REVIEW_TRANSFERS")
     if cell_index == 18:
         source = replace_once(source, 'PHASE10_VERSION = "VORTEX-V2.7-PLAYER-XPTS-CUMULATIVE-DEFCON-70"',
                               'PHASE10_VERSION = "VORTEX-V3-LIVE-ROLE-VERIFIED-DEFCON"')

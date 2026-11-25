@@ -16,7 +16,7 @@ class RenderRecoveryTests(TestCase):
             verify_with_recovery(root, rerender)
         self.assertEqual(verify.call_count, 2)
         self.assertEqual(verify.call_args.kwargs["expected_target"], target)
-        rerender.assert_called_once_with()
+        rerender.assert_called_once_with(target)
 
     def test_keeps_blocking_if_fpl_changes_again(self):
         verify = Mock(side_effect=SourceChanged("changed", (11, "2026-11-21T11:00:00Z")))
@@ -24,7 +24,7 @@ class RenderRecoveryTests(TestCase):
         with patch("day3.verify_evidence.verify_bundle", verify):
             with self.assertRaisesRegex(SourceChanged, "changed"):
                 verify_with_recovery(Path("/runner/day3"), rerender)
-        rerender.assert_called_once_with()
+        rerender.assert_called_once_with((11, "2026-11-21T11:00:00Z"))
         self.assertEqual(verify.call_count, 2)
 
     def test_integrity_failure_does_not_retry(self):
